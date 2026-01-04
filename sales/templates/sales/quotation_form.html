@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ออกใบเสนอราคาใหม่</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-light">
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-file-signature"></i> ออกใบเสนอราคา</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">เลือกลูกค้า:</label>
+                        <select id="customerSelect" class="form-select">
+                            <option value="">-- กรุณาเลือกลูกค้า --</option>
+                            {% for c in customers %}
+                            <option value="{{ c.id }}">{{ c.code }} - {{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted"><a href="/admin/master_data/customer/add/" target="_blank">+ เพิ่มลูกค้าใหม่</a></small>
+                    </div>
+
+                    <table class="table table-bordered mt-4">
+                        <thead class="table-light">
+                            <tr>
+                                <th>สินค้า</th>
+                                <th width="100">ราคา</th>
+                                <th width="100">จำนวน</th>
+                                <th width="120">รวม</th>
+                                <th width="50">ลบ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="quoteItems">
+                            </tbody>
+                        <tfoot>
+                            <tr>
+                                <td colspan="3" class="text-end fw-bold">ยอดสุทธิ:</td>
+                                <td colspan="2" class="fw-bold text-primary" id="grandTotal">0.00</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <i class="fas fa-box"></i> เลือกสินค้า
+                </div>
+                <div class="card-body p-2" style="max-height: 500px; overflow-y: auto;">
+                    <div class="d-grid gap-2">
+                        {% for p in products %}
+                        <button class="btn btn-outline-dark text-start" onclick="addItem({{ p.id }}, '{{ p.name }}', {{ p.sell_price }})">
+                            <div class="d-flex justify-content-between">
+                                <span>{{ p.name }}</span>
+                                <span class="badge bg-light text-dark">{{ p.sell_price|floatformat:0 }}</span>
+                            </div>
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="saveQuotation()" class="btn btn-success w-100 mt-3 py-3 fw-bold">
+                <i class="fas fa-save"></i> บันทึกใบเสนอราคา
+            </button>
+            <a href="{% url 'quotation_list' %}" class="btn btn-outline-secondary w-100 mt-2">ยกเลิก</a>
+        </div>
+    </div>
+</div>
+
+<script>
+    let items = [];
+
+    function addItem(id, name, price) {
+        let exist = items.find(i => i.id === id);
+        if(exist) {
+            exist.qty++;
+        } else {
+            items.push({ id: id, name: name, price: price, qty: 1 });
+        }
+        renderTable();
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('quoteItems');
+        const totalEl = document.getElementById('grandTotal');
+        tbody.innerHTML = '';
+        let total = 0;
+
+        items.forEach((item, idx) => {
+            let sum = item.qty * item.price;
+            total += sum;
+            tbody.innerHTML += `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${item.price.toLocaleString()}</td>
+                    <td><input type="number" class="form-control form-control-sm" value="${item.qty}" onchange="updateQty(${idx}, this.value)"></td>
+                    <td class="text-end">${sum.toLocaleString()}</td>
+                    <td><button class="btn btn-sm btn-danger" onclick="removeItem(${idx})">x</button></td>
+                </tr>
+            `;
+        });
+        totalEl.innerText = total.toLocaleString(undefined, {minimumFractionDigits: 2});
+    }
+
+    function updateQty(idx, val) {
+        if(val < 1) val = 1;
+        items[idx].qty = parseInt(val);
+        renderTable();
+    }
+
+    function removeItem(idx) {
+        items.splice(idx, 1);
+        renderTable();
+    }
+
+    function saveQuotation() {
+        const custId = document.getElementById('customerSelect').value;
+        if(!custId) return alert('กรุณาเลือกลูกค้าก่อนครับ');
+        if(items.length === 0) return alert('กรุณาเลือกสินค้าอย่างน้อย 1 รายการ');
+
+        if(!confirm('ยืนยันสร้างใบเสนอราคา?')) return;
+
+        fetch('', { // ส่งไปที่ URL ปัจจุบัน
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
+            body: JSON.stringify({ customer_id: custId, items: items })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if(data.success) {
+                alert('✅ บันทึกสำเร็จ! เลขที่: ' + data.code);
+                window.location.href = "{% url 'quotation_list' %}";
+            } else {
+                alert('❌ เกิดข้อผิดพลาด: ' + data.error);
+            }
+        });
+    }
+</script>
+</body>
+</html>

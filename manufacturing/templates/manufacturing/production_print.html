@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ใบสั่งผลิต {{ po.code }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background: #555; }
+        .page { width: 210mm; min-height: 297mm; padding: 20mm; margin: 10mm auto; background: white; position: relative; }
+        
+        /* หัวเอกสาร */
+        .header { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 20px; }
+        .doc-title h1 { margin: 0; color: #6f42c1; text-transform: uppercase; text-align: right; }
+        
+        /* ข้อมูลการผลิต */
+        .info-box { border: 2px solid #6f42c1; padding: 15px; border-radius: 5px; margin-bottom: 20px; background-color: #f8f9fa; }
+        .info-row { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .big-text { font-size: 1.2em; font-weight: bold; color: #333; }
+
+        /* ตารางวัตถุดิบ */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; }
+        th { background: #6f42c1; color: white; text-align: center; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        .btn-print { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: #6f42c1; color: white; border: none; cursor: pointer; border-radius: 5px; text-decoration: none; font-size: 16px; }
+        @media print { body { background: white; margin: 0; } .page { margin: 0; width: auto; } .no-print { display: none; } }
+    </style>
+</head>
+<body>
+    <a href="javascript:window.print()" class="btn-print no-print">🖨️ พิมพ์ใบสั่งผลิต</a>
+
+    <div class="page">
+        <div class="header">
+            <div>
+                <h3>{{ company.name_th }}</h3>
+                <small>ฝ่ายผลิต (Manufacturing Department)</small>
+            </div>
+            <div class="doc-title">
+                <h1>ใบสั่งผลิต</h1>
+                <p>JOB ORDER / PRODUCTION ORDER</p>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <div class="info-row">
+                <span>เลขที่คำสั่ง (Job No): <strong>{{ po.code }}</strong></span>
+                <span>วันที่เริ่ม (Start): {{ po.start_date|date:"d/m/Y" }}</span>
+            </div>
+            <hr>
+            <div class="info-row">
+                <span class="big-text">สินค้าที่ผลิต: {{ po.product.name }}</span>
+                <span class="big-text">จำนวน: {{ po.quantity }} หน่วย</span>
+            </div>
+            <div class="info-row" style="margin-top: 10px;">
+                <span>ผู้ควบคุม: {{ po.responsible_person.first_name }}</span>
+                <span>สถานะ: {{ po.get_status_display }}</span>
+            </div>
+        </div>
+
+        <h4 style="margin-bottom: 5px;">📦 รายการวัตถุดิบที่ต้องเบิก (Bill of Materials)</h4>
+        {% if bom %}
+        <table>
+            <thead>
+                <tr>
+                    <th width="50">#</th>
+                    <th>รายการวัตถุดิบ (Raw Material)</th>
+                    <th width="120">ปริมาณต่อหน่วย</th>
+                    <th width="120">จำนวนที่ต้องเบิก (รวม)</th>
+                    <th width="100">หน่วยนับ</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in bom.items.all %}
+                <tr>
+                    <td class="text-center">{{ forloop.counter }}</td>
+                    <td>{{ item.raw_material.name }}</td>
+                    <td class="text-center">{{ item.quantity|floatformat:4 }}</td>
+                    <td class="text-center" style="font-weight:bold; background:#eee;">
+                        {% widthratio item.quantity 1 po.quantity %}
+                    </td>
+                    <td class="text-center">หน่วย</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <p style="color:red; text-align:center; padding:20px; border:1px dashed red;">⚠️ ไม่พบสูตรการผลิต (BOM) ของสินค้านี้</p>
+        {% endif %}
+
+        <div style="display: flex; justify-content: space-between; margin-top: 80px; text-align: center;">
+            <div style="width: 30%; border-top: 1px solid #ccc; padding-top: 10px;">
+                ผู้วางแผนการผลิต<br>( ........................................... )
+            </div>
+            <div style="width: 30%; border-top: 1px solid #ccc; padding-top: 10px;">
+                เจ้าหน้าที่คลังสินค้า (เบิกจ่าย)<br>( ........................................... )
+            </div>
+            <div style="width: 30%; border-top: 1px solid #ccc; padding-top: 10px;">
+                ผู้รับผิดชอบการผลิต<br>( ........................................... )
+            </div>
+        </div>
+    </div>
+</body>
+</html>

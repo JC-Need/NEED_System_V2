@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <title>ใบสั่งซื้อ {{ po.code }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background: #555; }
+        .page { width: 210mm; min-height: 297mm; padding: 20mm; margin: 10mm auto; background: white; position: relative; }
+        
+        /* หัวเอกสาร */
+        .header { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 20px; }
+        .doc-title h1 { margin: 0; color: #fd7e14; text-transform: uppercase; text-align: right; }
+        
+        /* ข้อมูลคู่ค้า */
+        .info-box { display: flex; justify-content: space-between; margin-bottom: 20px; }
+        .box { width: 48%; border: 1px solid #eee; padding: 10px; border-radius: 5px; }
+        
+        /* ตาราง */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; }
+        th { background: #f8f9fa; text-align: center; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* ปุ่มพิมพ์ */
+        .btn-print { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: #fd7e14; color: white; border: none; cursor: pointer; border-radius: 5px; text-decoration: none; font-size: 16px; }
+        @media print { body { background: white; margin: 0; } .page { margin: 0; width: auto; } .no-print { display: none; } }
+    </style>
+</head>
+<body>
+    <a href="javascript:window.print()" class="btn-print no-print">🖨️ พิมพ์ใบสั่งซื้อ</a>
+
+    <div class="page">
+        <div class="header">
+            <div>
+                {% if company.logo %}
+                    <img src="{{ company.logo.url }}" style="height: 60px;">
+                {% endif %}
+                <h3>{{ company.name_th }}</h3>
+                <small>{{ company.address }} (Tel: {{ company.phone }})</small>
+            </div>
+            <div class="doc-title">
+                <h1>ใบสั่งซื้อ</h1>
+                <p>PURCHASE ORDER</p>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <div class="box">
+                <strong>ผู้จำหน่าย (Supplier):</strong><br>
+                {{ po.supplier.name }}<br>
+                {{ po.supplier.address }}<br>
+                โทร: {{ po.supplier.phone }}
+            </div>
+            <div class="box">
+                <strong>เลขที่ (PO No):</strong> {{ po.code }}<br>
+                <strong>วันที่ (Date):</strong> {{ po.date|date:"d/m/Y" }}<br>
+                <strong>ผู้จัดซื้อ:</strong> {{ po.buyer.first_name }}
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th width="50">#</th>
+                    <th>รายการสินค้า</th>
+                    <th width="80">จำนวน</th>
+                    <th width="100">หน่วยละ</th>
+                    <th width="120">รวมเงิน</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr>
+                    <td class="text-center">{{ forloop.counter }}</td>
+                    <td>{{ item.product.name }}</td>
+                    <td class="text-center">{{ item.quantity }}</td>
+                    <td class="text-right">{{ item.unit_cost|floatformat:2 }}</td>
+                    <td class="text-right">{{ item.total_cost|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" class="text-right"><strong>ยอดรวมสุทธิ (Total Amount)</strong></td>
+                    <td class="text-right"><strong>{{ po.total_amount|floatformat:2 }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div style="display: flex; justify-content: space-between; margin-top: 60px; text-align: center;">
+            <div style="width: 40%; border-top: 1px solid #ccc; padding-top: 10px;">
+                ผู้มีอำนาจสั่งซื้อ<br>( ........................................... )
+            </div>
+            <div style="width: 40%; border-top: 1px solid #ccc; padding-top: 10px;">
+                ผู้รับใบสั่งซื้อ<br>( ........................................... )
+            </div>
+        </div>
+    </div>
+</body>
+</html>
