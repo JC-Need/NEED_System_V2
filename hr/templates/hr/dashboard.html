@@ -1,0 +1,248 @@
+{% extends 'core/base.html' %}
+{% load humanize %} {% block content %}
+<style>
+    /* CSS พิเศษสำหรับหน้านี้โดยเฉพาะ */
+    .dashboard-header {
+        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%); /* สีโทนเข้ม หรูหรา */
+        color: white;
+        border-radius: 0 0 30px 30px; /* ขอบล่างโค้งมน */
+        padding-bottom: 60px;
+        margin-bottom: -40px; /* ให้การ์ดด้านล่างเกยขึ้นมา */
+    }
+    .stat-card {
+        border: none;
+        border-radius: 20px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        transition: transform 0.2s;
+        background: white;
+    }
+    .stat-card:hover {
+        transform: translateY(-5px); /* ลอยขึ้นเมื่อเอาเมาส์ชี้ */
+    }
+    .btn-action {
+        border-radius: 15px;
+        padding: 15px;
+        font-weight: bold;
+        transition: all 0.3s;
+        border: none;
+    }
+    .btn-checkin {
+        background: linear-gradient(45deg, #11998e, #38ef7d);
+        color: white;
+        box-shadow: 0 4px 15px rgba(56, 239, 125, 0.4);
+    }
+    .btn-leave {
+        background: linear-gradient(45deg, #fce38a, #f38181);
+        color: #fff;
+        box-shadow: 0 4px 15px rgba(243, 129, 129, 0.4);
+    }
+    .profile-img-circle {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        border: 4px solid rgba(255,255,255,0.3);
+        object-fit: cover;
+    }
+    .blur-text {
+        filter: blur(8px);
+        user-select: none;
+        transition: filter 0.3s;
+        cursor: pointer;
+    }
+    .blur-text.revealed {
+        filter: blur(0);
+    }
+</style>
+
+<div class="dashboard-header pt-5 px-4">
+    <div class="container">
+        <div class="d-flex align-items-center">
+            <div class="me-4">
+                {% if employee.photo %}
+                    <img src="{{ employee.photo.url }}" class="profile-img-circle shadow">
+                {% else %}
+                    <div class="profile-img-circle bg-white text-dark d-flex align-items-center justify-content-center fw-bold fs-1 shadow">
+                        {{ employee.first_name|slice:":1" }}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div>
+                <span class="badge bg-white text-dark mb-2 px-3 rounded-pill">
+                    <i class="fas fa-id-badge me-1"></i> {{ employee.emp_id }}
+                </span>
+                <h2 class="fw-bold mb-0">สวัสดี, {{ employee.prefix }}{{ employee.first_name }}</h2>
+                <p class="opacity-75 mb-0">{{ employee.position.title }} | {{ employee.department }}</p>
+            </div>
+
+            <div class="ms-auto">
+                <a href="/admin/logout/" class="btn btn-outline-light btn-sm rounded-pill px-3">
+                    <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row g-4 mb-5">
+
+        <div class="col-md-4">
+            <div class="stat-card h-100 p-4 position-relative overflow-hidden">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <small class="text-muted text-uppercase fw-bold">เงินได้สุทธิเดือนนี้</small>
+                        <h2 class="fw-bold text-primary mt-1 mb-0 blur-text" id="salaryText" onclick="toggleSalary()">
+                            ฿ {{ payslip.net_salary|default:employee.salary|intcomma }}
+                        </h2>
+                        <small class="text-muted" style="font-size: 0.8rem;">คลิกเพื่อแสดง/ซ่อน</small>
+                    </div>
+                    <div class="bg-light p-3 rounded-circle text-primary">
+                        <i class="fas fa-wallet fa-lg"></i>
+                    </div>
+                </div>
+                <div class="progress" style="height: 6px;">
+                    <div class="progress-bar bg-primary" style="width: 75%"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="stat-card h-100 p-4">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <small class="text-muted text-uppercase fw-bold">โบนัสคงเหลือ</small>
+                        <h2 class="fw-bold text-success mt-1 mb-0">฿ {{ payslip.bonus|default:"0.00"|intcomma }}</h2>
+                    </div>
+                    <div class="bg-light p-3 rounded-circle text-success">
+                        <i class="fas fa-gift fa-lg"></i>
+                    </div>
+                </div>
+                <small class="text-muted"><i class="fas fa-check-circle me-1"></i> สถานะปกติ</small>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="stat-card h-100 p-4" style="background: #f8f9fa;">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <small class="text-muted text-uppercase fw-bold">สถานะวันนี้</small>
+                    {% if today_attendance.time_in %}
+                        <span class="badge bg-success rounded-pill px-3">เข้างานแล้ว</span>
+                    {% else %}
+                        <span class="badge bg-warning text-dark rounded-pill px-3">ยังไม่ลงเวลา</span>
+                    {% endif %}
+                </div>
+                <div class="text-center py-2">
+                    <h1 class="fw-bold display-6 mb-0">
+                        {{ today_attendance.time_in|time:"H:i"|default:"--:--" }}
+                    </h1>
+                    <small class="text-muted">เวลาเข้างาน</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h5 class="fw-bold text-muted mb-3"><i class="fas fa-bolt me-2"></i>เมนูด่วน</h5>
+    <div class="row g-3 mb-5">
+        <div class="col-md-4">
+            {% if not today_attendance.time_in %}
+                <button class="btn btn-action btn-checkin w-100 d-flex align-items-center justify-content-center">
+                    <i class="fas fa-fingerprint fa-2x me-3"></i>
+                    <div class="text-start">
+                        <div class="fs-5">ลงเวลาเข้างาน</div>
+                        <small class="opacity-75">Check-in Now</small>
+                    </div>
+                </button>
+            {% elif not today_attendance.time_out %}
+                <button class="btn btn-action btn-danger w-100 d-flex align-items-center justify-content-center shadow">
+                    <i class="fas fa-sign-out-alt fa-2x me-3"></i>
+                    <div class="text-start">
+                        <div class="fs-5">ลงเวลาออกงาน</div>
+                        <small class="opacity-75">Check-out</small>
+                    </div>
+                </button>
+            {% else %}
+                <button class="btn btn-secondary w-100 py-3 disabled" style="opacity: 0.6;">
+                    <i class="fas fa-check-double me-2"></i> วันนี้ลงเวลาครบแล้ว
+                </button>
+            {% endif %}
+        </div>
+
+        <div class="col-md-4">
+            <button class="btn btn-action btn-leave w-100 d-flex align-items-center justify-content-center">
+                <i class="fas fa-paper-plane fa-2x me-3"></i>
+                <div class="text-start">
+                    <div class="fs-5">ขอลางาน</div>
+                    <small class="opacity-75">Request Leave</small>
+                </div>
+            </button>
+        </div>
+
+        <div class="col-md-4">
+            <button class="btn btn-action btn-light bg-white text-primary w-100 d-flex align-items-center justify-content-center shadow-sm">
+                <i class="fas fa-file-invoice-dollar fa-2x me-3"></i>
+                <div class="text-start">
+                    <div class="fs-5">สลิปเงินเดือน</div>
+                    <small class="text-muted">View Payslips</small>
+                </div>
+            </button>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-5">
+        <div class="card-header bg-white p-4 border-bottom-0">
+            <h5 class="fw-bold mb-0">📅 ประวัติการลาล่าสุด</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">วันที่ลา</th>
+                        <th>ประเภท</th>
+                        <th>เหตุผล</th>
+                        <th>สถานะ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for leave in leaves %}
+                    <tr>
+                        <td class="ps-4 fw-bold">{{ leave.start_date|date:"d M Y" }}</td>
+                        <td>
+                            {% if leave.leave_type == 'sick' %}🩹 ลาป่วย
+                            {% elif leave.leave_type == 'vacation' %}🏖️ พักร้อน
+                            {% else %}📝 {{ leave.get_leave_type_display }}{% endif %}
+                        </td>
+                        <td class="text-muted text-truncate" style="max-width: 200px;">{{ leave.reason }}</td>
+                        <td>
+                            {% if leave.status == 'approved' %}
+                                <span class="badge bg-success-subtle text-success border border-success px-3 rounded-pill">อนุมัติ</span>
+                            {% elif leave.status == 'rejected' %}
+                                <span class="badge bg-danger-subtle text-danger border border-danger px-3 rounded-pill">ไม่อนุมัติ</span>
+                            {% else %}
+                                <span class="badge bg-warning-subtle text-warning border border-warning px-3 rounded-pill">รอพิจารณา</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="text-center py-5 text-muted">
+                            <i class="fas fa-coffee fa-2x mb-3 d-block opacity-50"></i>
+                            ยังไม่มีประวัติการลาเร็วๆ นี้
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ฟังก์ชันซ่อน/แสดง เงินเดือน
+    function toggleSalary() {
+        var element = document.getElementById("salaryText");
+        element.classList.toggle("revealed");
+    }
+</script>
+
+{% endblock %}

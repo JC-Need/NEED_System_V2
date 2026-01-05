@@ -8,13 +8,15 @@ class CompanyInfo(models.Model):
     name_en = models.CharField(max_length=200, verbose_name="ชื่อบริษัท (อังกฤษ)", blank=True)
     tax_id = models.CharField(max_length=20, verbose_name="เลขผู้เสียภาษี")
     branch = models.CharField(max_length=50, default="สำนักงานใหญ่", verbose_name="สาขา")
-    
+
     address = models.TextField(verbose_name="ที่อยู่")
     phone = models.CharField(max_length=50, blank=True, verbose_name="เบอร์โทร")
     email = models.EmailField(blank=True, verbose_name="อีเมล")
     website = models.URLField(blank=True, verbose_name="เว็บไซต์")
-    
+
     logo = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้")
+    login_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="รูปหน้า Login (ควรเป็น PNG พื้นใส)")
+    navbar_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="รูปบนแถบเมนู (Navbar)")
     signature = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="ลายเซ็น/ตราประทับ")
 
     class Meta:

@@ -1,173 +1,240 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <title>CEO Dashboard - NEED System</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        body { background-color: #f4f6f9; }
-        .card-box { border-radius: 10px; border: none; transition: transform 0.2s; }
-        .card-box:hover { transform: translateY(-5px); cursor: pointer; }
-        .icon-box { font-size: 2.5rem; opacity: 0.8; }
-        .menu-btn { height: 100px; display: flex; flex-direction: column; justify-content: center; align-items: center; font-weight: bold; font-size: 1.1em; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-decoration: none; color: white; transition: 0.3s; }
-        .menu-btn:hover { opacity: 0.9; transform: scale(1.02); color: white; }
-    </style>
-</head>
-<body>
+{% extends 'core/base.html' %}
+{% load humanize %}
 
-    <nav class="navbar navbar-dark bg-dark mb-4">
-        <div class="container">
-            <a class="navbar-brand" href="#">🚀 NEED System <small>(CEO Dashboard)</small></a>
-            <div class="d-flex">
-                <span class="text-white me-3 align-self-center">สวัสดี, {{ user.username }}</span>
-                <a href="/admin/logout/" class="btn btn-outline-light btn-sm">ออกจากระบบ</a>
-            </div>
+{% block content %}
+<style>
+    :root {
+        --gold-grad: linear-gradient(135deg, #e6c884 0%, #c5a059 100%);
+        --blue-grad: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        --text-dark: #2d3436;
+        --text-light: #636e72;
+    }
+
+    /* สไตล์การ์ดแบบ Modern Clean */
+    .stat-card {
+        background: white;
+        border-radius: 16px;
+        padding: 25px;
+        border: 1px solid #f1f2f6;
+        box-shadow: 0 10px 20px rgba(0,0,0,0.02); /* เงานุ่มมาก */
+        transition: all 0.3s;
+        height: 100%;
+        position: relative;
+        overflow: hidden;
+    }
+    .stat-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.05); border-color: #e2e6ea; }
+
+    .stat-icon-bg {
+        position: absolute; right: -10px; bottom: -10px;
+        font-size: 5rem; opacity: 0.05; transform: rotate(-15deg);
+    }
+
+    .stat-value { font-size: 2.5rem; font-weight: 700; color: var(--text-dark); line-height: 1.2; }
+    .stat-label { font-size: 0.9rem; color: var(--text-light); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* ปุ่มเมนูแบบใหม่ (Gradient Icon) */
+    .menu-btn {
+        display: flex;
+        flex-direction: column; align-items: center; justify-content: center;
+        background: white;
+        color: var(--text-dark);
+        border: 1px solid #f1f2f6;
+        border-radius: 20px;
+        padding: 40px 20px;
+        text-decoration: none;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.01);
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+
+    .menu-btn:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0,0,0,0.08);
+        border-color: white;
+    }
+
+    .menu-icon-box {
+        width: 70px; height: 70px;
+        border-radius: 50%;
+        background: #f8f9fa; /* พื้นหลังไอคอนสีเทาจางๆ */
+        display: flex; align-items: center; justify-content: center;
+        margin-bottom: 20px;
+        transition: all 0.3s;
+    }
+
+    .menu-icon { font-size: 1.8rem; color: #b2bec3; transition: all 0.3s; }
+
+    /* เอฟเฟกต์ตอนชี้เมาส์: เปลี่ยนสีไอคอนตามหมวดหมู่ */
+    /* นี่คือจุดที่ทำให้เป็นสีทองครับ (Gold Gradient) */
+    .menu-btn:hover .menu-icon-box { background: var(--gold-grad); box-shadow: 0 10px 20px rgba(197, 160, 89, 0.3); }
+    .menu-btn:hover .menu-icon { color: white; }
+
+    .menu-title { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); }
+    .menu-desc { font-size: 0.8rem; color: #a4b0be; margin-top: 5px; }
+
+    /* เส้นคั่น */
+    .section-header { display: flex; align-items: center; margin: 40px 0 20px 0; }
+    .section-title { font-size: 1.25rem; font-weight: 800; color: var(--text-dark); margin-right: 15px; }
+    .section-divider { flex-grow: 1; height: 1px; background: #e9ecef; }
+
+</style>
+
+<div class="container-fluid py-4 px-4">
+
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h5 class="text-muted mb-1">ยินดีต้อนรับกลับ,</h5>
+            <h2 class="fw-bold" style="color: #2d3436;">{{ user.first_name|default:user.username }}</h2>
         </div>
-    </nav>
-
-    <div class="container">
-
-        <h5 class="mb-3 text-secondary"><i class="fas fa-chart-line"></i> ภาพรวมวันนี้ & เดือนนี้</h5>
-        <div class="row g-3 mb-5">
-            <div class="col-md-3">
-                <div class="card card-box bg-primary text-white h-100">
-                    <div class="card-body d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="card-title">ยอดขายวันนี้</h6>
-                            <h2 class="fw-bold">{{ sales_today|floatformat:0 }}</h2>
-                            <small>บาท</small>
-
-                            <div class="mt-2">
-                                <a href="{% url 'export_sales_excel' %}" class="btn btn-sm btn-light text-primary fw-bold">
-                                    <i class="fas fa-file-excel"></i> โหลด Excel
-                                </a>
-                            </div>
-
-                        </div>
-                        <i class="fas fa-cash-register icon-box"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="card card-box text-white h-100" style="background-color: #28a745;">
-                    <div class="card-body d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="card-title">กำไร (เดือนนี้)</h6>
-                            <h3 class="fw-bold">{{ profit_month|floatformat:0 }}</h3>
-                            <small class="text-white-50">รับ {{ income_month|floatformat:0 }} | จ่าย {{ expense_month|floatformat:0 }}</small>
-                        </div>
-                        <i class="fas fa-wallet icon-box"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="card card-box bg-danger text-white h-100" onclick="window.location.href='/admin/inventory/product/?stock_qty__lt=5'">
-                    <div class="card-body d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="card-title">สินค้าใกล้หมด</h6>
-                            <h2 class="fw-bold">{{ low_stock_count }}</h2>
-                            <small>รายการ (คลิกดู)</small>
-                        </div>
-                        <i class="fas fa-exclamation-triangle icon-box"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-md-3">
-                <div class="card card-box bg-warning text-dark h-100" onclick="window.location.href='/admin/purchasing/purchaseorder/?status__exact=ORDERED'">
-                    <div class="card-body d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="card-title">รอรับของ (PO)</h6>
-                            <h2 class="fw-bold">{{ pending_po_count }}</h2>
-                            <small>ใบสั่งซื้อ</small>
-                        </div>
-                        <i class="fas fa-truck icon-box"></i>
-                    </div>
-                </div>
-            </div>
+        <div>
+            <span class="badge bg-white text-dark border px-3 py-2 rounded-pill shadow-sm">
+                📅 {% now "d F Y" %}
+            </span>
         </div>
-
-        <h5 class="mb-3 text-secondary"><i class="fas fa-th"></i> เมนูหลัก</h5>
-        <div class="row g-3">
-
-            {% if user.is_superuser or perms.sales.view_posorder %}
-            <div class="col-6 col-md-3">
-                <a href="{% url 'sales_dashboard' %}" class="menu-btn bg-info">
-                    <i class="fas fa-cash-register fa-2x mb-2"></i>
-                    ฝ่ายขาย (Sales)
-                </a>
-            </div>
-            {% endif %}
-
-            {% if user.is_superuser or perms.inventory.view_product %}
-            <div class="col-6 col-md-3">
-                <a href="/admin/inventory/product/" class="menu-btn" style="background-color: #6f42c1;">
-                    <i class="fas fa-boxes fa-2x mb-2"></i>
-                    คลังสินค้า
-                </a>
-            </div>
-            {% endif %}
-
-            {% if user.is_superuser or perms.purchasing.view_purchaseorder %}
-            <div class="col-6 col-md-3">
-                <a href="/admin/purchasing/purchaseorder/" class="menu-btn" style="background-color: #fd7e14;">
-                    <i class="fas fa-shopping-basket fa-2x mb-2"></i>
-                    จัดซื้อ (PO)
-                </a>
-            </div>
-            {% endif %}
-
-            {% if user.is_superuser or perms.manufacturing.view_productionorder %}
-            <div class="col-6 col-md-3">
-                <a href="/admin/manufacturing/production_order/" class="menu-btn bg-warning text-dark">
-                    <i class="fas fa-industry fa-2x mb-2"></i>
-                    ฝ่ายผลิต
-                </a>
-            </div>
-            {% endif %}
-
-            {% if user.is_superuser or perms.accounting.view_income %}
-            <div class="col-6 col-md-3">
-                <a href="/admin/accounting/" class="menu-btn" style="background-color: #20c997;">
-                    <i class="fas fa-calculator fa-2x mb-2"></i>
-                    บัญชี
-                </a>
-            </div>
-            {% endif %}
-
-            {% if user.is_superuser or perms.hr.view_employee %}
-            <div class="col-6 col-md-3">
-                <a href="/admin/hr/employee/" class="menu-btn" style="background-color: #e83e8c;">
-                    <i class="fas fa-users fa-2x mb-2"></i>
-                    พนักงาน
-                </a>
-            </div>
-            {% endif %}
-
-            {% if user.is_superuser %}
-            <div class="col-6 col-md-3">
-                <a href="/admin/master_data/" class="menu-btn bg-dark">
-                    <i class="fas fa-database fa-2x mb-2"></i>
-                    ข้อมูลพื้นฐาน
-                </a>
-            </div>
-            <div class="col-6 col-md-3">
-                <a href="/admin/" class="menu-btn bg-dark">
-                    <i class="fas fa-cogs fa-2x mb-2"></i>
-                    Admin หลังบ้าน
-                </a>
-            </div>
-            {% endif %}
+    </div>
+    
+    <div class="row mb-4">
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="https://jcneedhistory.pythonanywhere.com" target="_blank" class="menu-btn" style="min-height: auto; padding: 20px;">
+                <div class="d-flex align-items-center">
+                    <div class="menu-icon-box mb-0 me-3" style="width: 50px; height: 50px; background: linear-gradient(135deg, #6c757d 0%, #495057 100%); box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);">
+                        <i class="fas fa-history menu-icon text-white" style="font-size: 1.2rem;"></i>
+                    </div>
+                    <div class="text-start">
+                        <div class="menu-title" style="font-size: 1rem;">โปรเจ็คเก่า</div>
+                        <div class="menu-desc mt-0" style="font-size: 0.7rem;">Legacy System</div>
+                    </div>
+                </div>
+            </a>
         </div>
-
     </div>
 
-    <footer class="text-center mt-5 mb-3 text-muted">
-        <small>© 2024 NEED System - All Rights Reserved.</small>
-    </footer>
+    <div class="row g-4 mb-4">
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="stat-label">ยอดขายวันนี้</div>
+                <div class="stat-value text-primary">{{ sales_today|intcomma }}</div>
+                <div class="mt-2"><span class="badge bg-primary bg-opacity-10 text-primary rounded-pill">Daily Sales</span></div>
+                <i class="fas fa-chart-line stat-icon-bg text-primary"></i>
+                <div class="mt-3 pt-3 border-top">
+                     <a href="{% url 'export_sales_excel' %}" class="text-decoration-none small fw-bold text-primary">
+                        <i class="fas fa-download"></i> โหลดรายงาน
+                    </a>
+                </div>
+            </div>
+        </div>
 
-</body>
-</html>
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="stat-label">กำไรสุทธิ</div>
+                <div class="stat-value text-success">{{ profit_month|intcomma }}</div>
+                <div class="mt-2"><span class="badge bg-success bg-opacity-10 text-success rounded-pill">Monthly Profit</span></div>
+                <i class="fas fa-coins stat-icon-bg text-success"></i>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="stat-label">สินค้าวิกฤต</div>
+                <div class="stat-value text-danger">{{ stock_low }}</div>
+                <div class="mt-2"><span class="badge bg-danger bg-opacity-10 text-danger rounded-pill">Low Stock</span></div>
+                <i class="fas fa-exclamation-circle stat-icon-bg text-danger"></i>
+            </div>
+        </div>
+
+        <div class="col-md-3 col-sm-6">
+            <div class="stat-card">
+                <div class="stat-label">รอรับของ</div>
+                <div class="stat-value text-warning">{{ po_pending }}</div>
+                <div class="mt-2"><span class="badge bg-warning bg-opacity-10 text-warning rounded-pill">Pending PO</span></div>
+                <i class="fas fa-truck-loading stat-icon-bg text-warning"></i>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-header">
+        <span class="section-title">เมนูจัดการ (Management)</span>
+        <div class="section-divider"></div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'employee_dashboard' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-id-card menu-icon"></i></div>
+                <div class="menu-title">ระบบพนักงาน</div>
+                <div class="menu-desc">สลิปเงินเดือน / ลงเวลา</div>
+            </a>
+        </div>
+
+        {% if user.is_superuser or perms.sales.view_posorder %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'sales_dashboard' %}" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-cash-register menu-icon"></i></div>
+                <div class="menu-title">ฝ่ายขาย</div>
+                <div class="menu-desc">POS / ใบเสนอราคา</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or perms.inventory.view_product %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="/admin/inventory/product/" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-box-open menu-icon"></i></div>
+                <div class="menu-title">คลังสินค้า</div>
+                <div class="menu-desc">สต็อก / บาร์โค้ด</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or perms.purchasing.view_purchaseorder %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="/admin/purchasing/purchaseorder/" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-shopping-cart menu-icon"></i></div>
+                <div class="menu-title">จัดซื้อ (PO)</div>
+                <div class="menu-desc">สั่งของเข้า</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or perms.manufacturing.view_productionorder %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="/admin/manufacturing/production_order/" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-cogs menu-icon"></i></div>
+                <div class="menu-title">ฝ่ายผลิต</div>
+                <div class="menu-desc">สั่งผลิต / เบิกของ</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser or perms.accounting.view_income %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="/admin/accounting/" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-calculator menu-icon"></i></div>
+                <div class="menu-title">บัญชี</div>
+                <div class="menu-desc">รายรับ / รายจ่าย</div>
+            </a>
+        </div>
+        {% endif %}
+
+        {% if user.is_superuser %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="/admin/master_data/" class="menu-btn">
+                <div class="menu-icon-box"><i class="fas fa-database menu-icon"></i></div>
+                <div class="menu-title">ข้อมูลพื้นฐาน</div>
+                <div class="menu-desc">บริษัท / ลูกค้า</div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="/admin/" class="menu-btn">
+                <div class="menu-icon-box" style="background: #343a40;">
+                    <i class="fas fa-cogs menu-icon text-white"></i>
+                </div>
+                <div class="menu-title">ผู้ดูแลระบบ</div>
+                <div class="menu-desc">จัดการหลังบ้าน</div>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

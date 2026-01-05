@@ -59,7 +59,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'], # โฟลเดอร์เก็บ HTML กลาง
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -67,6 +67,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'config.context_processors.company_info',
             ],
         },
     },
@@ -75,7 +76,6 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
-# ช่วงแรกใช้ SQLite ไปก่อนเพื่อความสะดวกในการขึ้นระบบ
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -91,19 +91,39 @@ AUTH_PASSWORD_VALIDATORS = [
     { 'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator', },
 ]
 
-# Internationalization
-# ✅ ตั้งค่าภาษาไทย และ เวลาประเทศไทย
-LANGUAGE_CODE = 'en-us'  # แก้เป็นอังกฤษชั่วคราว
-TIME_ZONE = 'Asia/Bangkok'
+# ==========================================
+# Internationalization (ตั้งค่าภาษาและวันที่)
+# ==========================================
+LANGUAGE_CODE = 'th'       # 👈 เปลี่ยนเป็นภาษาไทย
+TIME_ZONE = 'Asia/Bangkok' # 👈 เวลาไทย
 USE_I18N = True
+
+# ⚠️ สำคัญ: ต้องปิด L10N เพื่อให้ระบบยอมใช้ Format ที่เรากำหนดเองด้านล่าง
+USE_L10N = False 
 USE_TZ = True
+
+# ✅ กำหนดรูปแบบวันที่แสดงผลเป็น: 31/01/2026 (dd/mm/yyyy)
+DATE_FORMAT = 'd/m/Y'
+DATETIME_FORMAT = 'd/m/Y H:i'
+TIME_FORMAT = 'H:i'
+
+# ✅ กำหนดให้ช่องกรอกข้อมูลยอมรับรูปแบบนี้ (แก้ปัญหา Enter a valid date)
+DATE_INPUT_FORMATS = [
+    '%d/%m/%Y',  # รูปแบบหลัก: 31/10/1975
+    '%Y-%m-%d',  # รูปแบบสำรอง (กันเหนียว)
+]
+
+DATETIME_INPUT_FORMATS = [
+    '%d/%m/%Y %H:%M',
+    '%d/%m/%Y %H:%M:%S',
+    '%Y-%m-%d %H:%M:%S',
+]
 
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = 'static/'
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 # Media files (User uploaded images)
-# เก็บรูปสินค้า, รูปพนักงาน, โลโก้บริษัท
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
@@ -111,6 +131,6 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Login Redirect
-# เมื่อล็อกอินเสร็จ ให้วิ่งไปหน้า Dashboard (ที่เราจะสร้างในอนาคต)
-LOGIN_REDIRECT_URL = 'dashboard'
-LOGOUT_REDIRECT_URL = 'login'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
+LOGIN_URL = 'login'
