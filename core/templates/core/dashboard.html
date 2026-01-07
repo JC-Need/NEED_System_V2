@@ -65,7 +65,6 @@
     .menu-icon { font-size: 1.8rem; color: #b2bec3; transition: all 0.3s; }
 
     /* เอฟเฟกต์ตอนชี้เมาส์: เปลี่ยนสีไอคอนตามหมวดหมู่ */
-    /* นี่คือจุดที่ทำให้เป็นสีทองครับ (Gold Gradient) */
     .menu-btn:hover .menu-icon-box { background: var(--gold-grad); box-shadow: 0 10px 20px rgba(197, 160, 89, 0.3); }
     .menu-btn:hover .menu-icon { color: white; }
 
@@ -83,16 +82,12 @@
 
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
-            <h5 class="text-muted mb-1">ยินดีต้อนรับกลับ,</h5>
-            <h2 class="fw-bold" style="color: #2d3436;">{{ user.first_name|default:user.username }}</h2>
-        </div>
-        <div>
             <span class="badge bg-white text-dark border px-3 py-2 rounded-pill shadow-sm">
                 📅 {% now "d F Y" %}
             </span>
         </div>
     </div>
-    
+
     <div class="row mb-4">
         <div class="col-6 col-md-3 col-lg-3">
             <a href="https://jcneedhistory.pythonanywhere.com" target="_blank" class="menu-btn" style="min-height: auto; padding: 20px;">
@@ -117,7 +112,7 @@
                 <div class="mt-2"><span class="badge bg-primary bg-opacity-10 text-primary rounded-pill">Daily Sales</span></div>
                 <i class="fas fa-chart-line stat-icon-bg text-primary"></i>
                 <div class="mt-3 pt-3 border-top">
-                     <a href="{% url 'export_sales_excel' %}" class="text-decoration-none small fw-bold text-primary">
+                    <a href="{% url 'export_sales_excel' %}" class="text-decoration-none small fw-bold text-primary">
                         <i class="fas fa-download"></i> โหลดรายงาน
                     </a>
                 </div>
@@ -165,6 +160,29 @@
                 <div class="menu-desc">สลิปเงินเดือน / ลงเวลา</div>
             </a>
         </div>
+
+        {% if user.is_staff %}
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'manager_dashboard' %}" class="menu-btn" style="border: 1px solid #ffc107;">
+                <div class="menu-icon-box" style="background: #fff3cd;">
+                    <i class="fas fa-user-check menu-icon" style="color: #ffc107;"></i>
+                </div>
+                <div class="menu-title">อนุมัติใบลา</div>
+                <div class="menu-desc">สำหรับผู้จัดการ</div>
+            </a>
+        </div>
+
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'hr_executive_dashboard' %}" class="menu-btn" style="border: 1px solid #4e73df;">
+                <div class="menu-icon-box" style="background: #eaf1fb;">
+                    <i class="fas fa-chart-line menu-icon" style="color: #4e73df;"></i>
+                </div>
+                <div class="menu-title">HR Analytics</div>
+                <div class="menu-desc">วิเคราะห์ข้อมูล</div>
+            </a>
+        </div>
+        {% endif %}
+
 
         {% if user.is_superuser or perms.sales.view_posorder %}
         <div class="col-6 col-md-3 col-lg-3">

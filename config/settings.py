@@ -67,7 +67,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'config.context_processors.company_info',
+                'core.context_processors.company_context',
             ],
         },
     },
@@ -99,7 +99,7 @@ TIME_ZONE = 'Asia/Bangkok' # 👈 เวลาไทย
 USE_I18N = True
 
 # ⚠️ สำคัญ: ต้องปิด L10N เพื่อให้ระบบยอมใช้ Format ที่เรากำหนดเองด้านล่าง
-USE_L10N = False 
+USE_L10N = False
 USE_TZ = True
 
 # ✅ กำหนดรูปแบบวันที่แสดงผลเป็น: 31/01/2026 (dd/mm/yyyy)

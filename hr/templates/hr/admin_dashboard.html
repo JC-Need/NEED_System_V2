@@ -1,0 +1,182 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<div class="container-fluid py-4 px-4">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0 text-dark"><i class="fas fa-chart-line me-2"></i>HR Analytics Center</h2>
+            <p class="text-muted">วิเคราะห์ข้อมูลบุคลากรเพื่อการพัฒนาองค์กร</p>
+        </div>
+        <div>
+            <a href="{% url 'manager_dashboard' %}" class="btn btn-warning text-white rounded-pill shadow-sm fw-bold">
+                <i class="fas fa-bell me-2"></i>รออนุมัติ ({{ pending_leaves }})
+            </a>
+            <a href="/admin/hr/employee/add/" class="btn btn-primary rounded-pill shadow-sm ms-2">
+                <i class="fas fa-user-plus me-2"></i>รับพนักงานใหม่
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4 border-primary">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">พนักงานทั้งหมด</div>
+                            <div class="h3 mb-0 fw-bold text-dark">{{ total_employees }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-users fa-2x text-secondary opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4 border-success">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs fw-bold text-success text-uppercase mb-1">เข้างานวันนี้</div>
+                            <div class="h3 mb-0 fw-bold text-dark">{{ present_count }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-fingerprint fa-2x text-secondary opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4 border-info">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs fw-bold text-info text-uppercase mb-1">ลางานวันนี้</div>
+                            <div class="h3 mb-0 fw-bold text-dark">{{ on_leave_today }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-suitcase-rolling fa-2x text-secondary opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4 border-warning">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs fw-bold text-warning text-uppercase mb-1">รออนุมัติ</div>
+                            <div class="h3 mb-0 fw-bold text-dark">{{ pending_leaves }}</div>
+                        </div>
+                        <div class="col-auto">
+                            <i class="fas fa-file-signature fa-2x text-secondary opacity-25"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-0">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-chart-pie me-2 text-primary"></i>โครงสร้างพนักงานตามแผนก</h6>
+                </div>
+                <div class="card-body d-flex justify-content-center align-items-center" style="min-height: 300px;">
+                    <div style="width: 100%; max-width: 350px;">
+                        <canvas id="deptChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-user-tag me-2 text-success"></i>พนักงานใหม่ล่าสุด</h6>
+                    <small><a href="/admin/hr/employee/" class="text-decoration-none">ดูทั้งหมด</a></small>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light">
+                                <tr>
+                                    <th class="ps-4">ชื่อ-สกุล</th>
+                                    <th>ตำแหน่ง</th>
+                                    <th>เริ่มงาน</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for emp in new_hires %}
+                                <tr>
+                                    <td class="ps-4">
+                                        <div class="d-flex align-items-center">
+                                            {% if emp.photo %}
+                                                <img src="{{ emp.photo.url }}" class="rounded-circle me-2" width="30" height="30" style="object-fit:cover;">
+                                            {% else %}
+                                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center me-2" style="width:30px; height:30px; font-size: 12px;">{{ emp.first_name|slice:":1" }}</div>
+                                            {% endif %}
+                                            {{ emp.first_name }}
+                                        </div>
+                                    </td>
+                                    <td><span class="badge bg-light text-dark border">{{ emp.position }}</span></td>
+                                    <td class="text-muted small">{{ emp.start_date|date:"d M Y" }}</td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="3" class="text-center py-4 text-muted">ยังไม่มีข้อมูลพนักงาน</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // ดึงข้อมูลจาก Django มาใส่ในตัวแปร JavaScript
+    var deptLabels = [{% for item in dept_data %}"{{ item.department__name|default:'ไม่ระบุ' }}",{% endfor %}];
+    var deptCounts = [{% for item in dept_data %}{{ item.count }},{% endfor %}];
+
+    // วาดกราฟ Doughnut
+    var ctx = document.getElementById('deptChart').getContext('2d');
+    var myPieChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: deptLabels,
+            datasets: [{
+                data: deptCounts,
+                backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'],
+                hoverBackgroundColor: ['#2e59d9', '#17a673', '#2c9faf', '#dda20a', '#be2617', '#60616f'],
+                hoverBorderColor: "rgba(234, 236, 244, 1)",
+            }],
+        },
+        options: {
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        usePointStyle: true,
+                        padding: 20
+                    }
+                }
+            },
+            cutout: '70%', // ทำให้รูตรงกลางใหญ่ขึ้น ดูโมเดิร์น
+        },
+    });
+</script>
+
+{% endblock %}

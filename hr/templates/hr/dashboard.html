@@ -1,5 +1,7 @@
 {% extends 'core/base.html' %}
-{% load humanize %} {% block content %}
+{% load humanize %}
+
+{% block content %}
 <style>
     /* CSS พิเศษสำหรับหน้านี้โดยเฉพาะ */
     .dashboard-header {
@@ -71,14 +73,8 @@
                 <span class="badge bg-white text-dark mb-2 px-3 rounded-pill">
                     <i class="fas fa-id-badge me-1"></i> {{ employee.emp_id }}
                 </span>
-                <h2 class="fw-bold mb-0">สวัสดี, {{ employee.prefix }}{{ employee.first_name }}</h2>
+                <h2 class="fw-bold mb-0">{{ employee.prefix }} {{ employee.first_name }}</h2>
                 <p class="opacity-75 mb-0">{{ employee.position.title }} | {{ employee.department }}</p>
-            </div>
-
-            <div class="ms-auto">
-                <a href="/admin/logout/" class="btn btn-outline-light btn-sm rounded-pill px-3">
-                    <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
-                </a>
             </div>
         </div>
     </div>
@@ -146,21 +142,29 @@
     <div class="row g-3 mb-5">
         <div class="col-md-4">
             {% if not today_attendance.time_in %}
-                <button class="btn btn-action btn-checkin w-100 d-flex align-items-center justify-content-center">
-                    <i class="fas fa-fingerprint fa-2x me-3"></i>
-                    <div class="text-start">
-                        <div class="fs-5">ลงเวลาเข้างาน</div>
-                        <small class="opacity-75">Check-in Now</small>
-                    </div>
-                </button>
+                <form action="{% url 'check_in' %}" method="post" class="w-100">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-action btn-checkin w-100 d-flex align-items-center justify-content-center">
+                        <i class="fas fa-fingerprint fa-2x me-3"></i>
+                        <div class="text-start">
+                            <div class="fs-5">ลงเวลาเข้างาน</div>
+                            <small class="opacity-75">Check-in Now</small>
+                        </div>
+                    </button>
+                </form>
+
             {% elif not today_attendance.time_out %}
-                <button class="btn btn-action btn-danger w-100 d-flex align-items-center justify-content-center shadow">
-                    <i class="fas fa-sign-out-alt fa-2x me-3"></i>
-                    <div class="text-start">
-                        <div class="fs-5">ลงเวลาออกงาน</div>
-                        <small class="opacity-75">Check-out</small>
-                    </div>
-                </button>
+                <form action="{% url 'check_out' %}" method="post" class="w-100">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-action btn-danger w-100 d-flex align-items-center justify-content-center shadow">
+                        <i class="fas fa-sign-out-alt fa-2x me-3"></i>
+                        <div class="text-start">
+                            <div class="fs-5">ลงเวลาออกงาน</div>
+                            <small class="opacity-75">Check-out</small>
+                        </div>
+                    </button>
+                </form>
+
             {% else %}
                 <button class="btn btn-secondary w-100 py-3 disabled" style="opacity: 0.6;">
                     <i class="fas fa-check-double me-2"></i> วันนี้ลงเวลาครบแล้ว
@@ -169,13 +173,15 @@
         </div>
 
         <div class="col-md-4">
-            <button class="btn btn-action btn-leave w-100 d-flex align-items-center justify-content-center">
-                <i class="fas fa-paper-plane fa-2x me-3"></i>
-                <div class="text-start">
-                    <div class="fs-5">ขอลางาน</div>
-                    <small class="opacity-75">Request Leave</small>
-                </div>
-            </button>
+            <a href="{% url 'leave_create' %}" class="text-decoration-none">
+                <button class="btn btn-action btn-leave w-100 d-flex align-items-center justify-content-center">
+                    <i class="fas fa-paper-plane fa-2x me-3"></i>
+                    <div class="text-start">
+                        <div class="fs-5">ขอลางาน</div>
+                        <small class="opacity-75">Request Leave</small>
+                    </div>
+                </button>
+            </a>
         </div>
 
         <div class="col-md-4">
