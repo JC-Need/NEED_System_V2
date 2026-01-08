@@ -1,7 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-import datetime  # 👈 ต้องมีบรรทัดนี้ครับ สำคัญมาก!
+import datetime
 
 # ==========================================
 # ส่วนที่ 1: ข้อมูลประกอบ (Master Data ของ HR)
@@ -37,6 +37,7 @@ class EmployeeType(models.Model):
     class Meta:
         verbose_name = "ประเภทพนักงาน"
         verbose_name_plural = "ข้อมูลประเภทพนักงาน"
+
 
 # ==========================================
 # ส่วนที่ 2: ข้อมูลพนักงาน (Employee Core)
@@ -75,9 +76,49 @@ class Employee(models.Model):
     
     salary = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="เงินเดือนปัจจุบัน")
     social_security_id = models.CharField(max_length=20, blank=True, verbose_name="เลขประกันสังคม")
-    bank_account_no = models.CharField(max_length=20, blank=True, verbose_name="เลขที่บัญชี")
+    bank_account_no = models.CharField(max_length=20, blank=True, verbose_name="เลขที่บัญชี (เงินเดือน)")
     
     photo = models.ImageField(upload_to='employees/', blank=True, verbose_name="รูปถ่าย")
+
+    # ==========================================
+    # 🌳 ส่วนโครงสร้างทีม & ผลตอบแทน (Network)
+    # ==========================================
+    
+    # 1. ผู้แนะนำ/หัวหน้าทีม (Upline)
+    introducer = models.ForeignKey(
+        'self', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='downlines',
+        verbose_name='ผู้แนะนำ (Upline)'
+    )
+    
+    # 2. ระดับตำแหน่งทางธุรกิจ (Business Rank)
+    RANK_CHOICES = [
+        ('member', 'Member (สมาชิกทั่วไป)'),
+        ('supervisor', 'Supervisor (หัวหน้าทีม)'),
+        ('manager', 'Manager (ผู้จัดการทีม)'),
+        ('director', 'Director (ผู้อำนวยการ)'),
+    ]
+    business_rank = models.CharField(
+        max_length=20, 
+        choices=RANK_CHOICES, 
+        default='member', 
+        verbose_name='ระดับธุรกิจ'
+    )
+    
+    # 3. อัตราคอมมิชชั่นส่วนตัว (%)
+    commission_rate = models.DecimalField(
+        max_digits=5, 
+        decimal_places=2, 
+        default=0.00, 
+        verbose_name='ค่าคอมมิชชั่น (%)'
+    )
+
+    # 4. ข้อมูลการเงิน (สำหรับรับค่าคอมฯ)
+    bank_name = models.CharField(max_length=100, blank=True, null=True, verbose_name='ธนาคาร (รับคอมมิชชั่น)')
+    bank_account = models.CharField(max_length=20, blank=True, null=True, verbose_name='เลขบัญชี (รับคอมมิชชั่น)')
 
     def __str__(self):
         return f"{self.emp_id} - {self.first_name} {self.last_name}"
@@ -86,6 +127,7 @@ class Employee(models.Model):
         verbose_name = "พนักงาน"
         verbose_name_plural = "ข้อมูลพนักงาน"
         ordering = ['emp_id']
+
 
 # ==========================================
 # ส่วนที่ 3: ระบบลงเวลาและการลา (Time & Attendance)
@@ -104,27 +146,22 @@ class Attendance(models.Model):
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
 
     def save(self, *args, **kwargs):
-        # ตั้งเวลาเข้างานมาตรฐาน (เช่น 08:30 น.)
         WORK_START_TIME = datetime.time(8, 30, 0)
         
-        # ถ้ามีการลงเวลาเข้า
         if self.time_in:
-            # เช็คว่าสายไหม? (ถ้าเวลาเข้า มากกว่า 08:30)
             if self.time_in > WORK_START_TIME:
                 self.is_late = True
             else:
                 self.is_late = False
                 
-        # คำนวณชั่วโมงทำงาน (ถ้ามีทั้งเข้าและออก)
         if self.time_in and self.time_out:
-            # ต้องแปลงเป็น datetime เต็มรูปแบบเพื่อลบกัน
             dummy_date = datetime.date(2000, 1, 1)
             dt_in = datetime.datetime.combine(dummy_date, self.time_in)
             dt_out = datetime.datetime.combine(dummy_date, self.time_out)
             
             duration = dt_out - dt_in
             total_seconds = duration.total_seconds()
-            self.total_hours = total_seconds / 3600 # แปลงวินาทีเป็นชั่วโมง
+            self.total_hours = total_seconds / 3600
             
         super().save(*args, **kwargs)
 
@@ -168,6 +205,7 @@ class LeaveRequest(models.Model):
         verbose_name = "ใบลา"
         verbose_name_plural = "รายการใบลา"
 
+
 # ==========================================
 # ส่วนที่ 4: ระบบเงินเดือน (Payroll)
 # ==========================================
@@ -210,21 +248,18 @@ class Payslip(models.Model):
         return f"สลิปเงินเดือน: {self.employee.first_name} - {self.get_month_display()} {self.year}"
     
     def save(self, *args, **kwargs):
-        # 1. ดึงเงินเดือนจากข้อมูลพนักงาน (ถ้ายังไม่ได้กรอก)
         if self.base_salary == 0:
             self.base_salary = self.employee.salary
 
-        # 2. คำนวณประกันสังคมอัตโนมัติ (กฎหมายไทย: 5% ของเงินเดือน สูงสุดไม่เกินฐาน 15,000)
-        if self.social_security == 0: # คำนวณให้เฉพาะถ้ายังไม่ได้กรอกเอง
+        if self.social_security == 0:
             ss_base = self.base_salary
             if ss_base > 15000:
                 ss_base = 15000
-            elif ss_base < 1650: # ขั้นต่ำตามกฎหมาย
+            elif ss_base < 1650:
                 ss_base = 1650
             
-            self.social_security = ss_base * 0.05 # 5%
+            self.social_security = ss_base * 0.05
 
-        # 3. คำนวณยอดสุทธิ
         total_income = self.base_salary + self.ot_pay + self.bonus + self.other_income
         total_deduction = self.tax + self.social_security + self.leave_deduction + self.other_deduction
         self.net_salary = total_income - total_deduction
@@ -235,3 +270,30 @@ class Payslip(models.Model):
         verbose_name = "สลิปเงินเดือน"
         verbose_name_plural = "จัดการสลิปเงินเดือน"
         unique_together = ['employee', 'year', 'month']
+
+
+# ==========================================
+# ส่วนที่ 5: ระบบบันทึกรายได้คอมมิชชั่น (Commission Log) ✅ เพิ่มใหม่
+# ==========================================
+
+class CommissionLog(models.Model):
+    """
+    ตารางเก็บประวัติรายได้ค่าคอมมิชชั่น (ใคร ได้เงินจาก ใคร)
+    """
+    recipient = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='commissions_received', verbose_name="ผู้รับเงิน")
+    source_employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="จากยอดขายของ")
+    
+    level = models.IntegerField(verbose_name="ชั้นที่ (Level)")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="จำนวนเงิน (บาท)")
+    sale_ref_id = models.CharField(max_length=50, blank=True, verbose_name="อ้างอิงเลขที่บิล") # เผื่ออนาคตเชื่อมระบบขาย
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ได้รับ")
+
+    def __str__(self):
+        # ตรวจสอบก่อนว่า source_employee ยังอยู่หรือไม่ (ป้องกัน Error ถ้าพนักงานถูกลบ)
+        source_name = self.source_employee.first_name if self.source_employee else "Unknown"
+        return f"{self.recipient.first_name} รับ {self.amount} บาท (จาก {source_name})"
+
+    class Meta:
+        verbose_name = "ประวัติค่าคอมมิชชั่น"
+        verbose_name_plural = "ประวัติค่าคอมมิชชั่น"

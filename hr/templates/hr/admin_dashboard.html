@@ -15,7 +15,7 @@
             <a href="{% url 'manager_dashboard' %}" class="btn btn-warning text-white rounded-pill shadow-sm fw-bold">
                 <i class="fas fa-bell me-2"></i>รออนุมัติ ({{ pending_leaves }})
             </a>
-            <a href="/admin/hr/employee/add/" class="btn btn-primary rounded-pill shadow-sm ms-2">
+            <a href="{% url 'employee_create' %}" class="btn btn-primary rounded-pill shadow-sm ms-2">
                 <i class="fas fa-user-plus me-2"></i>รับพนักงานใหม่
             </a>
         </div>
@@ -30,9 +30,7 @@
                             <div class="text-xs fw-bold text-primary text-uppercase mb-1">พนักงานทั้งหมด</div>
                             <div class="h3 mb-0 fw-bold text-dark">{{ total_employees }}</div>
                         </div>
-                        <div class="col-auto">
-                            <i class="fas fa-users fa-2x text-secondary opacity-25"></i>
-                        </div>
+                        <div class="col-auto"><i class="fas fa-users fa-2x text-secondary opacity-25"></i></div>
                     </div>
                 </div>
             </div>
@@ -45,9 +43,7 @@
                             <div class="text-xs fw-bold text-success text-uppercase mb-1">เข้างานวันนี้</div>
                             <div class="h3 mb-0 fw-bold text-dark">{{ present_count }}</div>
                         </div>
-                        <div class="col-auto">
-                            <i class="fas fa-fingerprint fa-2x text-secondary opacity-25"></i>
-                        </div>
+                        <div class="col-auto"><i class="fas fa-fingerprint fa-2x text-secondary opacity-25"></i></div>
                     </div>
                 </div>
             </div>
@@ -60,9 +56,7 @@
                             <div class="text-xs fw-bold text-info text-uppercase mb-1">ลางานวันนี้</div>
                             <div class="h3 mb-0 fw-bold text-dark">{{ on_leave_today }}</div>
                         </div>
-                        <div class="col-auto">
-                            <i class="fas fa-suitcase-rolling fa-2x text-secondary opacity-25"></i>
-                        </div>
+                        <div class="col-auto"><i class="fas fa-suitcase-rolling fa-2x text-secondary opacity-25"></i></div>
                     </div>
                 </div>
             </div>
@@ -75,12 +69,40 @@
                             <div class="text-xs fw-bold text-warning text-uppercase mb-1">รออนุมัติ</div>
                             <div class="h3 mb-0 fw-bold text-dark">{{ pending_leaves }}</div>
                         </div>
+                        <div class="col-auto"><i class="fas fa-file-signature fa-2x text-secondary opacity-25"></i></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-6 col-lg-3">
+            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4" style="border-color: #6f42c1 !important;">
+                <div class="card-body">
+                    <div class="row no-gutters align-items-center">
+                        <div class="col mr-2">
+                            <div class="text-xs fw-bold text-uppercase mb-1" style="color: #6f42c1;">คอมมิชชั่นที่จ่ายแล้ว</div>
+                            <div class="h3 mb-0 fw-bold text-dark">฿{{ total_commission_paid|intcomma }}</div>
+                        </div>
                         <div class="col-auto">
-                            <i class="fas fa-file-signature fa-2x text-secondary opacity-25"></i>
+                            <i class="fas fa-hand-holding-usd fa-2x text-secondary opacity-25"></i>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <div class="col-md-6 col-lg-3">
+            <a href="{% url 'network_tree' %}" class="card border-0 shadow-sm h-100 py-3 text-decoration-none transition-hover" style="background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);">
+                <div class="card-body text-white d-flex align-items-center justify-content-between">
+                    <div>
+                        <div class="fw-bold text-uppercase mb-1" style="font-size: 0.8rem; opacity: 0.8;">Organization</div>
+                        <div class="h5 mb-0 fw-bold">ดูผังองค์กร (Tree)</div>
+                    </div>
+                    <i class="fas fa-sitemap fa-2x opacity-50"></i>
+                </div>
+            </a>
         </div>
     </div>
 
@@ -146,11 +168,9 @@
 </div>
 
 <script>
-    // ดึงข้อมูลจาก Django มาใส่ในตัวแปร JavaScript
     var deptLabels = [{% for item in dept_data %}"{{ item.department__name|default:'ไม่ระบุ' }}",{% endfor %}];
     var deptCounts = [{% for item in dept_data %}{{ item.count }},{% endfor %}];
 
-    // วาดกราฟ Doughnut
     var ctx = document.getElementById('deptChart').getContext('2d');
     var myPieChart = new Chart(ctx, {
         type: 'doughnut',
@@ -168,13 +188,10 @@
             plugins: {
                 legend: {
                     position: 'bottom',
-                    labels: {
-                        usePointStyle: true,
-                        padding: 20
-                    }
+                    labels: { usePointStyle: true, padding: 20 }
                 }
             },
-            cutout: '70%', // ทำให้รูตรงกลางใหญ่ขึ้น ดูโมเดิร์น
+            cutout: '70%', 
         },
     });
 </script>

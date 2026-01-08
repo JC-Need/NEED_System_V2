@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views
+from . import views_employee
+from . import views_network
 
 urlpatterns = [
     # ... path อื่นๆ ...
@@ -13,4 +15,6 @@ urlpatterns = [
     path('admin-dashboard/', views.hr_executive_dashboard, name='hr_executive_dashboard'),
     path('manager/reject/<int:leave_id>/', views.reject_leave, name='reject_leave'),
     path('analytics/', views.hr_executive_dashboard, name='hr_executive_dashboard'),
+    path('employee/add/', views_employee.employee_create, name='employee_create'),
+    path('network/tree/', views_network.network_tree, name='network_tree'),
 ]

@@ -1,0 +1,105 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<style>
+    /* 🌳 CSS สำหรับวาดผังองค์กร (Org Chart) */
+    .tree {
+        display: flex; justify-content: center; margin-top: 50px; min-height: 500px;
+        overflow-x: auto; /* เลื่อนซ้ายขวาได้ถ้าผังกว้าง */
+        padding-bottom: 50px;
+    }
+    .tree ul {
+        padding-top: 20px; position: relative;
+        transition: all 0.5s;
+        display: flex; justify-content: center;
+    }
+    .tree li {
+        float: left; text-align: center; list-style-type: none;
+        position: relative; padding: 20px 5px 0 5px;
+        transition: all 0.5s;
+    }
+    /* สร้างเส้นโยงแนวตั้ง */
+    .tree li::before, .tree li::after {
+        content: ''; position: absolute; top: 0; right: 50%;
+        border-top: 2px solid #ccc; width: 50%; height: 20px;
+    }
+    .tree li::after {
+        right: auto; left: 50%; border-left: 2px solid #ccc;
+    }
+    /* ลบเส้นที่ไม่จำเป็น (คนแรกและคนสุดท้ายของแถว) */
+    .tree li:only-child::after, .tree li:only-child::before { display: none; }
+    .tree li:only-child { padding-top: 0; }
+    .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
+    .tree li:last-child::before { border-right: 2px solid #ccc; border-radius: 0 5px 0 0; }
+    .tree li:first-child::after { border-radius: 5px 0 0 0; }
+    
+    /* สร้างเส้นโยงลงมาหาลูก */
+    .tree ul ul::before {
+        content: ''; position: absolute; top: 0; left: 50%;
+        border-left: 2px solid #ccc; width: 0; height: 20px;
+    }
+
+    /* กล่องการ์ดพนักงาน */
+    .node-card {
+        border: 1px solid #ddd; padding: 15px; text-decoration: none;
+        color: #666; font-family: 'Prompt', sans-serif; font-size: 14px;
+        display: inline-block; border-radius: 10px; background: white;
+        transition: all 0.3s; min-width: 150px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        position: relative; z-index: 10;
+    }
+    .node-card:hover {
+        background: #eaf1fb; border-color: #4e73df; color: #000;
+        transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .node-img {
+        width: 50px; height: 50px; border-radius: 50%; object-fit: cover;
+        border: 3px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-bottom: 10px;
+    }
+    
+    /* สีตามระดับตำแหน่ง (Rank Colors) */
+    .rank-badge { padding: 3px 10px; border-radius: 15px; font-size: 10px; font-weight: bold; text-transform: uppercase; color: white; display: block; margin-top: 5px; }
+    .rank-member { background: #858796; }
+    .rank-supervisor { background: #4e73df; }
+    .rank-manager { background: #f6c23e; }
+    .rank-director { background: #e74a3b; }
+
+</style>
+
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 px-4">
+        <div>
+            <h2 class="fw-bold mb-0 text-dark"><i class="fas fa-sitemap me-2 text-primary"></i>โครงสร้างทีมงาน (Organization Tree)</h2>
+            <p class="text-muted">แสดงผังสายงานตามลำดับการแนะนำ</p>
+        </div>
+        <div>
+            <a href="{% url 'employee_create' %}" class="btn btn-primary rounded-pill shadow-sm">
+                <i class="fas fa-plus me-2"></i>เพิ่มสมาชิกทีม
+            </a>
+            <a href="{% url 'hr_executive_dashboard' %}" class="btn btn-light border rounded-pill ms-2">
+                <i class="fas fa-arrow-left me-2"></i>กลับ Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm mx-4">
+        <div class="card-body bg-light" style="overflow-x: auto; min-height: 600px;">
+            
+            <div class="tree">
+                <ul>
+                    {% for root in root_employees %}
+                        {% include "hr/includes/node_recursive.html" with node=root %}
+                    {% empty %}
+                        <div class="text-center mt-5">
+                            <h4 class="text-muted">ยังไม่มีข้อมูลพนักงานในระบบ</h4>
+                            <p>เริ่มจากเพิ่มพนักงานคนแรกก่อนนะครับ</p>
+                        </div>
+                    {% endfor %}
+                </ul>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

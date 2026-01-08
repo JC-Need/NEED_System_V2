@@ -3,10 +3,11 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Count  # ✅ เพิ่ม: จำเป็นสำหรับการนับจำนวนพนักงานแยกตามแผนก
+from django.db.models import Count, Sum  # ✅ เพิ่ม Sum
 import datetime
 
-from .models import Employee, Attendance, LeaveRequest, Payslip
+# ✅ เพิ่ม CommissionLog
+from .models import Employee, Attendance, LeaveRequest, Payslip, CommissionLog 
 from .forms import LeaveRequestForm
 
 # ==========================================
@@ -129,33 +130,23 @@ def reject_leave(request, leave_id):
 
 
 # ==========================================
-# 5. ส่วนของผู้บริหาร (Executive Zone - Analytics) ✅ เพิ่มใหม่!
+# 5. ส่วนของผู้บริหาร (Executive Zone - Analytics)
 # ==========================================
 @staff_member_required(login_url='/login/')
 def hr_executive_dashboard(request):
     today = datetime.date.today()
     
-    # --- KPI 1: ภาพรวมบุคลากร ---
+    # KPI 1: ข้อมูลพื้นฐาน
     total_employees = Employee.objects.count()
-    
-    # คนที่มาทำงานวันนี้ (มีเวลาเข้างาน และวันที่คือวันนี้)
     present_count = Attendance.objects.filter(date=today, time_in__isnull=False).count()
-    
-    # คนที่ลางานวันนี้ (วันที่ปัจจุบัน อยู่ในช่วงวันลา และสถานะอนุมัติแล้ว)
-    on_leave_today = LeaveRequest.objects.filter(
-        start_date__lte=today, 
-        end_date__gte=today, 
-        status='approved'
-    ).count()
-    
-    # รายการรออนุมัติคงค้าง
+    on_leave_today = LeaveRequest.objects.filter(start_date__lte=today, end_date__gte=today, status='approved').count()
     pending_leaves = LeaveRequest.objects.filter(status='pending').count()
     
-    # --- KPI 2: ข้อมูลกราฟ (นับจำนวนคนแยกตามแผนก) ---
-    # ผลลัพธ์จะเป็น list เช่น: [{'department__name': 'IT', 'count': 5}, ...]
-    dept_data = Employee.objects.values('department__name').annotate(count=Count('id')).order_by('-count')
+    # ✅ KPI 2 (ใหม่): ยอดจ่ายคอมมิชชั่นรวมทั้งบริษัท (ถ้ายังไม่มีให้เป็น 0)
+    total_commission_paid = CommissionLog.objects.aggregate(Sum('amount'))['amount__sum'] or 0
     
-    # --- KPI 3: พนักงานใหม่ (5 คนล่าสุด) ---
+    # KPI 3: ข้อมูลกราฟ
+    dept_data = Employee.objects.values('department__name').annotate(count=Count('id')).order_by('-count')
     new_hires = Employee.objects.order_by('-start_date')[:5]
     
     context = {
@@ -163,9 +154,9 @@ def hr_executive_dashboard(request):
         'present_count': present_count,
         'on_leave_today': on_leave_today,
         'pending_leaves': pending_leaves,
+        'total_commission_paid': total_commission_paid, # ✅ ส่งตัวเลขไปหน้าบ้าน
         'dept_data': dept_data,
         'new_hires': new_hires,
     }
     
-    # ส่งไปที่ Template ใหม่ที่เราออกแบบไว้ (admin_dashboard.html)
     return render(request, 'hr/admin_dashboard.html', context)
