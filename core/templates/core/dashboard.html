@@ -153,35 +153,20 @@
     </div>
 
     <div class="row g-3">
+        
         <div class="col-6 col-md-3 col-lg-3">
-            <a href="{% url 'employee_dashboard' %}" class="menu-btn">
+            <a href="{% if user.is_staff %}{% url 'hr_executive_dashboard' %}{% else %}{% url 'employee_dashboard' %}{% endif %}" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-id-card menu-icon"></i></div>
                 <div class="menu-title">ระบบพนักงาน</div>
-                <div class="menu-desc">สลิปเงินเดือน / ลงเวลา</div>
-            </a>
-        </div>
-
-        {% if user.is_staff %}
-        <div class="col-6 col-md-3 col-lg-3">
-            <a href="{% url 'manager_dashboard' %}" class="menu-btn" style="border: 1px solid #ffc107;">
-                <div class="menu-icon-box" style="background: #fff3cd;">
-                    <i class="fas fa-user-check menu-icon" style="color: #ffc107;"></i>
+                <div class="menu-desc">
+                    {% if user.is_staff %}
+                        วิเคราะห์ข้อมูล HR
+                    {% else %}
+                        สลิปเงินเดือน / ลงเวลา
+                    {% endif %}
                 </div>
-                <div class="menu-title">อนุมัติใบลา</div>
-                <div class="menu-desc">สำหรับผู้จัดการ</div>
             </a>
         </div>
-
-        <div class="col-6 col-md-3 col-lg-3">
-            <a href="{% url 'hr_executive_dashboard' %}" class="menu-btn" style="border: 1px solid #4e73df;">
-                <div class="menu-icon-box" style="background: #eaf1fb;">
-                    <i class="fas fa-chart-line menu-icon" style="color: #4e73df;"></i>
-                </div>
-                <div class="menu-title">HR Analytics</div>
-                <div class="menu-desc">วิเคราะห์ข้อมูล</div>
-            </a>
-        </div>
-        {% endif %}
 
 
         {% if user.is_superuser or perms.sales.view_posorder %}
