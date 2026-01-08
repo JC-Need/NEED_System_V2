@@ -17,4 +17,6 @@ urlpatterns = [
     path('analytics/', views.hr_executive_dashboard, name='hr_executive_dashboard'),
     path('employee/add/', views_employee.employee_create, name='employee_create'),
     path('network/tree/', views_network.network_tree, name='network_tree'),
+    path('api/create-position/', views_employee.api_create_position, name='api_create_position'),
+    path('api/create-department/', views_employee.api_create_department, name='api_create_department'),
 ]
