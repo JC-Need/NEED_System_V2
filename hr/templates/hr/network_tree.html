@@ -1,105 +1,192 @@
 {% extends 'core/base.html' %}
+{% load static %}
 
 {% block content %}
 <style>
-    /* 🌳 CSS สำหรับวาดผังองค์กร (Org Chart) */
-    .tree {
-        display: flex; justify-content: center; margin-top: 50px; min-height: 500px;
-        overflow-x: auto; /* เลื่อนซ้ายขวาได้ถ้าผังกว้าง */
-        padding-bottom: 50px;
-    }
-    .tree ul {
-        padding-top: 20px; position: relative;
-        transition: all 0.5s;
-        display: flex; justify-content: center;
-    }
-    .tree li {
-        float: left; text-align: center; list-style-type: none;
-        position: relative; padding: 20px 5px 0 5px;
-        transition: all 0.5s;
-    }
-    /* สร้างเส้นโยงแนวตั้ง */
-    .tree li::before, .tree li::after {
-        content: ''; position: absolute; top: 0; right: 50%;
-        border-top: 2px solid #ccc; width: 50%; height: 20px;
-    }
-    .tree li::after {
-        right: auto; left: 50%; border-left: 2px solid #ccc;
-    }
-    /* ลบเส้นที่ไม่จำเป็น (คนแรกและคนสุดท้ายของแถว) */
-    .tree li:only-child::after, .tree li:only-child::before { display: none; }
-    .tree li:only-child { padding-top: 0; }
-    .tree li:first-child::before, .tree li:last-child::after { border: 0 none; }
-    .tree li:last-child::before { border-right: 2px solid #ccc; border-radius: 0 5px 0 0; }
-    .tree li:first-child::after { border-radius: 5px 0 0 0; }
-    
-    /* สร้างเส้นโยงลงมาหาลูก */
-    .tree ul ul::before {
-        content: ''; position: absolute; top: 0; left: 50%;
-        border-left: 2px solid #ccc; width: 0; height: 20px;
+    /* --- CSS สำหรับ Interactive Tree --- */
+    .tree-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 40px;
+        font-family: 'Sarabun', sans-serif;
     }
 
-    /* กล่องการ์ดพนักงาน */
+    /* เส้นหลักแนวตั้ง */
+    .tree-list {
+        list-style: none;
+        padding-left: 20px;
+        position: relative;
+    }
+    
+    .tree-list ul {
+        list-style: none;
+        padding-left: 30px; /* ขยับลูกเข้าไป */
+        border-left: 2px dashed #ccc; /* เส้นประแนวตั้ง */
+        margin-left: 10px;
+        display: none; /* 🔥 ซ่อนลูกทีมไว้ก่อน (Default Hidden) */
+    }
+    
+    /* แสดงลูกทีมเมื่อมี class 'active' */
+    .tree-list ul.active {
+        display: block;
+        animation: fadeIn 0.3s ease-in-out;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .tree-item {
+        margin: 10px 0;
+        position: relative;
+    }
+
+    /* เส้นขีดขวางแนวนอนหาลูก */
+    .tree-item::before {
+        content: '';
+        position: absolute;
+        top: 25px; left: -32px;
+        width: 30px; height: 2px;
+        background: #ccc;
+    }
+    
+    /* ซ่อนเส้นของ Root ตัวแรก */
+    .is-root::before { display: none; }
+    .is-root > ul { border-left: 2px dashed #ccc; margin-left: 25px; }
+
+    /* การ์ดพนักงาน */
     .node-card {
-        border: 1px solid #ddd; padding: 15px; text-decoration: none;
-        color: #666; font-family: 'Prompt', sans-serif; font-size: 14px;
-        display: inline-block; border-radius: 10px; background: white;
-        transition: all 0.3s; min-width: 150px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        position: relative; z-index: 10;
+        display: inline-flex;
+        align-items: center;
+        background: #fff;
+        border: 1px solid #e3e6f0;
+        border-radius: 12px;
+        padding: 8px 15px;
+        text-decoration: none;
+        color: #5a5c69;
+        transition: all 0.2s;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        min-width: 280px;
+        position: relative;
+        cursor: pointer;
     }
+
     .node-card:hover {
-        background: #eaf1fb; border-color: #4e73df; color: #000;
-        transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        transform: translateX(5px);
+        border-color: #4e73df;
+        box-shadow: 0 5px 15px rgba(78, 115, 223, 0.15);
     }
-    .node-img {
-        width: 50px; height: 50px; border-radius: 50%; object-fit: cover;
-        border: 3px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        margin-bottom: 10px;
+
+    /* ปุ่ม Toggle (+/-) */
+    .toggle-btn {
+        width: 24px; height: 24px;
+        background: #4e73df;
+        color: white;
+        border-radius: 50%;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 14px;
+        position: absolute;
+        right: -12px; top: 50%;
+        transform: translateY(-50%);
+        z-index: 10;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: 2px solid #fff;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
     
-    /* สีตามระดับตำแหน่ง (Rank Colors) */
-    .rank-badge { padding: 3px 10px; border-radius: 15px; font-size: 10px; font-weight: bold; text-transform: uppercase; color: white; display: block; margin-top: 5px; }
-    .rank-member { background: #858796; }
-    .rank-supervisor { background: #4e73df; }
-    .rank-manager { background: #f6c23e; }
-    .rank-director { background: #e74a3b; }
+    .toggle-btn:hover { background: #2e59d9; transform: translateY(-50%) scale(1.1); }
+    .toggle-btn.rotated { background: #e74a3b; transform: translateY(-50%) rotate(45deg); }
 
+    /* สีแถบด้านซ้าย */
+    .rank-director { border-left: 4px solid #e74a3b; }
+    .rank-manager { border-left: 4px solid #f6c23e; }
+    .rank-supervisor { border-left: 4px solid #4e73df; }
+    .rank-member { border-left: 4px solid #1cc88a; }
+
+    .node-img {
+        width: 40px; height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        margin-right: 12px;
+        border: 2px solid #f8f9fa;
+    }
 </style>
 
-<div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4 px-4">
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold mb-0 text-dark"><i class="fas fa-sitemap me-2 text-primary"></i>โครงสร้างทีมงาน (Organization Tree)</h2>
-            <p class="text-muted">แสดงผังสายงานตามลำดับการแนะนำ</p>
+            <h3 class="fw-bold mb-0 text-dark"><i class="fas fa-network-wired text-primary me-2"></i>โครงสร้างทีมงาน</h3>
+            <p class="text-muted small">คลิกที่ปุ่ม <i class="fas fa-plus-circle text-primary"></i> เพื่อดูสมาชิกในทีม</p>
         </div>
-        <div>
-            <a href="{% url 'employee_create' %}" class="btn btn-primary rounded-pill shadow-sm">
-                <i class="fas fa-plus me-2"></i>เพิ่มสมาชิกทีม
-            </a>
-            <a href="{% url 'hr_executive_dashboard' %}" class="btn btn-light border rounded-pill ms-2">
-                <i class="fas fa-arrow-left me-2"></i>กลับ Dashboard
+        <div class="d-flex gap-2">
+            <button onclick="expandAll()" class="btn btn-sm btn-outline-primary rounded-pill px-3">
+                <i class="fas fa-expand-arrows-alt me-1"></i> กางทั้งหมด
+            </button>
+            <button onclick="collapseAll()" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
+                <i class="fas fa-compress-arrows-alt me-1"></i> ย่อทั้งหมด
+            </button>
+            <a href="{% url 'hr_executive_dashboard' %}" class="btn btn-sm btn-light border rounded-pill px-3">
+                <i class="fas fa-arrow-left me-1"></i> กลับ
             </a>
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm mx-4">
-        <div class="card-body bg-light" style="overflow-x: auto; min-height: 600px;">
+    <div class="card border-0 shadow-sm rounded-4 bg-light">
+        <div class="card-body p-5 overflow-auto" style="min-height: 500px;">
             
-            <div class="tree">
-                <ul>
-                    {% for root in root_employees %}
-                        {% include "hr/includes/node_recursive.html" with node=root %}
-                    {% empty %}
-                        <div class="text-center mt-5">
-                            <h4 class="text-muted">ยังไม่มีข้อมูลพนักงานในระบบ</h4>
-                            <p>เริ่มจากเพิ่มพนักงานคนแรกก่อนนะครับ</p>
-                        </div>
-                    {% endfor %}
-                </ul>
-            </div>
+            <ul class="tree-list m-0 p-0">
+                {% for root in root_employees %}
+                    {% include "hr/includes/tree_node_vertical.html" with node=root is_root=True %}
+                {% empty %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-users-slash fa-3x mb-3 opacity-25"></i>
+                        <p>ยังไม่มีข้อมูลโครงสร้างทีม</p>
+                    </div>
+                {% endfor %}
+            </ul>
 
         </div>
     </div>
 </div>
+
+<script>
+    // ฟังก์ชันย่อ/ขยายเมื่อกดปุ่ม
+    function toggleNode(btn) {
+        const nextUl = btn.closest('li').querySelector('ul');
+        if (nextUl) {
+            nextUl.classList.toggle('active');
+            btn.classList.toggle('rotated');
+            
+            // เปลี่ยนไอคอน
+            const icon = btn.querySelector('i');
+            if(nextUl.classList.contains('active')){
+                icon.classList.remove('fa-plus');
+                icon.classList.add('fa-times');
+            } else {
+                icon.classList.remove('fa-times');
+                icon.classList.add('fa-plus');
+            }
+        }
+    }
+
+    // กางทั้งหมด
+    function expandAll() {
+        document.querySelectorAll('.tree-list ul').forEach(ul => ul.classList.add('active'));
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.add('rotated');
+            btn.innerHTML = '<i class="fas fa-times"></i>';
+        });
+    }
+
+    // ย่อทั้งหมด
+    function collapseAll() {
+        document.querySelectorAll('.tree-list ul').forEach(ul => ul.classList.remove('active'));
+        document.querySelectorAll('.toggle-btn').forEach(btn => {
+            btn.classList.remove('rotated');
+            btn.innerHTML = '<i class="fas fa-plus"></i>';
+        });
+    }
+</script>
 {% endblock %}

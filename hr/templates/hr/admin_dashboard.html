@@ -4,18 +4,17 @@
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<div class="container-fluid py-4 px-4">
-    
+<div class="container-fluid py-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold mb-0 text-dark"><i class="fas fa-chart-line me-2"></i>HR Analytics Center</h2>
+            <h3 class="fw-bold text-dark mb-0"><i class="fas fa-chart-line text-primary me-2"></i>HR Analytics Center</h3>
             <p class="text-muted">วิเคราะห์ข้อมูลบุคลากรเพื่อการพัฒนาองค์กร</p>
         </div>
         <div>
-            <a href="{% url 'manager_dashboard' %}" class="btn btn-warning text-white rounded-pill shadow-sm fw-bold">
+            <a href="{% url 'manager_dashboard' %}" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm me-2 text-white">
                 <i class="fas fa-bell me-2"></i>รออนุมัติ ({{ pending_leaves }})
             </a>
-            <a href="{% url 'employee_create' %}" class="btn btn-primary rounded-pill shadow-sm ms-2">
+            <a href="{% url 'employee_create' %}" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">
                 <i class="fas fa-user-plus me-2"></i>รับพนักงานใหม่
             </a>
         </div>
@@ -23,108 +22,101 @@
 
     <div class="row g-3 mb-4">
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4 border-primary">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-primary">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs fw-bold text-primary text-uppercase mb-1">พนักงานทั้งหมด</div>
-                            <div class="h3 mb-0 fw-bold text-dark">{{ total_employees }}</div>
-                        </div>
-                        <div class="col-auto"><i class="fas fa-users fa-2x text-secondary opacity-25"></i></div>
+                    <h6 class="text-muted text-uppercase fw-bold small">พนักงานทั้งหมด</h6>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="fw-bold mb-0 text-dark">{{ total_employees }}</h2>
+                        <i class="fas fa-users fa-2x text-primary opacity-25"></i>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4 border-success">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-success">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs fw-bold text-success text-uppercase mb-1">เข้างานวันนี้</div>
-                            <div class="h3 mb-0 fw-bold text-dark">{{ present_count }}</div>
-                        </div>
-                        <div class="col-auto"><i class="fas fa-fingerprint fa-2x text-secondary opacity-25"></i></div>
+                    <h6 class="text-muted text-uppercase fw-bold small">เข้างานวันนี้</h6>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="fw-bold mb-0 text-success">{{ present_count }}</h2>
+                        <i class="fas fa-fingerprint fa-2x text-success opacity-25"></i>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4 border-info">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-info">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs fw-bold text-info text-uppercase mb-1">ลางานวันนี้</div>
-                            <div class="h3 mb-0 fw-bold text-dark">{{ on_leave_today }}</div>
-                        </div>
-                        <div class="col-auto"><i class="fas fa-suitcase-rolling fa-2x text-secondary opacity-25"></i></div>
+                    <h6 class="text-muted text-uppercase fw-bold small">ลางานวันนี้</h6>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="fw-bold mb-0 text-info">{{ on_leave_today }}</h2>
+                        <i class="fas fa-luggage-cart fa-2x text-info opacity-25"></i>
                     </div>
                 </div>
             </div>
         </div>
         <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4 border-warning">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-4 border-warning">
                 <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs fw-bold text-warning text-uppercase mb-1">รออนุมัติ</div>
-                            <div class="h3 mb-0 fw-bold text-dark">{{ pending_leaves }}</div>
-                        </div>
-                        <div class="col-auto"><i class="fas fa-file-signature fa-2x text-secondary opacity-25"></i></div>
+                    <h6 class="text-muted text-uppercase fw-bold small">รออนุมัติ</h6>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h2 class="fw-bold mb-0 text-warning">{{ pending_leaves }}</h2>
+                        <i class="fas fa-file-signature fa-2x text-warning opacity-25"></i>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
-
-    <div class="row g-3 mb-4">
-        <div class="col-md-6 col-lg-3">
-            <div class="card border-0 shadow-sm h-100 py-3 border-start border-4" style="border-color: #6f42c1 !important;">
-                <div class="card-body">
-                    <div class="row no-gutters align-items-center">
-                        <div class="col mr-2">
-                            <div class="text-xs fw-bold text-uppercase mb-1" style="color: #6f42c1;">คอมมิชชั่นที่จ่ายแล้ว</div>
-                            <div class="h3 mb-0 fw-bold text-dark">฿{{ total_commission_paid|intcomma }}</div>
-                        </div>
-                        <div class="col-auto">
-                            <i class="fas fa-hand-holding-usd fa-2x text-secondary opacity-25"></i>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-md-6 col-lg-3">
-            <a href="{% url 'network_tree' %}" class="card border-0 shadow-sm h-100 py-3 text-decoration-none transition-hover" style="background: linear-gradient(135deg, #4e73df 0%, #224abe 100%);">
-                <div class="card-body text-white d-flex align-items-center justify-content-between">
-                    <div>
-                        <div class="fw-bold text-uppercase mb-1" style="font-size: 0.8rem; opacity: 0.8;">Organization</div>
-                        <div class="h5 mb-0 fw-bold">ดูผังองค์กร (Tree)</div>
-                    </div>
-                    <i class="fas fa-sitemap fa-2x opacity-50"></i>
-                </div>
-            </a>
         </div>
     </div>
 
     <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="card border-0 shadow-sm rounded-4 h-100">
-                <div class="card-header bg-white py-3 border-0">
-                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-chart-pie me-2 text-primary"></i>โครงสร้างพนักงานตามแผนก</h6>
+        
+        <div class="col-lg-7">
+            
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <div class="card border-0 shadow-sm rounded-4 h-100">
+                        <div class="card-body p-4 d-flex justify-content-between align-items-center">
+                            <div>
+                                <small class="text-muted fw-bold text-uppercase">คอมมิชชั่นที่จ่ายแล้ว</small>
+                                <h3 class="fw-bold text-dark mb-0">฿{{ total_commission_paid|intcomma }}</h3>
+                            </div>
+                            <div class="bg-light p-3 rounded-circle">
+                                <i class="fas fa-hand-holding-usd fa-2x text-secondary"></i>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="card-body d-flex justify-content-center align-items-center" style="min-height: 300px;">
-                    <div style="width: 100%; max-width: 350px;">
+                <div class="col-md-6">
+                    <a href="{% url 'network_tree' %}" class="text-decoration-none">
+                        <div class="card border-0 shadow-sm rounded-4 bg-primary text-white h-100 hover-scale">
+                            <div class="card-body p-4 d-flex justify-content-between align-items-center">
+                                <div>
+                                    <small class="text-white-50 fw-bold text-uppercase">ORGANIZATION</small>
+                                    <h4 class="fw-bold mb-0">ดูผังองค์กร (Tree)</h4>
+                                </div>
+                                <i class="fas fa-sitemap fa-3x text-white-50"></i>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <div class="card border-0 shadow-sm rounded-4">
+                <div class="card-header bg-white py-3">
+                    <h6 class="fw-bold m-0"><i class="fas fa-chart-pie me-2 text-primary"></i>โครงสร้างพนักงานตามแผนก</h6>
+                </div>
+                <div class="card-body">
+                    <div style="height: 350px; position: relative;">
                         <canvas id="deptChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col-lg-6">
+        <div class="col-lg-5">
             <div class="card border-0 shadow-sm rounded-4 h-100">
-                <div class="card-header bg-white py-3 border-0 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 fw-bold text-dark"><i class="fas fa-user-tag me-2 text-success"></i>พนักงานใหม่ล่าสุด</h6>
-                    <small><a href="/admin/hr/employee/" class="text-decoration-none">ดูทั้งหมด</a></small>
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold m-0"><i class="fas fa-user-clock me-2 text-success"></i>พนักงานใหม่ล่าสุด</h6>
+                    <a href="/admin/hr/employee/" class="small text-decoration-none">ดูทั้งหมด</a>
                 </div>
                 <div class="card-body p-0">
                     <div class="table-responsive">
@@ -132,8 +124,8 @@
                             <thead class="bg-light">
                                 <tr>
                                     <th class="ps-4">ชื่อ-สกุล</th>
-                                    <th>ตำแหน่ง</th>
-                                    <th>เริ่มงาน</th>
+                                    <th>แผนก</th>
+                                    <th class="text-end pe-4">เริ่มงาน</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -142,15 +134,17 @@
                                     <td class="ps-4">
                                         <div class="d-flex align-items-center">
                                             {% if emp.photo %}
-                                                <img src="{{ emp.photo.url }}" class="rounded-circle me-2" width="30" height="30" style="object-fit:cover;">
+                                                <img src="{{ emp.photo.url }}" class="rounded-circle me-2 shadow-sm" width="35" height="35" style="object-fit:cover;">
                                             {% else %}
-                                                <div class="rounded-circle bg-secondary text-white d-flex align-items-center justify-content-center me-2" style="width:30px; height:30px; font-size: 12px;">{{ emp.first_name|slice:":1" }}</div>
+                                                <div class="bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center me-2 small fw-bold shadow-sm" style="width: 35px; height: 35px;">
+                                                    {{ emp.first_name|slice:":1" }}
+                                                </div>
                                             {% endif %}
-                                            {{ emp.first_name }}
+                                            <span class="fw-bold text-dark">{{ emp.first_name }}</span>
                                         </div>
                                     </td>
-                                    <td><span class="badge bg-light text-dark border">{{ emp.position }}</span></td>
-                                    <td class="text-muted small">{{ emp.start_date|date:"d M Y" }}</td>
+                                    <td><span class="badge bg-light text-dark border">{{ emp.department.name|truncatechars:15 }}</span></td>
+                                    <td class="text-end pe-4 text-muted small">{{ emp.start_date|date:"d M Y" }}</td>
                                 </tr>
                                 {% empty %}
                                 <tr>
@@ -164,36 +158,51 @@
             </div>
         </div>
     </div>
-
 </div>
 
-<script>
-    var deptLabels = [{% for item in dept_data %}"{{ item.department__name|default:'ไม่ระบุ' }}",{% endfor %}];
-    var deptCounts = [{% for item in dept_data %}{{ item.count }},{% endfor %}];
+<style>
+    .hover-scale { transition: transform 0.2s; }
+    .hover-scale:hover { transform: scale(1.02); }
+</style>
 
-    var ctx = document.getElementById('deptChart').getContext('2d');
-    var myPieChart = new Chart(ctx, {
+<script>
+    // ข้อมูลจาก Django
+    const deptLabels = [{% for d in dept_data %}"{{ d.department__name }}",{% endfor %}];
+    const deptCounts = [{% for d in dept_data %}{{ d.count }},{% endfor %}];
+
+    // สีสันสวยงามสำหรับกราฟ
+    const colors = [
+        '#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', 
+        '#858796', '#5a5c69', '#fd7e14', '#20c997', '#6f42c1'
+    ];
+
+    const ctx = document.getElementById('deptChart').getContext('2d');
+    new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: deptLabels,
             datasets: [{
                 data: deptCounts,
-                backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e', '#e74a3b', '#858796'],
-                hoverBackgroundColor: ['#2e59d9', '#17a673', '#2c9faf', '#dda20a', '#be2617', '#60616f'],
-                hoverBorderColor: "rgba(234, 236, 244, 1)",
-            }],
+                backgroundColor: colors,
+                hoverOffset: 4
+            }]
         },
         options: {
-            maintainAspectRatio: false,
+            maintainAspectRatio: false, // ให้ยืดหดตามกล่อง
+            responsive: true,
             plugins: {
                 legend: {
-                    position: 'bottom',
-                    labels: { usePointStyle: true, padding: 20 }
+                    position: 'right', // ✅ ย้าย Legend ไปด้านขวา (แก้ปัญหาตกขอบ)
+                    labels: {
+                        boxWidth: 15,
+                        font: { size: 11 }
+                    }
                 }
             },
-            cutout: '70%', 
-        },
+            layout: {
+                padding: 10
+            }
+        }
     });
 </script>
-
 {% endblock %}
