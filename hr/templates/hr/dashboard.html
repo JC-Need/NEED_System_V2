@@ -185,13 +185,15 @@
         </div>
 
         <div class="col-md-4">
-            <button class="btn btn-action btn-light bg-white text-primary w-100 d-flex align-items-center justify-content-center shadow-sm">
-                <i class="fas fa-file-invoice-dollar fa-2x me-3"></i>
-                <div class="text-start">
-                    <div class="fs-5">สลิปเงินเดือน</div>
-                    <small class="text-muted">View Payslips</small>
-                </div>
-            </button>
+            <a href="{% url 'payslip_list' %}" class="text-decoration-none">
+                <button class="btn btn-action btn-light bg-white text-primary w-100 d-flex align-items-center justify-content-center shadow-sm">
+                    <i class="fas fa-file-invoice-dollar fa-2x me-3"></i>
+                    <div class="text-start">
+                        <div class="fs-5">สลิปเงินเดือน</div>
+                        <small class="text-muted">View Payslips</small>
+                    </div>
+                </button>
+            </a>
         </div>
     </div>
 
