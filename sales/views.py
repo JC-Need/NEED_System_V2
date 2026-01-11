@@ -1,8 +1,7 @@
 import json
 import datetime
-import openpyxl # ✅ เพิ่มตัวนี้
-from django.http import HttpResponse # ✅ เพิ่มตัวนี้
-from django.http import JsonResponse
+import openpyxl 
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -11,7 +10,7 @@ from django.contrib.auth.decorators import login_required
 from .models import POSOrder, POSOrderItem, Quotation, QuotationItem
 from inventory.models import Product, Category
 from master_data.models import Customer
-from accounting.models import Income
+# from accounting.models import Income  <-- ❌ ปิดไว้ก่อนครับ เพราะยังไม่มีแอปบัญชี
 
 # --- 1. หน้า Dashboard ---
 @login_required
@@ -33,6 +32,7 @@ def pos_checkout(request):
             data = json.loads(request.body)
             cart = data.get('cart', [])
             total_amount = data.get('total_amount', 0)
+            received_amount = data.get('received_amount', total_amount) # รับเงินมาเท่ายอดขาย (Default)
 
             # 1. สร้างหัวบิล
             now_str = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
@@ -44,7 +44,10 @@ def pos_checkout(request):
                 code=order_code,
                 employee=current_emp,
                 total_amount=total_amount,
-                payment_method='CASH'
+                received_amount=received_amount,
+                change_amount=float(received_amount) - float(total_amount),
+                payment_method='CASH',
+                status='PAID' # ✅ บังคับให้เป็น PAID ทันที เพื่อ Trigger คอมมิชชั่น!
             )
 
             # 2. วนลูปสินค้า -> บันทึก และ ตัดสต็อก
@@ -55,19 +58,15 @@ def pos_checkout(request):
                     product=product,
                     product_name=product.name,
                     quantity=item['qty'],
-                    price=item['price']
+                    price=item['price'],
+                    total_price=float(item['qty']) * float(item['price'])
                 )
-                product.stock_qty -= item['qty']
+                # ตัดสต็อก
+                product.stock_qty -= int(item['qty'])
                 product.save()
 
-            # 3. 💰 ลงบัญชี "รายรับ" อัตโนมัติ (New!)
-            Income.objects.create(
-                title=f"รายรับจากการขายบิล {order_code}",
-                amount=total_amount,
-                date=datetime.date.today(),
-                pos_order=order, # เชื่อมโยงกลับไปหาบิลได้
-                note="บันทึกอัตโนมัติจากระบบ POS"
-            )
+            # 3. 💰 ลงบัญชี (ปิดไว้ก่อน รอทำระบบบัญชี)
+            # Income.objects.create(...) 
 
             return JsonResponse({'success': True, 'order_code': order_code})
 
@@ -76,11 +75,10 @@ def pos_checkout(request):
 
     return JsonResponse({'success': False, 'error': 'Invalid Request'})
 
-# --- 3. ระบบใบเสนอราคา (Quotation) ✅ มาใหม่ ---
+# --- 3. ระบบใบเสนอราคา (Quotation) ---
 
 @login_required
 def quotation_list(request):
-    # ดึงใบเสนอราคาทั้งหมด เรียงจากใหม่ไปเก่า
     quotes = Quotation.objects.all().order_by('-id')
     return render(request, 'sales/quotation_list.html', {'quotes': quotes})
 
@@ -105,7 +103,7 @@ def quotation_create(request):
                 customer=customer,
                 employee=current_emp,
                 date=datetime.date.today(),
-                status='DRAFT' # สร้างเสร็จให้เป็นสถานะ ร่าง ไว้ก่อน
+                status='DRAFT'
             )
 
             # 2. บันทึกรายการ
@@ -126,9 +124,8 @@ def quotation_create(request):
                     amount=amount
                 )
 
-            # อัปเดตยอดรวมท้ายบิล
             quotation.subtotal = total_val
-            quotation.grand_total = total_val # (ยังไม่รวมภาษี ไว้ค่อยทำเพิ่มได้ครับ)
+            quotation.grand_total = total_val
             quotation.save()
 
             return JsonResponse({'success': True, 'code': code})
@@ -136,7 +133,6 @@ def quotation_create(request):
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
 
-    # กรณีเปิดหน้าเว็บ (GET)
     customers = Customer.objects.all()
     products = Product.objects.filter(is_active=True)
     return render(request, 'sales/quotation_form.html', {
@@ -144,79 +140,49 @@ def quotation_create(request):
         'products': products
     })
 
-# ✅ เพิ่มฟังก์ชันนี้ต่อท้ายสุดของไฟล์
 @login_required
 def quotation_print(request, quote_id):
-    # ดึงใบเสนอราคาตาม ID ที่ระบุ
     quote = get_object_or_404(Quotation, id=quote_id)
-
-    # ดึงข้อมูลบริษัท (เอามาแปะหัวบิล)
     from master_data.models import CompanyInfo
     company = CompanyInfo.objects.first()
-
-    context = {
-        'quote': quote,
-        'company': company,
-        'items': quote.items.all() # ดึงรายการสินค้าในบิล
-    }
+    context = {'quote': quote, 'company': company, 'items': quote.items.all()}
     return render(request, 'sales/quotation_print.html', context)
 
 @login_required
 def pos_print_slip(request, order_code):
-    # ดึงข้อมูลบิลจากเลขที่บิล (Code)
     order = get_object_or_404(POSOrder, code=order_code)
-
-    # ดึงข้อมูลร้านค้า (Company Info)
     from master_data.models import CompanyInfo
     company = CompanyInfo.objects.first()
-
-    context = {
-        'order': order,
-        'items': order.items.all(),
-        'company': company,
-    }
+    context = {'order': order, 'items': order.items.all(), 'company': company}
     return render(request, 'sales/slip_print.html', context)
 
-# ✅ ฟังก์ชันส่งออกรายงาน Excel
 @login_required
 def export_sales_excel(request):
-    # 1. สร้างสมุดงาน Excel เปล่าๆ
+    # ตรวจสอบว่ามี openpyxl หรือยัง (กันเหนียว)
+    try:
+        import openpyxl
+    except ImportError:
+        return HttpResponse("Server Error: openpyxl library not installed.", status=500)
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Sales Report"
 
-    # 2. สร้างหัวตาราง (Header)
     headers = ["วันที่/เวลา", "เลขที่บิล", "พนักงานขาย", "วิธีชำระ", "ยอดขาย (บาท)"]
     ws.append(headers)
 
-    # 3. ดึงข้อมูลจากฐานข้อมูล (POSOrder)
-    # เรียงจากล่าสุดไปเก่าสุด
     orders = POSOrder.objects.all().order_by('-created_at')
-
     total_sales = 0
 
-    # 4. วนลูปเขียนข้อมูลทีละแถว
     for order in orders:
-        # แปลงวันที่เป็น text สวยๆ (ปี-เดือน-วัน เวลา)
         date_str = order.created_at.strftime('%Y-%m-%d %H:%M')
-
-        # ชื่อพนักงาน (เช็คก่อนว่ามีไหม)
         emp_name = order.employee.first_name if order.employee else "Admin/Unkown"
-
-        ws.append([
-            date_str,
-            order.code,
-            emp_name,
-            order.payment_method,
-            order.total_amount
-        ])
+        ws.append([date_str, order.code, emp_name, order.payment_method, order.total_amount])
         total_sales += order.total_amount
 
-    # 5. เพิ่มบรรทัดสรุปยอดรวม
-    ws.append([]) # เว้นบรรทัด
+    ws.append([])
     ws.append(["", "", "", "รวมทั้งสิ้น:", total_sales])
 
-    # 6. ส่งไฟล์กลับไปให้คนกดดาวน์โหลด
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="Sales_Report.xlsx"'
     wb.save(response)

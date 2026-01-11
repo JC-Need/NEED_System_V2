@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Employee, Department, Position, EmployeeType, Attendance, LeaveRequest, Payslip
+from .models import Employee, Department, Position, EmployeeType, Attendance, LeaveRequest, Payslip, CommissionLog
 
 admin.site.site_header = "NEED System Administration"
 admin.site.site_title = "NEED System Portal"
@@ -52,7 +52,7 @@ class PayslipAdmin(admin.ModelAdmin):
     list_display = ('employee', 'month_year_display', 'base_salary', 'net_salary', 'status')
     list_filter = ('year', 'month', 'status', 'employee__department')
     search_fields = ('employee__first_name', 'employee__emp_id')
-    
+
     # จัดกลุ่มให้กรอกง่ายๆ
     fieldsets = (
         ('ข้อมูลหลัก', {'fields': ('employee', ('month', 'year'), 'status', 'payment_date')}),
@@ -65,3 +65,9 @@ class PayslipAdmin(admin.ModelAdmin):
     def month_year_display(self, obj):
         return f"{obj.get_month_display()} {obj.year}"
     month_year_display.short_description = "งวดเดือน"
+
+@admin.register(CommissionLog)
+class CommissionLogAdmin(admin.ModelAdmin):
+    list_display = ('recipient', 'amount', 'source_employee', 'level', 'sale_ref_id', 'created_at')
+    list_filter = ('level', 'created_at')
+    search_fields = ('recipient__first_name', 'sale_ref_id')

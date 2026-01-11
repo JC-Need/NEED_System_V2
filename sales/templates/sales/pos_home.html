@@ -1,85 +1,93 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>จุดขายหน้าร้าน (POS) - JC Company</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <style>
-        body { background-color: #f0f2f5; height: 100vh; overflow: hidden; }
-        .product-card { cursor: pointer; transition: transform 0.2s; border: none; height: 100%; }
-        .product-card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .product-img { height: 120px; object-fit: cover; border-radius: 10px 10px 0 0; }
-        .cart-area { background: white; height: 100vh; display: flex; flex-direction: column; border-left: 1px solid #ddd; }
-        .cart-items { flex-grow: 1; overflow-y: auto; padding: 10px; }
-        .cart-summary { background: #f8f9fa; padding: 20px; border-top: 2px solid #ddd; }
-    </style>
-</head>
-<body>
+{% extends 'core/base.html' %}
+{% load humanize %}
 
-<div class="container-fluid">
-    <div class="row">
-        <div class="col-md-8 p-4" style="height: 100vh; overflow-y: auto;">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h4 class="mb-0"><i class="fas fa-store text-primary"></i> เลือกสินค้า</h4>
-                <input type="text" id="searchInput" class="form-control w-50" placeholder="🔍 ค้นหาชื่อสินค้า หรือ บาร์โค้ด...">
+{% block content %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<style>
+    /* ปรับแต่งหน้าจอ POS ให้เต็มจอและดูทันสมัย */
+    .pos-container { height: calc(100vh - 80px); overflow: hidden; }
+    .product-scroll { height: 100%; overflow-y: auto; padding-bottom: 50px; }
+    .cart-area { height: 100%; display: flex; flex-direction: column; background: white; border-left: 1px solid #eee; }
+    .cart-items { flex-grow: 1; overflow-y: auto; }
+
+    .product-card { cursor: pointer; transition: all 0.2s; border: 1px solid #eee; }
+    .product-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); border-color: #4e73df; }
+    .product-img { height: 120px; object-fit: cover; background: #f8f9fa; }
+
+    /* สไตล์ปุ่มในตะกร้า */
+    .btn-qty { width: 30px; height: 30px; padding: 0; line-height: 28px; border-radius: 50%; }
+</style>
+
+<div class="container-fluid py-3 pos-container">
+    <div class="row h-100 g-0">
+
+        <div class="col-md-8 h-100 pe-md-3 d-flex flex-column">
+            <div class="card border-0 shadow-sm mb-3">
+                <div class="card-body p-3 d-flex align-items-center">
+                    <i class="fas fa-search text-muted me-3 fs-5"></i>
+                    <input type="text" id="searchBox" class="form-control border-0 fs-5" placeholder="ค้นหาชื่อสินค้า หรือยิงบาร์โค้ด..." autofocus onkeyup="filterProducts()">
+                </div>
             </div>
 
-            <div class="row g-3" id="productGrid">
-                {% for product in products %}
-                <div class="col-6 col-md-4 col-lg-3 product-item" data-name="{{ product.name }}" data-code="{{ product.code }}">
-                    <div class="card product-card" onclick="addToCart({{ product.id }}, '{{ product.name }}', {{ product.sell_price }})">
-                        {% if product.image %}
-                            <img src="{{ product.image.url }}" class="product-img">
-                        {% else %}
-                            <div class="product-img d-flex align-items-center justify-content-center bg-secondary text-white">
-                                <i class="fas fa-box fa-2x"></i>
+            <div class="product-scroll pe-2">
+                <div class="row g-3" id="productGrid">
+                    {% for product in products %}
+                    <div class="col-6 col-md-4 col-lg-3 product-item" data-name="{{ product.name }}" data-code="{{ product.code }}">
+                        <div class="card product-card h-100 rounded-3 overflow-hidden"
+                             onclick="addToCart({{ product.id }}, '{{ product.name }}', {{ product.sell_price }})">
+                            {% if product.image %}
+                                <img src="{{ product.image.url }}" class="card-img-top product-img">
+                            {% else %}
+                                <div class="product-img d-flex align-items-center justify-content-center text-secondary bg-light">
+                                    <i class="fas fa-box-open fa-2x opacity-50"></i>
+                                </div>
+                            {% endif %}
+                            <div class="card-body p-2 text-center">
+                                <h6 class="card-title fw-bold text-dark mb-1 text-truncate">{{ product.name }}</h6>
+                                <p class="card-text text-primary fw-bold mb-0">฿{{ product.sell_price|intcomma }}</p>
+                                <span class="badge bg-light text-muted border rounded-pill mt-1">{{ product.stock_qty }} ชิ้น</span>
                             </div>
-                        {% endif %}
-                        <div class="card-body p-2 text-center">
-                            <h6 class="card-title mb-1 text-truncate">{{ product.name }}</h6>
-                            <p class="card-text text-primary fw-bold">{{ product.sell_price|floatformat:2 }} ฿</p>
-                            <span class="badge bg-light text-dark">{{ product.stock_qty }} ชิ้น</span>
                         </div>
                     </div>
+                    {% empty %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-exclamation-circle fa-3x text-muted mb-3 opacity-25"></i>
+                            <h4>ไม่พบสินค้า</h4>
+                            <p class="text-muted">กรุณาเพิ่มสินค้าในเมนู Inventory</p>
+                        </div>
+                    {% endfor %}
                 </div>
-                {% empty %}
-                <div class="col-12 text-center mt-5">
-                    <p class="text-muted">❌ ไม่พบสินค้าในสต็อก (กรุณาเพิ่มสินค้าใน Inventory)</p>
-                </div>
-                {% endfor %}
             </div>
         </div>
 
-        <div class="col-md-4 cart-area shadow">
-            <div class="p-3 bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="fas fa-shopping-cart"></i> รายการขาย</h5>
-                <button onclick="clearCart()" class="btn btn-sm btn-danger"><i class="fas fa-trash"></i> ล้าง</button>
-            </div>
-
-            <div class="cart-items" id="cartItems">
-                <div class="text-center text-muted mt-5">
-                    <i class="fas fa-basket-shopping fa-3x mb-3"></i>
-                    <p>ยังไม่มีสินค้าในตะกร้า</p>
-                </div>
-            </div>
-
-            <div class="cart-summary">
-                <div class="d-flex justify-content-between mb-2">
-                    <span>จำนวนชิ้น:</span>
-                    <span id="totalQty" class="fw-bold">0</span>
-                </div>
-                <div class="d-flex justify-content-between mb-3">
-                    <span class="h4">ยอดรวมทั้งสิ้น:</span>
-                    <span class="h4 text-primary" id="totalAmount">0.00 ฿</span>
+        <div class="col-md-4 h-100 shadow-lg rounded-4 overflow-hidden">
+            <div class="cart-area">
+                <div class="p-3 bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-shopping-basket me-2"></i>ตะกร้าสินค้า</h5>
+                    <button onclick="clearCart()" class="btn btn-sm btn-outline-light rounded-pill px-3">
+                        <i class="fas fa-trash-alt me-1"></i> ล้าง
+                    </button>
                 </div>
 
-                <button class="btn btn-success w-100 py-3 fw-bold fs-5" onclick="checkout()">
-                    <i class="fas fa-money-bill-wave"></i> รับเงิน (Checkout)
-                </button>
+                <div class="cart-items p-3 bg-light" id="cartContainer">
+                    </div>
 
-                <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary w-100 mt-2">กลับหน้าหลัก</a>
+                <div class="p-3 bg-white border-top">
+                    <div class="d-flex justify-content-between mb-2 text-muted">
+                        <span>จำนวนรายการ:</span>
+                        <span id="totalQty" class="fw-bold">0</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3 align-items-end">
+                        <span class="fs-5 fw-bold">ยอดรวมสุทธิ</span>
+                        <span class="fs-2 fw-bold text-primary" id="totalAmount">0.00</span>
+                    </div>
+
+                    <button class="btn btn-success w-100 py-3 rounded-3 fs-5 fw-bold shadow-sm" onclick="checkout()">
+                        <i class="fas fa-hand-holding-usd me-2"></i> รับเงิน (Checkout)
+                    </button>
+                    <a href="{% url 'sales_dashboard' %}" class="btn btn-light w-100 mt-2 text-muted">กลับหน้าหลัก</a>
+                </div>
             </div>
         </div>
     </div>
@@ -88,7 +96,7 @@
 <script>
     let cart = [];
 
-    // เพิ่มสินค้า
+    // 1. เพิ่มสินค้า
     function addToCart(id, name, price) {
         let existingItem = cart.find(item => item.id === id);
         if (existingItem) {
@@ -99,133 +107,196 @@
         renderCart();
     }
 
-    // แสดงผลตะกร้า
-    function renderCart() {
-        const cartContainer = document.getElementById('cartItems');
-        const totalQtyEl = document.getElementById('totalQty');
-        const totalAmountEl = document.getElementById('totalAmount');
-
-        cartContainer.innerHTML = '';
-        let totalQty = 0;
-        let totalAmount = 0;
-
-        if (cart.length === 0) {
-            cartContainer.innerHTML = '<div class="text-center text-muted mt-5"><i class="fas fa-basket-shopping fa-3x mb-3"></i><p>ยังไม่มีสินค้าในตะกร้า</p></div>';
+    // 2. ลบ/ลด/เพิ่ม สินค้า
+    function updateQty(index, change) {
+        if (cart[index].qty + change > 0) {
+            cart[index].qty += change;
         } else {
-            cart.forEach((item, index) => {
-                totalQty += item.qty;
-                totalAmount += item.qty * item.price;
-
-                cartContainer.innerHTML += `
-                    <div class="card mb-2 border-0 shadow-sm">
-                        <div class="card-body p-2 d-flex justify-content-between align-items-center">
-                            <div style="width: 50%;">
-                                <div class="fw-bold text-truncate">${item.name}</div>
-                                <div class="text-muted small">${item.price.toFixed(2)} x ${item.qty}</div>
-                            </div>
-                            <div class="fw-bold text-primary">${(item.price * item.qty).toFixed(2)}</div>
-                            <div>
-                                <button onclick="decreaseQty(${index})" class="btn btn-sm btn-outline-secondary px-2">-</button>
-                                <button onclick="increaseQty(${index})" class="btn btn-sm btn-outline-secondary px-2">+</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        totalQtyEl.innerText = totalQty;
-        totalAmountEl.innerText = totalAmount.toLocaleString('en-US', {minimumFractionDigits: 2}) + ' ฿';
-    }
-
-    function increaseQty(index) {
-        cart[index].qty++;
-        renderCart();
-    }
-
-    function decreaseQty(index) {
-        if (cart[index].qty > 1) {
-            cart[index].qty--;
-        } else {
-            cart.splice(index, 1);
+            cart.splice(index, 1); // ลบออกถ้าเหลือ 0
         }
         renderCart();
     }
 
     function clearCart() {
-        if(confirm('ยืนยันล้างตะกร้า?')) {
-            cart = [];
-            renderCart();
+        if (cart.length > 0) {
+            Swal.fire({
+                title: 'ยืนยันล้างตะกร้า?',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'ล้างเลย',
+                cancelButtonText: 'ยกเลิก'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    cart = [];
+                    renderCart();
+                }
+            });
         }
     }
 
-    // ค้นหาสินค้า
-    document.getElementById('searchInput').addEventListener('keyup', function() {
-        let value = this.value.toLowerCase();
-        let items = document.querySelectorAll('.product-item');
-        items.forEach(function(item) {
-            let name = item.getAttribute('data-name').toLowerCase();
-            let code = item.getAttribute('data-code').toLowerCase();
-            if (name.includes(value) || code.includes(value)) {
-                item.style.display = 'block';
-            } else {
-                item.style.display = 'none';
-            }
-        });
-    });
+    // 3. แสดงผล (Render)
+    function renderCart() {
+        const container = document.getElementById('cartContainer');
+        const totalQtyEl = document.getElementById('totalQty');
+        const totalAmountEl = document.getElementById('totalAmount');
 
-    // ✅ ฟังก์ชันรับเงิน (ส่งข้อมูลไป Server)
+        container.innerHTML = '';
+        let totalQ = 0;
+        let totalA = 0;
+
+        if (cart.length === 0) {
+            container.innerHTML = `
+                <div class="text-center py-5 text-muted">
+                    <i class="fas fa-shopping-cart fa-3x mb-3 opacity-25"></i>
+                    <p>ยังไม่มีสินค้า</p>
+                </div>`;
+        } else {
+            cart.forEach((item, index) => {
+                totalQ += item.qty;
+                totalA += item.qty * item.price;
+
+                container.innerHTML += `
+                    <div class="card border-0 shadow-sm mb-2">
+                        <div class="card-body p-2 d-flex align-items-center">
+                            <div class="flex-grow-1 overflow-hidden">
+                                <div class="fw-bold text-truncate text-dark">${item.name}</div>
+                                <div class="small text-muted">฿${item.price.toLocaleString()} x ${item.qty}</div>
+                            </div>
+                            <div class="text-end px-2 fw-bold text-primary">
+                                ${(item.price * item.qty).toLocaleString()}
+                            </div>
+                            <div class="d-flex flex-column gap-1">
+                                <button onclick="updateQty(${index}, 1)" class="btn btn-sm btn-outline-primary btn-qty"><i class="fas fa-plus small"></i></button>
+                                <button onclick="updateQty(${index}, -1)" class="btn btn-sm btn-outline-secondary btn-qty"><i class="fas fa-minus small"></i></button>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+        }
+
+        totalQtyEl.innerText = totalQ;
+        totalAmountEl.innerText = '฿' + totalA.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }
+
+    // 4. ค้นหา (Filter)
+    function filterProducts() {
+        let input = document.getElementById('searchBox').value.toLowerCase();
+        let items = document.getElementsByClassName('product-item');
+        for (let i = 0; i < items.length; i++) {
+            let name = items[i].getAttribute('data-name').toLowerCase();
+            let code = items[i].getAttribute('data-code') ? items[i].getAttribute('data-code').toLowerCase() : "";
+            if (name.includes(input) || code.includes(input)) {
+                items[i].classList.remove('d-none');
+            } else {
+                items[i].classList.add('d-none');
+            }
+        }
+    }
+
+    // 5. ระบบรับเงิน (Checkout) 💰 - แบบมี Auto Format (1,000.00)
     function checkout() {
         if (cart.length === 0) {
-            alert('❌ กรุณาเลือกสินค้าก่อนครับ');
+            Swal.fire('ตะกร้าว่างเปล่า', 'กรุณาเลือกสินค้าก่อนครับ', 'error');
             return;
         }
 
-        if (!confirm('ยืนยันการรับเงิน?')) return;
+        let totalAmount = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
 
-        let total = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+        // แปลงยอดรวมเป็นรูปแบบเริ่มต้น (เช่น 1,660.00)
+        let formattedTotal = totalAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
 
-        fetch('/sales/pos/checkout/', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': '{{ csrf_token }}'
+        Swal.fire({
+            title: 'รับเงินสดมาเท่าไหร่?',
+            input: 'text', // ใช้ text เพื่อให้ใส่ลูกน้ำได้
+            inputValue: formattedTotal, // ค่าเริ่มต้น
+            text: `ยอดรวมทั้งสิ้น: ฿${formattedTotal}`,
+            showCancelButton: true,
+            confirmButtonText: 'ยืนยันรับเงิน',
+            confirmButtonColor: '#1cc88a',
+            inputAttributes: {
+                inputmode: 'decimal', // ให้มือถือโชว์แป้นตัวเลข
+                autocomplete: 'off'
             },
-            body: JSON.stringify({
-                cart: cart,
-                total_amount: total
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // 1. แจ้งเตือนสั้นๆ หรือไม่ต้องแจ้งก็ได้
-                // alert('✅ บันทึกสำเร็จ!');
+            didOpen: () => {
+                const input = Swal.getInput();
 
-                // 2. ล้างตะกร้า
-                cart = [];
-                renderCart();
+                // 1. ไฮไลท์ตัวเลขทั้งหมดทันที (เพื่อให้พิมพ์ทับได้เลย ไม่ต้องลบ)
+                input.setSelectionRange(0, input.value.length);
 
-                // 3. 🧾 เปิดหน้าใบเสร็จขึ้นมาทันที (Popup)
-                // ขนาดหน้าต่าง 400x600 (พอดีสลิป)
-                let slipUrl = '/sales/pos/print/' + data.order_code + '/';
-                window.open(slipUrl, 'Receipt', 'width=400,height=600');
+                // 2. ฟังชั่นก์จัดรูปแบบอัตโนมัติขณะพิมพ์ (Magic Happens Here!) ✨
+                input.addEventListener('input', function() {
+                    // เก็บค่าเดิมที่พิมพ์
+                    let value = this.value;
 
-                // 4. รีเฟรชหน้าจอ (เพื่อให้สต็อกอัปเดต) หลังจาก Print สักนิด
-                setTimeout(() => {
-                    location.reload();
-                }, 1000);
+                    // ลบทุกอย่างที่ไม่ใช่ตัวเลขและจุดทศนิยม
+                    value = value.replace(/[^0-9.]/g, '');
 
-            } else {
-                alert('❌ เกิดข้อผิดพลาด: ' + data.error);
+                    // แยกส่วนจำนวนเต็ม และ ทศนิยม
+                    let parts = value.split('.');
+                    let intPart = parts[0];
+                    let decPart = parts.length > 1 ? '.' + parts[1].slice(0, 2) : ''; // จำกัดทศนิยม 2 ตำแหน่ง
+
+                    // ใส่ลูกน้ำให้จำนวนเต็ม
+                    if (intPart !== '') {
+                        intPart = parseInt(intPart).toLocaleString('en-US');
+                    }
+
+                    // รวมร่างกลับเข้าไป
+                    this.value = intPart + decPart;
+                });
+            },
+            preConfirm: (value) => {
+                // ก่อนส่งไปคำนวณ ต้องลบลูกน้ำออกก่อน (1,000 -> 1000)
+                let cleanValue = value.replace(/,/g, '');
+
+                if (!cleanValue || parseFloat(cleanValue) < totalAmount) {
+                    Swal.showValidationMessage(`❌ เงินสดไม่พอครับ (ขาดอีก ฿${(totalAmount - parseFloat(cleanValue || 0)).toLocaleString()})`)
+                    return false;
+                }
+                return cleanValue;
             }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('❌ เชื่อมต่อเซิร์ฟเวอร์ไม่ได้');
+        }).then((result) => {
+            if (result.isConfirmed) {
+                let received = parseFloat(result.value);
+
+                // ส่งข้อมูลไป Server
+                fetch("{% url 'pos_checkout' %}", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+                    body: JSON.stringify({
+                        cart: cart,
+                        total_amount: totalAmount,
+                        received_amount: received
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        let change = received - totalAmount;
+
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'บันทึกสำเร็จ!',
+                            html: `<div class="fs-4">รับเงิน: <b>${received.toLocaleString()}</b> บาท</div>
+                                   <div class="fs-2 text-danger fw-bold mt-2">เงินทอน: ฿${change.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>`,
+                            showDenyButton: true,
+                            confirmButtonText: '🖨️ พิมพ์ใบเสร็จ',
+                            denyButtonText: 'ปิด',
+                        }).then((res) => {
+                            if (res.isConfirmed) {
+                                window.open(`/sales/pos/print/${data.order_code}/`, '_blank', 'width=400,height=600');
+                            }
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire('Error', data.error, 'error');
+                    }
+                });
+            }
         });
     }
 </script>
-
-</body>
-</html>
+{% endblock %}

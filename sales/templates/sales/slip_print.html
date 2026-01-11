@@ -1,63 +1,75 @@
-<!DOCTYPE html>
+{% load humanize %} <!DOCTYPE html>
 <html lang="th">
 <head>
     <meta charset="UTF-8">
     <title>ใบเสร็จ {{ order.code }}</title>
     <style>
-        /* ตั้งค่าหน้ากระดาษสำหรับ Slip (กว้างประมาณ 80mm) */
+        /* ตั้งค่าหน้ากระดาษสำหรับ Slip Printer (กว้าง 80mm) */
         body { 
-            font-family: 'Courier New', monospace; /* ใช้ฟอนต์เครื่องพิมพ์ดีดเพื่อให้ดูคลาสสิกและอ่านง่าย */
+            font-family: 'Courier New', monospace; 
             margin: 0; 
-            padding: 10px; 
-            width: 80mm; /* ปรับเป็น 58mm ถ้าใช้เครื่องเล็ก */
-            background: white;
+            padding: 5px; 
+            width: 78mm; 
+            background: white; 
             color: black;
+            font-size: 12px;
         }
-        
         .container { width: 100%; }
         .text-center { text-align: center; }
         .text-right { text-align: right; }
-        .bold { font-weight: bold; }
+        .fw-bold { font-weight: bold; }
         
-        .line { border-bottom: 1px dashed black; margin: 5px 0; }
+        .line { border-bottom: 1px dashed black; margin: 8px 0; }
         
-        /* ตารางรายการ */
-        table { width: 100%; border-collapse: collapse; font-size: 12px; }
-        td { vertical-align: top; }
+        table { width: 100%; border-collapse: collapse; }
+        td { vertical-align: top; padding: 2px 0; }
         
-        /* ซ่อนปุ่มเวลาพิมพ์ */
+        /* ปุ่มพิมพ์ (ซ่อนเวลาพิมพ์จริง) */
+        .no-print { text-align: center; margin-bottom: 15px; }
         .btn-print { 
-            display: block; width: 100%; padding: 10px; 
-            background: black; color: white; text-align: center; 
-            text-decoration: none; margin-bottom: 10px; font-family: sans-serif; 
+            background: #000; color: #fff; text-decoration: none; 
+            padding: 8px 20px; border-radius: 5px; font-family: sans-serif; cursor: pointer;
         }
-        
+
         @media print {
-            .btn-print { display: none; }
-            body { margin: 0; padding: 0; width: auto; }
-            @page { margin: 0; }
+            .no-print { display: none; }
+            body { padding: 0; margin: 0; }
         }
     </style>
 </head>
-<body onload="window.print()"> <a href="javascript:window.print()" class="btn-print">🖨️ พิมพ์ใบเสร็จ</a>
+<body onload="window.print()">
+
+    <div class="no-print">
+        <a href="javascript:window.print()" class="btn-print">🖨️ พิมพ์ใบเสร็จ</a>
+    </div>
 
     <div class="container">
         <div class="text-center">
             {% if company.logo %}
-                <img src="{{ company.logo.url }}" style="max-width: 50px; filter: grayscale(100%);"><br>
+                <img src="{{ company.logo.url }}" style="max-width: 60px; filter: grayscale(100%); margin-bottom: 5px;"><br>
             {% endif %}
-            <span class="bold" style="font-size: 1.2em;">{{ company.name_th }}</span><br>
-            <span style="font-size: 0.8em;">{{ company.address }}</span><br>
-            <span style="font-size: 0.8em;">โทร: {{ company.phone }}</span>
+            
+            <span class="fw-bold" style="font-size: 1.2em;">{{ company.name_th|default:"NEED Shopping" }}</span><br>
+            
+            {% if company.branch %}
+                สาขา: {{ company.branch }}<br>
+            {% endif %}
+            
+            {% if company.tax_id %}
+                TAX ID: {{ company.tax_id }}<br>
+            {% endif %}
+            
+            {% if company.phone %}
+                โทร: {{ company.phone }}
+            {% endif %}
         </div>
         
         <div class="line"></div>
         
-        <div style="font-size: 0.9em;">
-            TAX INV / RECEIPT<br>
-            เลขที่: {{ order.code }}<br>
+        <div>
+            บิลเลขที่: {{ order.code }}<br>
             วันที่: {{ order.created_at|date:"d/m/Y H:i" }}<br>
-            พนักงาน: {{ order.employee.first_name|default:"-" }}
+            พนักงาน: {{ order.employee.first_name|default:"Admin" }}
         </div>
         
         <div class="line"></div>
@@ -68,8 +80,8 @@
                 <td colspan="2">{{ item.product_name }}</td>
             </tr>
             <tr>
-                <td class="text-right">{{ item.quantity }} x {{ item.price|floatformat:2 }}</td>
-                <td class="text-right">{{ item.total_price|floatformat:2 }}</td>
+                <td style="padding-left: 10px;">{{ item.quantity }} x {{ item.price|floatformat:2|intcomma }}</td>
+                <td class="text-right">{{ item.total_price|floatformat:2|intcomma }}</td>
             </tr>
             {% endfor %}
         </table>
@@ -78,27 +90,26 @@
         
         <table style="font-size: 1.1em;">
             <tr>
-                <td class="bold">ยอดรวมสุทธิ</td>
-                <td class="text-right bold">{{ order.total_amount|floatformat:2 }}</td>
+                <td class="fw-bold">ยอดรวมสุทธิ</td>
+                <td class="text-right fw-bold">{{ order.total_amount|floatformat:2|intcomma }}</td>
             </tr>
             <tr>
-                <td>รับเงิน ({{ order.payment_method }})</td>
-                <td class="text-right">{{ order.total_amount|floatformat:2 }}</td>
+                <td>รับเงินสด</td>
+                <td class="text-right">{{ order.received_amount|floatformat:2|intcomma }}</td>
             </tr>
             <tr>
                 <td>เงินทอน</td>
-                <td class="text-right">0.00</td>
+                <td class="text-right">{{ order.change_amount|floatformat:2|intcomma }}</td>
             </tr>
         </table>
         
         <div class="line"></div>
         
         <div class="text-center" style="margin-top: 10px;">
-            ขอบคุณที่อุดหนุนครับ/ค่ะ<br>
+            ขอบคุณที่อุดหนุนครับ<br>
+            Thank you very much.<br>
             **************************
         </div>
-        
-        <br><br>
     </div>
 
 </body>

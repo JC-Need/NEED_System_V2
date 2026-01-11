@@ -6,8 +6,6 @@ urlpatterns = [
     path('pos/', views.pos_home, name='pos_home'),
     path('pos/checkout/', views.pos_checkout, name='pos_checkout'),
     path('pos/print/<str:order_code>/', views.pos_print_slip, name='pos_print_slip'),
-    
-    # ✅ เพิ่มบรรทัดนี้: ลิงก์ดาวน์โหลด Excel
     path('export/excel/', views.export_sales_excel, name='export_sales_excel'),
 
     path('quotation/', views.quotation_list, name='quotation_list'),
