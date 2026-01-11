@@ -1,0 +1,265 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid px-4 py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-edit text-primary me-2"></i>แก้ไขใบเสนอราคา
+            </h4>
+            <div class="text-muted small mt-1">
+                เลขที่เอกสาร: <span class="badge bg-warning text-dark fs-6 font-monospace">{{ qt.code }}</span>
+                <span class="mx-2">|</span>
+                วันที่: {{ qt.date|date:"d/m/Y" }}
+            </div>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'quotation_list' %}" class="btn btn-secondary shadow-sm">
+                <i class="fas fa-arrow-left me-1"></i> กลับหน้าหลัก
+            </a>
+            <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-success shadow-sm">
+                <i class="fas fa-print me-1"></i> พิมพ์ / ตัวอย่าง
+            </a>
+        </div>
+    </div>
+
+    <div id="local-message-box" class="mb-3">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert">
+                <i class="fas fa-check-circle me-2"></i> {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-3">
+            <div class="card shadow-sm border-0 rounded-3 sticky-top" style="top: 20px; z-index: 99;">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="fw-bold text-primary mb-0"><i class="fas fa-id-card me-2"></i>ข้อมูลลูกค้า</h6>
+                </div>
+                <div class="card-body bg-light">
+                    <div class="mb-3">
+                        <label class="small text-muted fw-bold">ชื่อบริษัท / ลูกค้า</label>
+                        <input type="text" class="form-control bg-white" value="{{ qt.customer_name }}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="small text-muted fw-bold">เลขผู้เสียภาษี</label>
+                        <input type="text" class="form-control bg-white" value="{{ qt.customer_tax_id|default:'-' }}" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="small text-muted fw-bold">เบอร์โทรศัพท์</label>
+                        <input type="text" class="form-control bg-white" value="{{ qt.customer_phone|default:'-' }}" readonly>
+                    </div>
+                    <div class="mb-2">
+                        <label class="small text-muted fw-bold">ที่อยู่จัดส่ง</label>
+                        <textarea class="form-control bg-white" rows="4" readonly>{{ qt.customer_address }}</textarea>
+                    </div>
+                </div>
+                <div class="card-footer bg-white text-center py-2">
+                    <a href="#" class="btn btn-warning btn-sm fw-bold w-100 disabled">
+                        <i class="fas fa-user-edit me-1"></i> แก้ไขข้อมูลลูกค้า
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h6 class="mb-0 fw-bold text-success"><i class="fas fa-cart-plus me-2"></i>เพิ่มรายการสินค้า</h6>
+                </div>
+                <div class="card-body p-4 bg-white">
+                    <form method="POST">
+                        {% csrf_token %}
+                        <input type="hidden" name="add_item" value="true">
+                        
+                        <div class="mb-4 p-3 bg-light rounded border border-success border-opacity-25">
+                            <label class="fw-bold text-success mb-2 small">
+                                <i class="fas fa-search me-1"></i> ตัวช่วยค้นหาสินค้า (เลือกแล้วข้อมูลจะเด้งลงช่องล่าง)
+                            </label>
+                            <select id="product_selector" class="form-control select2" style="width: 100%;">
+                                <option value="">-- พิมพ์ชื่อสินค้าเพื่อค้นหา --</option>
+                                {% for p in products %}
+                                    <option value="{{ p.id }}" data-name="{{ p.name }}" data-price="{{ p.sell_price }}">
+                                        {{ p.code }} : {{ p.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-6">
+                                <label class="small fw-bold mb-1 text-dark">ชื่อรายการสินค้า *</label>
+                                <input type="text" name="item_name" id="input_name" class="form-control" placeholder="พิมพ์ชื่อสินค้า..." required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="small fw-bold mb-1 text-dark">ราคา/หน่วย</label>
+                                <div class="input-group">
+                                    <input type="number" name="price" id="input_price" class="form-control text-end fw-bold" step="0.01" value="0.00" required>
+                                    <span class="input-group-text bg-light">฿</span>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="small fw-bold mb-1 text-dark">จำนวน</label>
+                                <input type="number" name="quantity" class="form-control text-center fw-bold" value="1" min="1" required>
+                            </div>
+                            <div class="col-md-1">
+                                <button type="submit" class="btn btn-success w-100 fw-bold">
+                                    <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 rounded-3 mb-4">
+                <div class="card-header bg-white py-2 border-bottom">
+                    <h6 class="mb-0 fw-bold text-dark">รายการในใบเสนอราคา</h6>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary small text-uppercase">
+                            <tr class="align-middle"> 
+                                <th class="ps-4 py-3" style="width: 5%">ลำดับ</th>
+                                <th class="py-3" style="width: 45%">รายละเอียดสินค้า</th>
+                                <th class="text-center py-3" style="width: 15%">จำนวน</th>
+                                <th class="text-end py-3" style="width: 15%">ราคา/หน่วย</th>
+                                <th class="text-end pe-4 py-3" style="width: 20%">รวมเงิน</th>
+                                <th class="py-3" style="width: 5%"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in qt.items.all %}
+                            <tr>
+                                <td class="ps-4 text-muted">{{ forloop.counter }}</td>
+                                <td class="fw-bold text-dark">{{ item.item_name }}</td>
+                                <td class="text-center">
+                                    <span class="badge bg-light text-dark border px-3">{{ item.quantity }}</span>
+                                </td>
+                                <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
+                                <td class="text-end pe-4 fw-bold text-primary">{{ item.total_price|floatformat:2|intcomma }}</td>
+                                <td>
+                                    <a href="{% url 'delete_item' item.id %}" class="text-danger" onclick="return confirm('ลบรายการนี้?');">
+                                        <i class="fas fa-times-circle"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    <i class="fas fa-shopping-basket fa-3x mb-3 opacity-50"></i>
+                                    <p class="mb-0">ยังไม่มีรายการสินค้า</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <form method="POST">
+                {% csrf_token %}
+                <input type="hidden" name="update_info" value="true">
+                
+                <div class="card shadow-sm border-0 rounded-3">
+                    <div class="card-body row">
+                        <div class="col-md-7 border-end">
+                            <label class="small fw-bold text-primary mb-2"><i class="fas fa-pen me-1"></i> หมายเหตุ / เงื่อนไข (Note):</label>
+                            <textarea name="note" class="form-control" rows="4" placeholder="ระบุเงื่อนไข...">{{ qt.note }}</textarea>
+                            <button type="submit" class="btn btn-primary btn-sm mt-3">
+                                <i class="fas fa-save me-1"></i> บันทึกหมายเหตุ
+                            </button>
+                        </div>
+
+                        <div class="col-md-5 ps-md-4">
+                            <div class="d-flex justify-content-between mb-2 mt-2">
+                                <span class="text-muted">รวมราคาสินค้า:</span>
+                                <span class="fw-bold">{{ item_total|floatformat:2|intcomma }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted small">ค่าขนส่ง:</span>
+                                <input type="number" name="shipping_cost" class="form-control form-control-sm text-end w-50" step="0.01" value="{{ qt.shipping_cost }}">
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span class="text-muted small">หักส่วนลด:</span>
+                                <input type="number" name="discount" class="form-control form-control-sm text-end w-50 text-danger" step="0.01" value="{{ qt.discount }}">
+                            </div>
+                            
+                            <hr>
+
+                            <div class="d-flex justify-content-between mb-1 small text-muted">
+                                <span>ราคาก่อนภาษี:</span>
+                                <span>{{ qt.subtotal|floatformat:2|intcomma }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-3 small text-muted">
+                                <span>VAT 7%:</span>
+                                <span>{{ qt.vat_amount|floatformat:2|intcomma }}</span>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-center bg-light p-3 rounded border">
+                                <span class="fw-bold text-dark">ยอดสุทธิ (GRAND TOTAL)</span>
+                                <span class="fw-bold text-success fs-4">฿{{ qt.grand_total|floatformat:2|intcomma }}</span>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-primary w-100 mt-3 fw-bold shadow">
+                                <i class="fas fa-check-circle me-2"></i> คำนวณและบันทึกยอด
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+        </div>
+    </div>
+</div>
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet">
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        var $select = $('#product_selector').select2({
+            theme: 'bootstrap4',
+            placeholder: "-- พิมพ์ชื่อสินค้าเพื่อค้นหา --",
+            allowClear: true,
+            width: '100%'
+        });
+
+        $select.on('select2:select', function (e) {
+            var selectedOption = $(this).find(':selected');
+            var name = selectedOption.data('name');
+            var price = selectedOption.data('price');
+            if(name) {
+                $('#input_name').val(name);
+                $('#input_price').val(price);
+                $('input[name="quantity"]').select();
+            }
+        });
+        
+        $select.on('select2:clear', function (e) {
+            $('#input_name').val('');
+            $('#input_price').val('0.00');
+        });
+
+        if ($('#local-message-box .alert').length > 0) {
+            $('.alert').not('#local-message-box .alert').remove();
+        }
+    });
+</script>
+
+<style>
+    .select2-container--bootstrap4 .select2-selection--single { height: 38px !important; }
+    .select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered { line-height: 36px; padding-left: 12px; }
+</style>
+
+{% block messages %}{% endblock %}
+
+{% endblock %}
