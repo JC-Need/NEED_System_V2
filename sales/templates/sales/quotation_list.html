@@ -1,61 +1,101 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <title>รายการใบเสนอราคา</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-</head>
-<body class="bg-light">
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3><i class="fas fa-file-invoice"></i> รายการใบเสนอราคา (Quotation)</h3>
-            <a href="{% url 'quotation_create' %}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> สร้างใบใหม่
-            </a>
-        </div>
+{% extends 'core/base.html' %}
+{% load humanize %}
 
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <table class="table table-hover">
-                    <thead class="table-dark">
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0"><i class="fas fa-file-invoice text-warning me-2"></i>รายการใบเสนอราคา</h2>
+            <p class="text-muted mb-0">จัดการใบเสนอราคาและติดตามสถานะ</p>
+        </div>
+        <a href="{% url 'quotation_create' %}" class="btn btn-success shadow-sm rounded-pill px-4 fw-bold">
+            <i class="fas fa-plus me-2"></i>สร้างใบเสนอราคาใหม่
+        </a>
+    </div>
+
+    <div class="card border-0 shadow-sm mb-4 rounded-4">
+        <div class="card-body p-3">
+            <form method="get" class="row g-2 align-items-center">
+                <div class="col-md-10">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" name="q" class="form-control border-start-0 ps-0" 
+                               placeholder="ค้นหาเลขที่เอกสาร, ชื่อลูกค้า..." 
+                               value="{{ request.GET.q|default:'' }}">
+                    </div>
+                </div>
+                <div class="col-md-2 d-grid">
+                    <button type="submit" class="btn btn-primary rounded-pill">ค้นหา</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light text-secondary">
                         <tr>
-                            <th>เลขที่เอกสาร</th>
-                            <th>วันที่</th>
-                            <th>ลูกค้า</th>
-                            <th>ยอดรวม</th>
-                            <th>สถานะ</th>
-                            <th>จัดการ</th>
+                            <th class="ps-4 py-3" width="15%">เลขที่เอกสาร</th>
+                            <th width="15%">วันที่</th>
+                            <th width="30%">ลูกค้า</th>
+                            <th class="text-end" width="15%">ยอดสุทธิ</th>
+                            <th class="text-center" width="10%">สถานะ</th>
+                            <th class="text-center pe-4" width="15%">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for q in quotes %}
+                        {% for quote in quotes %}
                         <tr>
-                            <td>{{ q.code }}</td>
-                            <td>{{ q.date|date:"d M Y" }}</td>
-                            <td>{{ q.customer.name|default:"-" }}</td>
-                            <td class="fw-bold text-end">{{ q.grand_total|floatformat:2 }}</td>
+                            <td class="ps-4 fw-bold text-primary">{{ quote.code }}</td>
+                            <td class="text-muted">{{ quote.date|date:"d/m/Y" }}</td>
                             <td>
-                                <span class="badge bg-secondary">{{ q.get_status_display }}</span>
+                                <div class="fw-bold text-dark">{{ quote.customer.name|default:"-" }}</div>
+                                <small class="text-muted"><i class="fas fa-phone-alt me-1"></i>{{ quote.customer.phone }}</small>
                             </td>
-                            <td>
-                                <a href="{% url 'quotation_print' q.id %}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-print"></i> พิมพ์
-                                </a>
+                            <td class="text-end fw-bold">฿{{ quote.grand_total|floatformat:2|intcomma }}</td>
+                            <td class="text-center">
+                                {% if quote.status == 'DRAFT' %}
+                                    <span class="badge bg-secondary rounded-pill px-3">รอยืนยัน</span>
+                                {% elif quote.status == 'APPROVED' %}
+                                    <span class="badge bg-success rounded-pill px-3">อนุมัติแล้ว</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark rounded-pill px-3">{{ quote.get_status_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center pe-4">
+                                <div class="btn-group">
+                                    <a href="{% url 'quotation_print' quote.id %}" target="_blank" class="btn btn-sm btn-outline-dark" title="พิมพ์/ดูรายละเอียด">
+                                        <i class="fas fa-print"></i>
+                                    </a>
+                                    </div>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">ยังไม่มีใบเสนอราคา</td>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <div class="mb-3"><i class="fas fa-folder-open fa-3x opacity-25"></i></div>
+                                <h5>ไม่พบข้อมูลใบเสนอราคา</h5>
+                                <p class="small">เริ่มสร้างใบแรกโดยกดปุ่มด้านบนได้เลยครับ</p>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
-        <div class="mt-3">
-            <a href="{% url 'sales_dashboard' %}" class="btn btn-secondary">กลับหน้าหลัก</a>
-        </div>
+        
+        {% if quotes.has_other_pages %}
+        <div class="card-footer bg-white py-3">
+            </div>
+        {% endif %}
     </div>
-</body>
-</html>
+    
+    <div class="mt-4">
+        <a href="{% url 'sales_dashboard' %}" class="btn btn-light text-muted">
+            <i class="fas fa-arrow-left me-1"></i> กลับหน้าหลักฝ่ายขาย
+        </a>
+    </div>
+</div>
+{% endblock %}

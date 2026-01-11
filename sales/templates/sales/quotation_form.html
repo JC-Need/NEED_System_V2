@@ -1,149 +1,278 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-    <meta charset="UTF-8">
-    <title>ออกใบเสนอราคาใหม่</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-</head>
-<body class="bg-light">
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-md-8">
-            <div class="card shadow-sm mb-3">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="fas fa-file-signature"></i> ออกใบเสนอราคา</h5>
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<style>
+    /* ปรับแต่งให้เหมือนระบบเก่า */
+    .card-header-custom {
+        background-color: #0d6efd; /* สีฟ้า */
+        color: white;
+        font-weight: bold;
+        padding: 15px;
+        border-radius: 5px 5px 0 0;
+    }
+    .form-label { font-weight: bold; font-size: 0.9rem; color: #333; }
+    .bg-search-box { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; margin-bottom: 20px; }
+    .required { color: red; }
+</style>
+
+<div class="container py-4">
+    <form id="quoteForm" onsubmit="saveQuotation(event)">
+
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header-custom d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-file-invoice me-2"></i>สร้างใบเสนอราคาใหม่ (Create Quotation)</span>
+            </div>
+
+            <div class="card-body p-4">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">วันที่เอกสาร</label>
+                        <input type="date" class="form-control" id="docDate" value="{% now 'Y-m-d' %}" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">ยืนยันราคาถึงวันที่</label>
+                        <input type="date" class="form-control" id="validDate">
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label class="form-label">เลือกลูกค้า:</label>
-                        <select id="customerSelect" class="form-select">
-                            <option value="">-- กรุณาเลือกลูกค้า --</option>
+
+                <div class="bg-search-box">
+                    <label class="text-primary fw-bold mb-2"><i class="fas fa-search me-1"></i> ค้นหาลูกค้าเก่า (ดึงข้อมูลอัตโนมัติ)</label>
+                    <div class="input-group">
+                        <select id="customerSelect" class="form-select" style="width: 100%;">
+                            <option value="">-- พิมพ์ชื่อลูกค้าเพื่อค้นหา --</option>
                             {% for c in customers %}
-                            <option value="{{ c.id }}">{{ c.code }} - {{ c.name }}</option>
+                            <option value="{{ c.id }}"
+                                    data-code="{{ c.code }}"
+                                    data-name="{{ c.name }}"
+                                    data-tax="{{ c.tax_id }}"
+                                    data-phone="{{ c.phone }}"
+                                    data-address="{{ c.address }}">
+                                {{ c.code }} : {{ c.name }}
+                            </option>
                             {% endfor %}
                         </select>
-                        <small class="text-muted"><a href="/admin/master_data/customer/add/" target="_blank">+ เพิ่มลูกค้าใหม่</a></small>
                     </div>
+                    <div class="text-end mt-1">
+                        <a href="{% url 'customer_create' %}" target="_blank" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-plus"></i> เพิ่มลูกค้าใหม่
+                        </a>
+                    </div>
+                </div>
 
-                    <table class="table table-bordered mt-4">
-                        <thead class="table-light">
+                <div class="mb-3">
+                    <label class="form-label">ชื่อลูกค้า / บริษัท <span class="required">*</span></label>
+                    <input type="text" class="form-control" id="customerName" placeholder="ระบุชื่อลูกค้า" required>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">เลขผู้เสียภาษี (ถ้ามี)</label>
+                        <input type="text" class="form-control" id="customerTax" placeholder="เลขประจำตัวผู้เสียภาษี">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">เบอร์โทรศัพท์</label>
+                        <input type="text" class="form-control" id="customerPhone" placeholder="0xx-xxx-xxxx">
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">ที่อยู่</label>
+                    <textarea class="form-control" id="customerAddress" rows="3"></textarea>
+                </div>
+
+                <div class="mb-4">
+                    <label class="form-label">หมายเหตุ</label>
+                    <textarea class="form-control" id="note" rows="2"></textarea>
+                </div>
+
+                <hr class="my-4">
+
+                <h5 class="fw-bold text-primary mb-3"><i class="fas fa-list-ul me-2"></i>รายการสินค้า</h5>
+                <div class="table-responsive mb-3">
+                    <table class="table table-bordered align-middle">
+                        <thead class="table-light text-center">
                             <tr>
-                                <th>สินค้า</th>
-                                <th width="100">ราคา</th>
-                                <th width="100">จำนวน</th>
-                                <th width="120">รวม</th>
-                                <th width="50">ลบ</th>
+                                <th width="40%">สินค้า</th>
+                                <th width="15%">ราคา/หน่วย</th>
+                                <th width="15%">จำนวน</th>
+                                <th width="20%">รวมเงิน</th>
+                                <th width="10%">ลบ</th>
                             </tr>
                         </thead>
-                        <tbody id="quoteItems">
+                        <tbody id="itemsBody">
                             </tbody>
-                        <tfoot>
+                        <tfoot class="table-light">
                             <tr>
-                                <td colspan="3" class="text-end fw-bold">ยอดสุทธิ:</td>
-                                <td colspan="2" class="fw-bold text-primary" id="grandTotal">0.00</td>
+                                <td colspan="5" class="p-2">
+                                    <button type="button" class="btn btn-outline-primary btn-sm w-100 border-dashed" onclick="addItemRow()">
+                                        <i class="fas fa-plus"></i> เพิ่มรายการสินค้า
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td colspan="3" class="text-end fw-bold pe-3">ยอดรวมสุทธิ (Grand Total)</td>
+                                <td class="text-end fw-bold px-3 text-primary h5 mb-0 bg-white" id="grandTotal">0.00</td>
+                                <td></td>
                             </tr>
                         </tfoot>
                     </table>
                 </div>
-            </div>
-        </div>
 
-        <div class="col-md-4">
-            <div class="card shadow-sm">
-                <div class="card-header bg-secondary text-white">
-                    <i class="fas fa-box"></i> เลือกสินค้า
-                </div>
-                <div class="card-body p-2" style="max-height: 500px; overflow-y: auto;">
-                    <div class="d-grid gap-2">
-                        {% for p in products %}
-                        <button class="btn btn-outline-dark text-start" onclick="addItem({{ p.id }}, '{{ p.name }}', {{ p.sell_price }})">
-                            <div class="d-flex justify-content-between">
-                                <span>{{ p.name }}</span>
-                                <span class="badge bg-light text-dark">{{ p.sell_price|floatformat:0 }}</span>
-                            </div>
-                        </button>
-                        {% endfor %}
-                    </div>
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'quotation_list' %}" class="btn btn-secondary px-4">ยกเลิก</a>
+                    <button type="submit" class="btn btn-success px-5 fw-bold shadow">
+                        <i class="fas fa-save me-2"></i> บันทึกและพิมพ์
+                    </button>
                 </div>
             </div>
-            
-            <button onclick="saveQuotation()" class="btn btn-success w-100 mt-3 py-3 fw-bold">
-                <i class="fas fa-save"></i> บันทึกใบเสนอราคา
-            </button>
-            <a href="{% url 'quotation_list' %}" class="btn btn-outline-secondary w-100 mt-2">ยกเลิก</a>
         </div>
-    </div>
+    </form>
 </div>
 
+<datalist id="productList">
+    {% for p in products %}
+    <option value="{{ p.name }}" data-id="{{ p.id }}" data-price="{{ p.sell_price }}">
+    {% endfor %}
+</datalist>
+
 <script>
-    let items = [];
-
-    function addItem(id, name, price) {
-        let exist = items.find(i => i.id === id);
-        if(exist) {
-            exist.qty++;
-        } else {
-            items.push({ id: id, name: name, price: price, qty: 1 });
-        }
-        renderTable();
-    }
-
-    function renderTable() {
-        const tbody = document.getElementById('quoteItems');
-        const totalEl = document.getElementById('grandTotal');
-        tbody.innerHTML = '';
-        let total = 0;
-
-        items.forEach((item, idx) => {
-            let sum = item.qty * item.price;
-            total += sum;
-            tbody.innerHTML += `
-                <tr>
-                    <td>${item.name}</td>
-                    <td>${item.price.toLocaleString()}</td>
-                    <td><input type="number" class="form-control form-control-sm" value="${item.qty}" onchange="updateQty(${idx}, this.value)"></td>
-                    <td class="text-end">${sum.toLocaleString()}</td>
-                    <td><button class="btn btn-sm btn-danger" onclick="removeItem(${idx})">x</button></td>
-                </tr>
-            `;
+    $(document).ready(function() {
+        // 1. ตั้งค่า Select2 ให้สวยงามและค้นหาได้
+        $('#customerSelect').select2({
+            theme: 'bootstrap-5',
+            placeholder: '-- พิมพ์ชื่อลูกค้า --',
+            allowClear: true,
+            width: '100%'
         });
-        totalEl.innerText = total.toLocaleString(undefined, {minimumFractionDigits: 2});
+
+        // 2. ระบบ Auto-fill: เมื่อเลือกชื่อลูกค้า ให้ดึงข้อมูลมาใส่ช่องว่าง
+        $('#customerSelect').on('select2:select', function (e) {
+            var data = e.params.data.element.dataset; // ดึง data- attributes
+
+            $('#customerName').val(data.name);
+            $('#customerTax').val(data.tax);
+            $('#customerPhone').val(data.phone);
+            $('#customerAddress').val(data.address);
+        });
+
+        // 3. เริ่มต้นด้วยการเพิ่มแถวสินค้า 1 แถว
+        addItemRow();
+    });
+
+    // --- ฟังก์ชันจัดการสินค้า (เหมือนเดิม แต่ปรับให้เข้ากับหน้าใหม่) ---
+    function addItemRow() {
+        const tbody = document.getElementById('itemsBody');
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>
+                <input type="text" class="form-control" list="productList" onchange="productSelected(this)" placeholder="พิมพ์ชื่อสินค้า..." required>
+                <input type="hidden" name="product_id">
+            </td>
+            <td>
+                <input type="number" class="form-control text-end" name="price" step="0.01" oninput="calculateTotal()" required>
+            </td>
+            <td>
+                <input type="number" class="form-control text-center" name="qty" value="1" min="1" oninput="calculateTotal()" required>
+            </td>
+            <td class="text-end align-middle px-3 fw-bold row-total">0.00</td>
+            <td class="text-center">
+                <button type="button" class="btn btn-link text-danger p-0" onclick="removeRow(this)"><i class="fas fa-trash-alt"></i></button>
+            </td>
+        `;
+        tbody.appendChild(row);
     }
 
-    function updateQty(idx, val) {
-        if(val < 1) val = 1;
-        items[idx].qty = parseInt(val);
-        renderTable();
+    function productSelected(input) {
+        const options = document.getElementById('productList').options;
+        for (let op of options) {
+            if (op.value === input.value) {
+                const row = input.closest('tr');
+                row.querySelector('[name="product_id"]').value = op.getAttribute('data-id');
+                row.querySelector('[name="price"]').value = op.getAttribute('data-price');
+                calculateTotal();
+                return;
+            }
+        }
     }
 
-    function removeItem(idx) {
-        items.splice(idx, 1);
-        renderTable();
+    function calculateTotal() {
+        let total = 0;
+        document.querySelectorAll('#itemsBody tr').forEach(row => {
+            const price = parseFloat(row.querySelector('[name="price"]').value) || 0;
+            const qty = parseFloat(row.querySelector('[name="qty"]').value) || 0;
+            const lineTotal = price * qty;
+            row.querySelector('.row-total').innerText = lineTotal.toLocaleString(undefined, {minimumFractionDigits:2});
+            total += lineTotal;
+        });
+        document.getElementById('grandTotal').innerText = total.toLocaleString(undefined, {minimumFractionDigits:2});
     }
 
-    function saveQuotation() {
-        const custId = document.getElementById('customerSelect').value;
-        if(!custId) return alert('กรุณาเลือกลูกค้าก่อนครับ');
-        if(items.length === 0) return alert('กรุณาเลือกสินค้าอย่างน้อย 1 รายการ');
+    function removeRow(btn) {
+        if(document.querySelectorAll('#itemsBody tr').length > 1) {
+            btn.closest('tr').remove();
+            calculateTotal();
+        } else {
+            // ถ้าเหลือแถวเดียว ให้แค่เคลียร์ค่า
+            const row = btn.closest('tr');
+            row.querySelectorAll('input').forEach(i => i.value = '');
+            row.querySelector('[name="qty"]').value = 1;
+            calculateTotal();
+        }
+    }
 
-        if(!confirm('ยืนยันสร้างใบเสนอราคา?')) return;
+    // --- ฟังก์ชันบันทึกข้อมูล ---
+    function saveQuotation(e) {
+        e.preventDefault();
 
-        fetch('', { // ส่งไปที่ URL ปัจจุบัน
+        // เก็บรายการสินค้า
+        const items = [];
+        let hasItem = false;
+        document.querySelectorAll('#itemsBody tr').forEach(row => {
+            const pid = row.querySelector('[name="product_id"]').value;
+            if(pid) {
+                items.push({
+                    id: pid,
+                    price: row.querySelector('[name="price"]').value,
+                    qty: row.querySelector('[name="qty"]').value
+                });
+                hasItem = true;
+            }
+        });
+
+        if(!hasItem) return alert('กรุณาเพิ่มรายการสินค้าอย่างน้อย 1 รายการ');
+
+        // เก็บข้อมูล Header
+        // หมายเหตุ: เราส่ง customer_id ไปด้วย ถ้าเขาเลือกจาก list
+        // แต่ถ้าเขาพิมพ์ชื่อเอง (ไม่ได้เลือก) เราจะส่งเป็น None แล้วให้ Backend จัดการ (ในเวอร์ชันนี้ขอเน้นเลือกจาก List ก่อน)
+        const custId = $('#customerSelect').val();
+
+        const data = {
+            customer_id: custId,
+            items: items,
+            // ส่งข้อมูล Text ไปด้วยเผื่อมีการแก้ไขหน้างาน (Optional: ขึ้นอยู่กับ Backend รองรับไหม)
+            // ในที่นี้ Backend เรารับแค่ customer_id และ items เป็นหลัก
+        };
+
+        fetch("{% url 'quotation_create' %}", {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
-            body: JSON.stringify({ customer_id: custId, items: items })
+            body: JSON.stringify(data)
         })
-        .then(r => r.json())
+        .then(res => res.json())
         .then(data => {
             if(data.success) {
-                alert('✅ บันทึกสำเร็จ! เลขที่: ' + data.code);
+                alert('✅ บันทึกใบเสนอราคาสำเร็จ!');
                 window.location.href = "{% url 'quotation_list' %}";
             } else {
-                alert('❌ เกิดข้อผิดพลาด: ' + data.error);
+                alert('เกิดข้อผิดพลาด: ' + data.error);
             }
         });
     }
 </script>
-</body>
-</html>
+{% endblock %}

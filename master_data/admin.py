@@ -1,20 +1,37 @@
 from django.contrib import admin
-# ✅ Import แค่ 3 ตัวที่เราเก็บไว้จริง
-from .models import CompanyInfo, Customer, Supplier
+from .models import CompanyInfo, Customer, Supplier, Province, Amphure, Tambon
 
 # 1. ข้อมูลบริษัท
 @admin.register(CompanyInfo)
 class CompanyInfoAdmin(admin.ModelAdmin):
-    list_display = ('name_th', 'tax_id', 'branch')
+    list_display = ('name_th', 'branch', 'phone')
 
-# 2. ลูกค้า
+# 2. ลูกค้า (Customer)
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ('code', 'name', 'phone', 'points')
-    search_fields = ('code', 'name', 'phone')
+    # ลบ 'points' ออกแล้ว ใส่ 'province' แทน
+    list_display = ('code', 'name', 'phone', 'province', 'is_active')
+    search_fields = ('code', 'name', 'phone', 'tax_id')
+    list_filter = ('is_active', 'province')
+    readonly_fields = ('code',) # ห้ามแก้รหัสลูกค้าเอง
 
-# 3. ซัพพลายเออร์
+# 3. ผู้ขาย (Supplier)
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
     list_display = ('code', 'name', 'contact_name', 'phone')
     search_fields = ('code', 'name')
+
+# 4. ข้อมูลภูมิศาสตร์ (เผื่อแก้ไข)
+@admin.register(Province)
+class ProvinceAdmin(admin.ModelAdmin):
+    search_fields = ('name_th', 'name_en')
+
+@admin.register(Amphure)
+class AmphureAdmin(admin.ModelAdmin):
+    search_fields = ('name_th',)
+    list_filter = ('province',)
+
+@admin.register(Tambon)
+class TambonAdmin(admin.ModelAdmin):
+    search_fields = ('name_th', 'zip_code')
+    list_filter = ('amphure__province',)

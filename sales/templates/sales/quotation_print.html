@@ -1,3 +1,4 @@
+{% load humanize %}
 <!DOCTYPE html>
 <html lang="th">
 <head>
@@ -5,58 +6,88 @@
     <title>ใบเสนอราคา {{ quote.code }}</title>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Sarabun', sans-serif; background: #555; }
+        body { 
+            font-family: 'Sarabun', sans-serif; 
+            background: #525659; /* สีพื้นหลังเหมือนโปรแกรม PDF */
+            margin: 0; 
+            padding: 20px;
+        }
         
         /* ตั้งค่าหน้ากระดาษ A4 */
         .page {
-            width: 210mm; min-height: 297mm;
+            width: 210mm;
+            min-height: 297mm;
             padding: 20mm;
-            margin: 10mm auto;
+            margin: 0 auto;
             background: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
             position: relative;
+            box-sizing: border-box; /* สำคัญ: ให้ padding ไม่ขยายขนาดกระดาษ */
         }
 
         /* ส่วนหัว */
-        .header { display: flex; justify-content: space-between; margin-bottom: 20px; }
-        .company-info h2 { margin: 0; color: #333; }
-        .doc-title { text-align: right; }
-        .doc-title h1 { margin: 0; color: #0d6efd; text-transform: uppercase; }
+        .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
+        .company-info h2 { margin: 0 0 5px 0; color: #333; font-weight: bold; }
+        .company-info p { margin: 0; color: #555; line-height: 1.4; font-size: 0.95em; }
         
-        /* ตารางข้อมูลลูกค้า */
-        .info-section { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 2px solid #ddd; padding-bottom: 20px; }
-        .box { width: 48%; }
-        .box strong { display: block; margin-bottom: 5px; font-size: 1.1em; }
+        .doc-title { text-align: right; }
+        .doc-title h1 { margin: 0; color: #0d6efd; text-transform: uppercase; font-size: 24pt; }
+        .doc-title p { margin: 0; letter-spacing: 2px; color: #777; font-weight: bold; }
+        
+        /* ข้อมูลลูกค้า */
+        .info-section { 
+            display: flex; justify-content: space-between; 
+            margin-bottom: 25px; 
+            border-top: 2px solid #333; 
+            border-bottom: 2px solid #333; 
+            padding: 15px 0;
+        }
+        .box { width: 48%; font-size: 0.95em; line-height: 1.5; }
+        .box strong { color: #000; display: inline-block; width: 100px; }
 
-        /* ตารางรายการสินค้า */
+        /* ตารางสินค้า */
         .item-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .item-table th, .item-table td { border: 1px solid #ccc; padding: 8px; }
-        .item-table th { background: #f8f9fa; text-align: center; }
+        .item-table th { 
+            background: #f0f0f0; border: 1px solid #ccc; padding: 10px; 
+            text-align: center; font-weight: bold; 
+        }
+        .item-table td { 
+            border: 1px solid #ccc; padding: 8px; vertical-align: top; 
+        }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
 
         /* ส่วนท้าย */
-        .total-section { display: flex; justify-content: flex-end; }
-        .total-box { width: 40%; }
-        .total-row { display: flex; justify-content: space-between; padding: 5px 0; }
-        .grand-total { font-weight: bold; font-size: 1.2em; border-top: 2px solid #333; border-bottom: 2px solid #333; margin-top: 5px; padding: 10px 0; }
-
-        .signature-section { display: flex; justify-content: space-between; margin-top: 50px; text-align: center; }
-        .sig-box { width: 40%; border-top: 1px solid #ccc; padding-top: 10px; }
-
-        /* ซ่อนปุ่มพิมพ์เมื่อสั่ง Print จริง */
-        @media print {
-            body { background: white; margin: 0; }
-            .page { margin: 0; box-shadow: none; width: auto; height: auto; }
-            .no-print { display: none; }
+        .total-section { display: flex; justify-content: flex-end; margin-top: 10px; }
+        .total-box { width: 45%; }
+        .total-row { display: flex; justify-content: space-between; padding: 6px 10px; }
+        .grand-total { 
+            background: #f0f0f0; font-weight: bold; font-size: 1.1em; 
+            border: 1px solid #ccc; margin-top: 5px; 
         }
-        
+
+        .signature-section { 
+            display: flex; justify-content: space-between; margin-top: 60px; text-align: center; 
+        }
+        .sig-box { width: 40%; }
+        .sig-line { border-bottom: 1px dotted #999; width: 80%; margin: 40px auto 10px auto; }
+
         /* ปุ่มพิมพ์ */
         .btn-print {
             position: fixed; top: 20px; right: 20px;
-            padding: 10px 20px; background: #0d6efd; color: white;
-            border: none; cursor: pointer; border-radius: 5px; font-size: 16px;
-            text-decoration: none;
+            padding: 12px 24px; background: #0d6efd; color: white;
+            border: none; cursor: pointer; border-radius: 50px; 
+            font-size: 16px; text-decoration: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            font-weight: bold; z-index: 1000;
+        }
+        .btn-print:hover { background: #0b5ed7; transform: translateY(-2px); }
+
+        /* Media Print */
+        @media print {
+            body { background: white; margin: 0; padding: 0; }
+            .page { margin: 0; padding: 20mm; box-shadow: none; width: auto; height: auto; }
+            .no-print { display: none !important; }
         }
     </style>
 </head>
@@ -68,40 +99,41 @@
         <div class="header">
             <div class="company-info">
                 {% if company.logo %}
-                    <img src="{{ company.logo.url }}" style="height: 60px; margin-bottom: 10px;">
+                    <img src="{{ company.logo.url }}" style="height: 70px; margin-bottom: 10px;">
                 {% endif %}
                 <h2>{{ company.name_th|default:"บริษัท ตัวอย่าง จำกัด" }}</h2>
-                <p style="font-size: 0.9em; color: #666;">
+                <p>
                     {{ company.address|linebreaksbr }}<br>
-                    โทร: {{ company.phone }} | เลขผู้เสียภาษี: {{ company.tax_id }}
+                    <strong>โทร:</strong> {{ company.phone }} | 
+                    <strong>Tax ID:</strong> {{ company.tax_id }}
                 </p>
             </div>
             <div class="doc-title">
                 <h1>ใบเสนอราคา</h1>
-                <p style="letter-spacing: 2px;">QUOTATION</p>
+                <p>QUOTATION</p>
             </div>
         </div>
 
         <div class="info-section">
             <div class="box">
-                <strong>ลูกค้า (Customer):</strong>
+                <div style="font-weight: bold; margin-bottom: 5px; color: #0d6efd;">ลูกค้า (CUSTOMER)</div>
                 {{ quote.customer.name }}<br>
                 {{ quote.customer.address }}<br>
-                โทร: {{ quote.customer.phone }} <br>
-                ผู้ติดต่อ: {{ quote.customer.contact_person }}
+                <strong>โทร:</strong> {{ quote.customer.phone }}<br>
+                <strong>ผู้ติดต่อ:</strong> {{ quote.customer.contact_person|default:"-" }}
             </div>
             <div class="box text-right">
-                <p><strong>เลขที่ (No):</strong> {{ quote.code }}</p>
-                <p><strong>วันที่ (Date):</strong> {{ quote.date|date:"d/m/Y" }}</p>
-                <p><strong>ผู้ออกเอกสาร:</strong> {{ quote.employee.first_name }}</p>
+                <p><strong>เลขที่:</strong> {{ quote.code }}</p>
+                <p><strong>วันที่:</strong> {{ quote.date|date:"d/m/Y" }}</p>
+                <p><strong>ผู้ขาย:</strong> {{ quote.employee.first_name }}</p>
             </div>
         </div>
 
         <table class="item-table">
             <thead>
                 <tr>
-                    <th width="50">ลำดับ</th>
-                    <th>รายการสินค้า</th>
+                    <th width="50">#</th>
+                    <th>รายละเอียด (Description)</th>
                     <th width="80">จำนวน</th>
                     <th width="100">ราคา/หน่วย</th>
                     <th width="120">จำนวนเงิน</th>
@@ -113,13 +145,13 @@
                     <td class="text-center">{{ forloop.counter }}</td>
                     <td>{{ item.product.name }}</td>
                     <td class="text-center">{{ item.quantity }}</td>
-                    <td class="text-right">{{ item.unit_price|floatformat:2 }}</td>
-                    <td class="text-right">{{ item.amount|floatformat:2 }}</td>
+                    <td class="text-right">{{ item.unit_price|floatformat:2|intcomma }}</td>
+                    <td class="text-right">{{ item.amount|floatformat:2|intcomma }}</td>
                 </tr>
                 {% endfor %}
                 
                 {% for i in "12345" %}
-                <tr><td colspan="5" style="height: 25px;"></td></tr>
+                <tr><td colspan="5" style="height: 30px;"></td></tr>
                 {% endfor %}
             </tbody>
         </table>
@@ -128,35 +160,37 @@
             <div class="total-box">
                 <div class="total-row">
                     <span>รวมเป็นเงิน (Subtotal):</span>
-                    <span>{{ quote.subtotal|floatformat:2 }}</span>
+                    <span>{{ quote.subtotal|floatformat:2|intcomma }}</span>
                 </div>
-                <div class="total-row">
+                {% if quote.discount > 0 %}
+                <div class="total-row text-danger">
                     <span>ส่วนลด (Discount):</span>
-                    <span>{{ quote.discount|floatformat:2 }}</span>
+                    <span>-{{ quote.discount|floatformat:2|intcomma }}</span>
                 </div>
+                {% endif %}
+                
                 <div class="total-row grand-total">
                     <span>จำนวนเงินรวมทั้งสิ้น:</span>
-                    <span>{{ quote.grand_total|floatformat:2 }} บาท</span>
+                    <span>{{ quote.grand_total|floatformat:2|intcomma }} บาท</span>
                 </div>
             </div>
         </div>
 
         <div class="signature-section">
             <div class="sig-box">
-                <br><br>
-                (....................................................)<br>
+                <div class="sig-line"></div>
                 ผู้สั่งซื้อ / ลูกค้า<br>
                 วันที่ ...../...../..........
             </div>
             <div class="sig-box">
                 {% if company.signature %}
-                    <img src="{{ company.signature.url }}" style="height: 50px;"><br>
+                    <img src="{{ company.signature.url }}" style="height: 50px; margin-bottom: -20px;"><br>
                 {% else %}
-                    <br><br>
+                    <div style="height: 40px;"></div>
                 {% endif %}
+                <div class="sig-line"></div>
                 ( {{ quote.employee.first_name }} {{ quote.employee.last_name }} )<br>
-                ผู้มีอำนาจลงนาม<br>
-                วันที่ {{ quote.date|date:"d/m/Y" }}
+                ผู้มีอำนาจลงนาม
             </div>
         </div>
     </div>
