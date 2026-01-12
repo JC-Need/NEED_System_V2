@@ -9,83 +9,40 @@
         --text-dark: #2d3436;
         --text-light: #636e72;
     }
-
-    /* สไตล์การ์ดแบบ Modern Clean */
     .stat-card {
-        background: white;
-        border-radius: 16px;
-        padding: 25px;
-        border: 1px solid #f1f2f6;
-        box-shadow: 0 10px 20px rgba(0,0,0,0.02); /* เงานุ่มมาก */
-        transition: all 0.3s;
-        height: 100%;
-        position: relative;
-        overflow: hidden;
+        background: white; border-radius: 16px; padding: 25px;
+        border: 1px solid #f1f2f6; box-shadow: 0 10px 20px rgba(0,0,0,0.02);
+        transition: all 0.3s; height: 100%; position: relative; overflow: hidden;
     }
     .stat-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.05); border-color: #e2e6ea; }
-
-    .stat-icon-bg {
-        position: absolute; right: -10px; bottom: -10px;
-        font-size: 5rem; opacity: 0.05; transform: rotate(-15deg);
-    }
-
+    .stat-icon-bg { position: absolute; right: -10px; bottom: -10px; font-size: 5rem; opacity: 0.05; transform: rotate(-15deg); }
     .stat-value { font-size: 2.5rem; font-weight: 700; color: var(--text-dark); line-height: 1.2; }
     .stat-label { font-size: 0.9rem; color: var(--text-light); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
 
-    /* ปุ่มเมนูแบบใหม่ (Gradient Icon) */
     .menu-btn {
-        display: flex;
-        flex-direction: column; align-items: center; justify-content: center;
-        background: white;
-        color: var(--text-dark);
-        border: 1px solid #f1f2f6;
-        border-radius: 20px;
-        padding: 40px 20px;
-        text-decoration: none;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.01);
-        transition: all 0.3s ease;
-        height: 100%;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        background: white; color: var(--text-dark); border: 1px solid #f1f2f6;
+        border-radius: 20px; padding: 40px 20px; text-decoration: none;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.01); transition: all 0.3s ease; height: 100%;
     }
-
-    .menu-btn:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.08);
-        border-color: white;
-    }
-
+    .menu-btn:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-color: white; }
     .menu-icon-box {
-        width: 70px; height: 70px;
-        border-radius: 50%;
-        background: #f8f9fa; /* พื้นหลังไอคอนสีเทาจางๆ */
-        display: flex; align-items: center; justify-content: center;
-        margin-bottom: 20px;
-        transition: all 0.3s;
+        width: 70px; height: 70px; border-radius: 50%; background: #f8f9fa;
+        display: flex; align-items: center; justify-content: center; margin-bottom: 20px; transition: all 0.3s;
     }
-
     .menu-icon { font-size: 1.8rem; color: #b2bec3; transition: all 0.3s; }
-
-    /* เอฟเฟกต์ตอนชี้เมาส์: เปลี่ยนสีไอคอนตามหมวดหมู่ */
     .menu-btn:hover .menu-icon-box { background: var(--gold-grad); box-shadow: 0 10px 20px rgba(197, 160, 89, 0.3); }
     .menu-btn:hover .menu-icon { color: white; }
-
     .menu-title { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); }
     .menu-desc { font-size: 0.8rem; color: #a4b0be; margin-top: 5px; }
-
-    /* เส้นคั่น */
     .section-header { display: flex; align-items: center; margin: 40px 0 20px 0; }
     .section-title { font-size: 1.25rem; font-weight: 800; color: var(--text-dark); margin-right: 15px; }
     .section-divider { flex-grow: 1; height: 1px; background: #e9ecef; }
-
 </style>
 
 <div class="container-fluid py-4 px-4">
-
     <div class="d-flex justify-content-between align-items-end mb-4">
-        <div>
-            <span class="badge bg-white text-dark border px-3 py-2 rounded-pill shadow-sm">
-                📅 {% now "d F Y" %}
-            </span>
-        </div>
+        <div><span class="badge bg-white text-dark border px-3 py-2 rounded-pill shadow-sm">📅 {% now "d F Y" %}</span></div>
     </div>
 
     <div class="row mb-4">
@@ -112,13 +69,10 @@
                 <div class="mt-2"><span class="badge bg-primary bg-opacity-10 text-primary rounded-pill">Daily Sales</span></div>
                 <i class="fas fa-chart-line stat-icon-bg text-primary"></i>
                 <div class="mt-3 pt-3 border-top">
-                    <a href="{% url 'export_sales_excel' %}" class="text-decoration-none small fw-bold text-primary">
-                        <i class="fas fa-download"></i> โหลดรายงาน
-                    </a>
+                    <a href="{% url 'export_sales_excel' %}" class="text-decoration-none small fw-bold text-primary"><i class="fas fa-download"></i> โหลดรายงาน</a>
                 </div>
             </div>
         </div>
-
         <div class="col-md-3 col-sm-6">
             <div class="stat-card">
                 <div class="stat-label">กำไรสุทธิ</div>
@@ -127,7 +81,6 @@
                 <i class="fas fa-coins stat-icon-bg text-success"></i>
             </div>
         </div>
-
         <div class="col-md-3 col-sm-6">
             <div class="stat-card">
                 <div class="stat-label">สินค้าวิกฤต</div>
@@ -136,7 +89,6 @@
                 <i class="fas fa-exclamation-circle stat-icon-bg text-danger"></i>
             </div>
         </div>
-
         <div class="col-md-3 col-sm-6">
             <div class="stat-card">
                 <div class="stat-label">รอรับของ</div>
@@ -153,23 +105,16 @@
     </div>
 
     <div class="row g-3">
-        
+
         <div class="col-6 col-md-3 col-lg-3">
             <a href="{% if user.is_staff %}{% url 'hr_executive_dashboard' %}{% else %}{% url 'employee_dashboard' %}{% endif %}" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-id-card menu-icon"></i></div>
                 <div class="menu-title">ระบบพนักงาน</div>
-                <div class="menu-desc">
-                    {% if user.is_staff %}
-                        วิเคราะห์ข้อมูล HR
-                    {% else %}
-                        สลิปเงินเดือน / ลงเวลา
-                    {% endif %}
-                </div>
+                <div class="menu-desc">{% if user.is_staff %}วิเคราะห์ข้อมูล HR{% else %}สลิปเงินเดือน / ลงเวลา{% endif %}</div>
             </a>
         </div>
 
-
-        {% if user.is_superuser or perms.sales.view_posorder %}
+        {% if user.is_superuser or "Sales" in user_groups %}
         <div class="col-6 col-md-3 col-lg-3">
             <a href="{% url 'sales_dashboard' %}" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-cash-register menu-icon"></i></div>
@@ -179,7 +124,7 @@
         </div>
         {% endif %}
 
-        {% if user.is_superuser or perms.inventory.view_product %}
+        {% if user.is_superuser or "Inventory" in user_groups %}
         <div class="col-6 col-md-3 col-lg-3">
             <a href="/admin/inventory/product/" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-box-open menu-icon"></i></div>
@@ -189,7 +134,7 @@
         </div>
         {% endif %}
 
-        {% if user.is_superuser or perms.purchasing.view_purchaseorder %}
+        {% if user.is_superuser or "Purchasing" in user_groups %}
         <div class="col-6 col-md-3 col-lg-3">
             <a href="/admin/purchasing/purchaseorder/" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-shopping-cart menu-icon"></i></div>
@@ -199,7 +144,7 @@
         </div>
         {% endif %}
 
-        {% if user.is_superuser or perms.manufacturing.view_productionorder %}
+        {% if user.is_superuser or "Manufacturing" in user_groups %}
         <div class="col-6 col-md-3 col-lg-3">
             <a href="/admin/manufacturing/production_order/" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-cogs menu-icon"></i></div>
@@ -209,7 +154,7 @@
         </div>
         {% endif %}
 
-        {% if user.is_superuser or perms.accounting.view_income %}
+        {% if user.is_superuser or "Accounting" in user_groups %}
         <div class="col-6 col-md-3 col-lg-3">
             <a href="/admin/accounting/" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-calculator menu-icon"></i></div>
@@ -238,6 +183,5 @@
         </div>
         {% endif %}
     </div>
-
 </div>
 {% endblock %}

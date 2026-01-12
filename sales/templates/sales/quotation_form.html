@@ -5,6 +5,12 @@
     <div class="row justify-content-center">
         <div class="col-lg-9">
             
+            {% if form.errors %}
+            <div class="alert alert-danger shadow-sm rounded-3 mb-4">
+                <i class="fas fa-exclamation-triangle me-2"></i> กรุณากรอกข้อมูลให้ครบถ้วน
+            </div>
+            {% endif %}
+
             <div class="card shadow-lg border-0 rounded-4">
                 <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center rounded-top-4">
                     <h5 class="mb-0 fw-bold"><i class="fas fa-file-invoice me-2"></i>สร้างใบเสนอราคาใหม่ (Step 1)</h5>
@@ -39,7 +45,7 @@
                                         data-tax="{{ customer.tax_id|default:'' }}"
                                         data-phone="{{ customer.phone|default:'' }}" 
                                         data-address="{{ customer.address|default:'' }} {{ customer.sub_district|default:'' }} {{ customer.district|default:'' }} {{ customer.province|default:'' }} {{ customer.zip_code|default:'' }}">
-                                      {{ customer.code }} : {{ customer.name }}
+                                    {{ customer.code }} : {{ customer.name }}
                                 </option>
                                 {% endfor %}
                             </select>
@@ -52,7 +58,16 @@
 
                         <div class="mb-3">
                             <label class="form-label fw-bold">ชื่อลูกค้า / บริษัท <span class="text-danger">*</span></label>
-                            {{ form.customer_name }}
+                            <input type="text" name="customer_name" id="id_customer_name" 
+                                   class="form-control {% if form.customer_name.errors %}is-invalid{% endif %}" 
+                                   value="{{ form.customer_name.value|default:'' }}" 
+                                   required placeholder="ระบุชื่อลูกค้า...">
+                            
+                            {% if form.customer_name.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.customer_name.errors.0 }}
+                                </div>
+                            {% endif %}
                         </div>
                         
                         <div class="row mb-3">
@@ -91,34 +106,24 @@
 
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet">
-
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script> <script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
+
+<script>
     $(document).ready(function() {
-        // --- 1. ตั้งค่าปฏิทิน (Flatpickr) ---
-        flatpickr(".datepicker", {
-            dateFormat: "d/m/Y",  // ✅ กำหนดรูปแบบเป็น วัน/เดือน/ปี
-            locale: "th",         // ✅ ใช้ภาษาไทย
-            allowInput: true      // พิมพ์เองก็ได้
-        });
+        flatpickr(".datepicker", { dateFormat: "d/m/Y", locale: "th", allowInput: true });
 
-        // --- 2. ตั้งค่า Select2 ---
         $('#customer_select').select2({ 
-            theme: 'bootstrap4', 
-            placeholder: "-- พิมพ์ชื่อลูกค้า --", 
-            allowClear: true,
-            width: '100%'
+            theme: 'bootstrap4', placeholder: "-- พิมพ์ชื่อลูกค้า --", allowClear: true, width: '100%'
         });
 
-        // --- 3. ระบบดึงข้อมูลลูกค้า ---
         $('#customer_select').on('change', function () {
             var selected = $(this).find(':selected');
             var val = $(this).val();
-
             if (!val) {
                 $('#id_customer_name').val('');
                 $('#id_customer_tax_id').val('');
@@ -137,10 +142,8 @@
 <style>
     .select2-container--bootstrap4 .select2-selection--single { height: 38px !important; }
     .select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered { line-height: 36px; padding-left: 12px; }
-    /* ปรับแต่งช่องวันที่ให้มีไอคอนปฏิทิน */
-    .datepicker {
-        background-color: #fff !important; 
-        cursor: pointer;
-    }
+    .datepicker { background-color: #fff !important; cursor: pointer; }
+    /* ปรับแต่งช่อง Invalid */
+    .is-invalid { border-color: #dc3545 !important; background-image: none !important; }
 </style>
 {% endblock %}

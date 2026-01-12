@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.validators import RegexValidator  # ✅ เพิ่มตัวช่วยตรวจสอบ (Validator)
 import datetime
 
 # --- ส่วนที่ 1: ตารางข้อมูลที่อยู่ (Thai Geography) ---
@@ -41,11 +42,26 @@ class Customer(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="รหัสลูกค้า", blank=True)
     name = models.CharField(max_length=200, verbose_name="ชื่อลูกค้า / บริษัท")
     branch = models.CharField(max_length=100, default="สำนักงานใหญ่", blank=True, verbose_name="สาขา")
-    tax_id = models.CharField(max_length=20, blank=True, null=True, verbose_name="เลขผู้เสียภาษี")
+    
+    # ✅ 1. เลขผู้เสียภาษี: ไม่บังคับ (blank=True) แต่ถ้าใส่ต้องครบ 13 หลัก
+    tax_id = models.CharField(
+        max_length=13, 
+        blank=True, 
+        null=True, 
+        verbose_name="เลขผู้เสียภาษี",
+        validators=[RegexValidator(r'^\d{13}$', 'เลขผู้เสียภาษีต้องเป็นตัวเลข 13 หลัก')]
+    )
     
     # การติดต่อ
     contact_person = models.CharField(max_length=100, blank=True, null=True, verbose_name="ชื่อผู้ติดต่อ")
-    phone = models.CharField(max_length=50, blank=True, null=True, verbose_name="เบอร์โทรศัพท์")
+    
+    # ✅ 2. เบอร์โทรศัพท์: บังคับใส่ (ลบ blank=True) และต้องเป็นตัวเลข 9-10 หลัก (0xx...)
+    phone = models.CharField(
+        max_length=10, 
+        verbose_name="เบอร์โทรศัพท์",
+        validators=[RegexValidator(r'^0\d{8,9}$', 'เบอร์โทรต้องเป็นตัวเลข 9-10 หลักและขึ้นต้นด้วย 0')]
+    )
+    
     email = models.EmailField(blank=True, null=True, verbose_name="อีเมล")
     line_id = models.CharField(max_length=50, blank=True, null=True, verbose_name="Line ID")
     

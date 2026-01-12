@@ -1,7 +1,6 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 from django.db.models import Sum, F
-from django.utils import timezone
 import datetime
 
 # Import เพื่อนบ้าน
@@ -30,6 +29,9 @@ def dashboard(request):
     expense_month = Expense.objects.filter(date__month=current_month, date__year=current_year).aggregate(Sum('amount'))['amount__sum'] or 0
     profit_month = income_month - expense_month
 
+    # ✅ เพิ่มบรรทัดนี้: ดึงรายชื่อกลุ่มของผู้ใช้งาน ส่งไปให้หน้าเว็บเช็ค
+    user_groups = list(request.user.groups.values_list('name', flat=True))
+
     context = {
         'sales_today': sales_today,
         'low_stock_count': low_stock_count,
@@ -37,5 +39,6 @@ def dashboard(request):
         'income_month': income_month,
         'expense_month': expense_month,
         'profit_month': profit_month,
+        'user_groups': user_groups, # ✅ ส่งตัวแปรนี้ไปที่หน้าเว็บ
     }
     return render(request, 'core/dashboard.html', context)
