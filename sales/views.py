@@ -41,7 +41,7 @@ def pos_checkout(request):
             cart = data.get('cart', [])
             total_amount = data.get('total_amount', 0)
             received_amount = data.get('received_amount', total_amount)
-            
+
             now_str = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
             order_code = f"POS-{now_str}"
             current_emp = getattr(request.user, 'employee', None)
@@ -89,7 +89,7 @@ def pos_print_slip(request, order_code):
 @login_required
 def quotation_list(request):
     queryset = Quotation.objects.all().order_by('-created_at')
-    
+
     search_query = request.GET.get('q')
     if search_query:
         queryset = queryset.filter(
@@ -116,11 +116,11 @@ def quotation_create(request):
         if form.is_valid():
             qt = form.save(commit=False)
             qt.created_by = request.user
-            
+
             now = datetime.datetime.now()
             prefix = f"QT-{now.strftime('%y%m')}"
             last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
-            
+
             if last:
                 try:
                     seq = int(last.code.split('-')[-1]) + 1
@@ -128,21 +128,19 @@ def quotation_create(request):
                     seq = 1
             else:
                 seq = 1
-            
+
             qt.code = f"{prefix}-{seq:03d}"
             qt.save()
-            
-            # แจ้งเตือนแค่ครั้งแรก (สร้างสำเร็จ)
             messages.success(request, f"สร้างใบเสนอราคา {qt.code} เรียบร้อย")
             return redirect('quotation_edit', qt_id=qt.id)
+
     else:
         form = QuotationForm(initial={
             'date': datetime.date.today(),
             'valid_until': datetime.date.today() + datetime.timedelta(days=15)
         })
 
-    customers = Customer.objects.filter(is_active=True)
-    return render(request, 'sales/quotation_form.html', {'form': form, 'customers': customers})
+    return render(request, 'sales/quotation_form.html', {'form': form})
 
 # ==========================================
 # 5. ใบเสนอราคา: แก้ไข Step 2
@@ -152,7 +150,7 @@ def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     products = Product.objects.filter(is_active=True)
     customers = Customer.objects.filter(is_active=True)
-    
+
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
 
     if request.method == 'POST':
@@ -176,7 +174,7 @@ def quotation_edit(request, qt_id):
                     messages.error(request, "กรุณาระบุชื่อสินค้า")
             except Exception as e:
                 messages.error(request, f"เกิดข้อผิดพลาด: {e}")
-            
+
             return redirect('quotation_edit', qt_id=qt.id)
 
         # --- กรณี 2: บันทึกยอด (✅ มีข้อความ) ---
@@ -185,7 +183,7 @@ def quotation_edit(request, qt_id):
             qt.discount = Decimal(request.POST.get('discount', 0))
             qt.shipping_cost = Decimal(request.POST.get('shipping_cost', 0))
             calculate_totals(qt)
-            
+
             # ✅ โชว์ข้อความนี้อันเดียวครับ!
             messages.success(request, "บันทึกข้อมูลเรียบร้อย")
             return redirect('quotation_edit', qt_id=qt.id)
@@ -254,3 +252,35 @@ def export_sales_excel(request):
     response['Content-Disposition'] = 'attachment; filename="Sales_Report.xlsx"'
     wb.save(response)
     return response
+
+@login_required
+def api_search_customer(request):
+    query = request.GET.get('q', '').strip()
+    if not query:
+        return JsonResponse({'results': []})
+
+    # ค้นหาจาก ชื่อ หรือ รหัส หรือ เบอร์โทร
+    customers = Customer.objects.filter(
+        Q(name__icontains=query) |
+        Q(code__icontains=query) |
+        Q(phone__icontains=query)
+    ).values('code', 'name', 'tax_id', 'phone', 'address', 'sub_district', 'district', 'province', 'zip_code')[:10] # ดึงมาแค่ 10 คนพอ
+
+    results = []
+    for c in customers:
+        # รวมที่อยู่ให้สวยงาม
+        addr_parts = [
+            c['address'], c['sub_district'], c['district'],
+            c['province'], c['zip_code']
+        ]
+        full_address = " ".join([p for p in addr_parts if p])
+
+        results.append({
+            'code': c['code'],
+            'name': c['name'],
+            'tax_id': c['tax_id'] or '',
+            'phone': c['phone'] or '',
+            'address': full_address
+        })
+
+    return JsonResponse({'results': results})

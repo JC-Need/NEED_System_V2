@@ -13,12 +13,13 @@ urlpatterns = [
     # 3. ระบบใบเสนอราคา (Quotation)
     path('quotation/', views.quotation_list, name='quotation_list'),
     path('quotation/create/', views.quotation_create, name='quotation_create'),
-    
+
     # ✅ บรรทัดนี้คือตัวแก้ Error ครับ! (เส้นทางไปหน้าแก้ไข)
     path('quotation/edit/<int:qt_id>/', views.quotation_edit, name='quotation_edit'),
-    
+
     path('quotation/delete-item/<int:item_id>/', views.delete_item, name='delete_item'),
     path('quotation/print/<int:qt_id>/', views.quotation_print, name='quotation_print'),
+    path('api/customer-search/', views.api_search_customer, name='api_search_customer'),
 
     # 4. อื่นๆ
     path('export/excel/', views.export_sales_excel, name='export_sales_excel'),

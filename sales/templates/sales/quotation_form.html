@@ -4,7 +4,7 @@
 <div class="container py-4">
     <div class="row justify-content-center">
         <div class="col-lg-9">
-            
+
             {% if form.errors %}
             <div class="alert alert-danger shadow-sm rounded-3 mb-4">
                 <i class="fas fa-exclamation-triangle me-2"></i> กรุณากรอกข้อมูลให้ครบถ้วน
@@ -13,11 +13,11 @@
 
             <div class="card shadow-lg border-0 rounded-4">
                 <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center rounded-top-4">
-                    <h5 class="mb-0 fw-bold"><i class="fas fa-file-invoice me-2"></i>สร้างใบเสนอราคาใหม่ (Step 1)</h5>
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-file-invoice me-2"></i>สร้างใบเสนอราคาใหม่</h5>
                 </div>
-                
+
                 <div class="card-body p-4">
-                    <form method="post">
+                    <form method="post" autocomplete="off">
                         {% csrf_token %}
 
                         <div class="row mb-4">
@@ -33,43 +33,51 @@
 
                         <hr class="text-muted opacity-25">
 
-                        <div class="mb-4 p-3 bg-light rounded-3 border border-primary-subtle">
-                            <label class="form-label fw-bold text-primary mb-2">
-                                <i class="fas fa-search me-1"></i> ค้นหาลูกค้าเก่า (ดึงข้อมูลอัตโนมัติ)
-                            </label>
-                            <select id="customer_select" class="form-control" style="width: 100%;">
-                                <option value="">-- พิมพ์ชื่อลูกค้าเพื่อค้นหา --</option>
-                                {% for customer in customers %}
-                                <option value="{{ customer.id }}" 
-                                        data-name="{{ customer.name }}"
-                                        data-tax="{{ customer.tax_id|default:'' }}"
-                                        data-phone="{{ customer.phone|default:'' }}" 
-                                        data-address="{{ customer.address|default:'' }} {{ customer.sub_district|default:'' }} {{ customer.district|default:'' }} {{ customer.province|default:'' }} {{ customer.zip_code|default:'' }}">
-                                    {{ customer.code }} : {{ customer.name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                            <div class="mt-2 text-end">
-                                <a href="{% url 'customer_create' %}" target="_blank" class="small fw-bold text-decoration-none text-primary">
-                                    <i class="fas fa-plus-circle"></i> เพิ่มลูกค้าใหม่
+                        <div class="mb-4 p-4 bg-white rounded-4 border shadow-sm">
+
+                            <div class="d-flex justify-content-between align-items-end mb-2">
+
+                                <div>
+                                    <span class="fw-bold text-primary h6 mb-0">
+                                        <i class="fas fa-search me-1"></i> ค้นหาลูกค้าจากฐานข้อมูล
+                                    </span>
+                                    <span class="text-muted small ms-3">
+                                        <i class="fas fa-info-circle text-info me-1"></i> พิมพ์คำค้นหาแล้วกดปุ่ม "ค้นหา" เพื่อดึงข้อมูล
+                                    </span>
+                                </div>
+
+                                <a href="{% url 'customer_create' %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-pill fw-bold px-3 shadow-sm">
+                                    <i class="fas fa-user-plus me-1"></i> เพิ่มลูกค้าใหม่
                                 </a>
                             </div>
+
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0 text-muted">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input type="text" id="search_input" class="form-control border-start-0 ps-0" placeholder="พิมพ์ชื่อ, รหัส, หรือเบอร์โทรลูกค้า..." autocomplete="off">
+                                <button class="btn btn-primary px-4 fw-bold" type="button" id="btn_search">
+                                    ค้นหา
+                                </button>
+                            </div>
+
+                            <div id="search_results" class="list-group mt-2 shadow-sm" style="display: none; max-height: 300px; overflow-y: auto;"></div>
                         </div>
 
                         <div class="mb-3">
                             <label class="form-label fw-bold">ชื่อลูกค้า / บริษัท <span class="text-danger">*</span></label>
-                            <input type="text" name="customer_name" id="id_customer_name" 
-                                   class="form-control {% if form.customer_name.errors %}is-invalid{% endif %}" 
-                                   value="{{ form.customer_name.value|default:'' }}" 
+                            <input type="text" name="customer_name" id="id_customer_name"
+                                   class="form-control {% if form.customer_name.errors %}is-invalid{% endif %}"
+                                   value="{{ form.customer_name.value|default:'' }}"
                                    required placeholder="ระบุชื่อลูกค้า...">
-                            
+
                             {% if form.customer_name.errors %}
                                 <div class="invalid-feedback">
                                     {{ form.customer_name.errors.0 }}
                                 </div>
                             {% endif %}
                         </div>
-                        
+
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label class="form-label fw-bold">เลขผู้เสียภาษี (ถ้ามี)</label>
@@ -85,7 +93,7 @@
                             <label class="form-label fw-bold">ที่อยู่</label>
                             {{ form.customer_address }}
                         </div>
-                        
+
                         <div class="mb-4">
                             <label class="form-label fw-bold">หมายเหตุ</label>
                             {{ form.note }}
@@ -117,24 +125,77 @@
     $(document).ready(function() {
         flatpickr(".datepicker", { dateFormat: "d/m/Y", locale: "th", allowInput: true });
 
-        $('#customer_select').select2({ 
-            theme: 'bootstrap4', placeholder: "-- พิมพ์ชื่อลูกค้า --", allowClear: true, width: '100%'
+        // --- ระบบค้นหาลูกค้า (AJAX) ---
+        $('#btn_search').click(function() {
+            performSearch();
         });
 
-        $('#customer_select').on('change', function () {
-            var selected = $(this).find(':selected');
-            var val = $(this).val();
-            if (!val) {
-                $('#id_customer_name').val('');
-                $('#id_customer_tax_id').val('');
-                $('#id_customer_phone').val('');
-                $('#id_customer_address').val('');
-                return;
+        $('#search_input').keypress(function(e) {
+            if(e.which == 13) { // กด Enter ก็ค้นหาได้
+                e.preventDefault(); // กันไม่ให้ Form Submit
+                performSearch();
             }
-            $('#id_customer_name').val(selected.data('name'));
-            $('#id_customer_tax_id').val(selected.data('tax'));
-            $('#id_customer_phone').val(selected.data('phone'));
-            $('#id_customer_address').val(selected.data('address'));
+        });
+
+        function performSearch() {
+            var query = $('#search_input').val();
+            var $results = $('#search_results');
+            var $btn = $('#btn_search');
+
+            if (!query) { alert("กรุณาพิมพ์คำค้นหาก่อนครับ"); return; }
+
+            // Loading...
+            $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> กำลังหา...');
+            $results.html('').show();
+
+            $.ajax({
+                url: "{% url 'api_search_customer' %}",
+                data: { 'q': query },
+                success: function(data) {
+                    $btn.prop('disabled', false).html('<i class="fas fa-search me-2"></i> ค้นหา');
+
+                    if (data.results.length > 0) {
+                        $.each(data.results, function(index, cus) {
+                            var item = `
+                                <a href="#" class="list-group-item list-group-item-action p-3 customer-item"
+                                   data-name="${cus.name}"
+                                   data-tax="${cus.tax_id}"
+                                   data-phone="${cus.phone}"
+                                   data-address="${cus.address}">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <h6 class="mb-1 fw-bold text-primary">${cus.name}</h6>
+                                        <small class="text-muted">${cus.code}</small>
+                                    </div>
+                                    <p class="mb-1 small text-muted"><i class="fas fa-map-marker-alt me-1"></i> ${cus.address}</p>
+                                    <small class="text-muted"><i class="fas fa-phone me-1"></i> ${cus.phone} | Tax: ${cus.tax_id}</small>
+                                </a>
+                            `;
+                            $results.append(item);
+                        });
+                    } else {
+                        $results.append('<div class="list-group-item text-center text-muted py-3">ไม่พบข้อมูลลูกค้า</div>');
+                    }
+                },
+                error: function() {
+                    $btn.prop('disabled', false).html('<i class="fas fa-search me-2"></i> ค้นหา');
+                    alert('เกิดข้อผิดพลาดในการเชื่อมต่อ');
+                }
+            });
+        }
+
+        // เมื่อกดเลือกที่ผลลัพธ์
+        $(document).on('click', '.customer-item', function(e) {
+            e.preventDefault();
+
+            // ดึงข้อมูลมาใส่ช่อง
+            $('#id_customer_name').val($(this).data('name'));
+            $('#id_customer_tax_id').val($(this).data('tax'));
+            $('#id_customer_phone').val($(this).data('phone'));
+            $('#id_customer_address').val($(this).data('address'));
+
+            // ซ่อนผลลัพธ์
+            $('#search_results').hide();
+            $('#search_input').val(''); // เคลียร์ช่องค้นหา
         });
     });
 </script>
