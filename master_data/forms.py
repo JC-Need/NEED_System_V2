@@ -1,51 +1,29 @@
 from django import forms
-from django.core.validators import RegexValidator # ✅ 1. เพิ่มตัวช่วยตรวจสอบ
+from django.core.exceptions import ValidationError # ✅ 1. Import ตัวแจ้ง Error เพิ่ม
 from .models import Customer
 
 class CustomerForm(forms.ModelForm):
-    # ✅ 2. สร้างกฎเหล็กให้ "เบอร์โทรศัพท์"
+    # ✅ 2. เอา RegexValidator ออก เพื่อรับค่าที่มีขีดได้ (แล้วค่อยไปลบทีหลัง)
     phone = forms.CharField(
         label="เบอร์โทรศัพท์",
-        required=False, 
-        # บังคับเลข 10 หลัก (^\d{10}$) เท่านั้น
-        validators=[RegexValidator(r'^\d{10}$', 'เบอร์โทรต้องเป็นตัวเลข 10 หลักติดกัน (เช่น 0812345678)')],
+        required=False,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'id': 'input_phone',
-            'placeholder': 'ห้ามเว้น ใส่เฉพาะตัวเลขเท่านั้น', # ✅ เปลี่ยนข้อความตามสั่ง
-            'autocomplete': 'new-password' # ✅ ปิดประวัติ
+            'placeholder': 'ตัวอย่าง: 0812345678 (ระบบจะตัดขีดออกให้อัตโนมัติ)', # ปรับข้อความให้เป็นมิตรขึ้น
+            'autocomplete': 'new-password'
         })
     )
 
     class Meta:
         model = Customer
         fields = '__all__'
-        exclude = ['code', 'created_at', 'updated_at'] 
-        
-        # ✅ 3. ปิดประวัติ (Autocomplete) ให้ครบทุกช่องที่วงมา
+        exclude = ['code', 'created_at', 'updated_at', 'credit_limit', 'credit_term']
         widgets = {
-            'name': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'ระบุชื่อลูกค้า / บริษัท', 
-                'autocomplete': 'new-password' # 👈 ปิดประวัติ
-            }),
-            'tax_id': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'เลขผู้เสียภาษี 13 หลัก', 
-                'autocomplete': 'new-password' # 👈 ปิดประวัติ
-            }),
-            'contact_person': forms.TextInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'ระบุชื่อผู้ติดต่อ', 
-                'autocomplete': 'new-password' # 👈 ปิดประวัติ
-            }),
-            'address': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 2, 
-                'autocomplete': 'new-password' # 👈 ปิดประวัติ
-            }),
-            
-            # ส่วนอื่นๆ คงเดิม
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ระบุชื่อลูกค้า / บริษัท', 'autocomplete': 'new-password'}),
+            'tax_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เลขผู้เสียภาษี 13 หลัก', 'autocomplete': 'new-password'}),
+            'contact_person': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ระบุชื่อผู้ติดต่อ', 'autocomplete': 'new-password'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'autocomplete': 'new-password'}),
             'note': forms.Textarea(attrs={'rows': 3}),
             'zip_code': forms.TextInput(attrs={'id': 'input_zipcode'}),
             'location': forms.TextInput(attrs={'id': 'input_location', 'placeholder': 'กดปุ่มเพื่อดึงพิกัด GPS'}),
@@ -53,10 +31,44 @@ class CustomerForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # วนลูปเพื่อใส่ class form-control ให้มั่นใจ (แต่ไม่ทับ widget ที่เราประกาศข้างบน)
         for field in self.fields:
             if field != 'is_active':
-                existing_attrs = self.fields[field].widget.attrs
-                existing_attrs.update({'class': 'form-control'})
-                
+                self.fields[field].widget.attrs.update({'class': 'form-control'})
         self.fields['is_active'].widget.attrs.update({'class': 'form-check-input ms-2'})
+
+    # ✅ 3. เพิ่มฟังก์ชัน "ล้างข้อมูลเบอร์โทร" (Auto-Clean Logic)
+    def clean_phone(self):
+        data = self.cleaned_data['phone']
+        if not data:
+            return data
+
+        # ลบขีด (-) และช่องว่าง ( ) ออกให้หมด
+        cleaned_data = data.replace('-', '').replace(' ', '')
+
+        # ตรวจสอบว่าเป็นตัวเลขล้วนหรือไม่
+        if not cleaned_data.isdigit():
+            raise ValidationError("เบอร์โทรต้องเป็นตัวเลขเท่านั้น")
+
+        # ตรวจสอบความยาว (ต้อง 10 หลัก)
+        if len(cleaned_data) != 10:
+            raise ValidationError(f"เบอร์โทรต้องมี 10 หลัก (ตอนนี้มี {len(cleaned_data)} หลัก)")
+
+        return cleaned_data
+
+    def clean_tax_id(self):
+        data = self.cleaned_data.get('tax_id')
+        if not data:
+            return data
+
+        # ลบขีดและช่องว่างออกให้หมด
+        cleaned_data = data.replace('-', '').replace(' ', '')
+
+        # ตรวจสอบว่าเป็นตัวเลขล้วน
+        if not cleaned_data.isdigit():
+            raise ValidationError("เลขผู้เสียภาษีต้องเป็นตัวเลขเท่านั้น")
+
+        # ตรวจสอบความยาว (13 หลัก)
+        if len(cleaned_data) != 13:
+            raise ValidationError(f"เลขผู้เสียภาษีต้องมี 13 หลัก (ตอนนี้มี {len(cleaned_data)} หลัก)")
+
+        return cleaned_data
