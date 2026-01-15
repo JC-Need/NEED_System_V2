@@ -2,7 +2,7 @@
 {% load humanize %}
 
 {% block content %}
-<div class="container py-4">
+<div class="container-xxl py-4 px-4">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -25,8 +25,19 @@
         </div>
     </div>
 
-    <div class="row g-4"> <div class="col-lg-4">
-            <div class="card shadow border-0 rounded-4 h-100"> <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center rounded-top-4">
+    <div class="alert alert-warning shadow-sm">
+        <h6 class="fw-bold mb-1"><i class="fas fa-bug me-2"></i>DEBUG INFO (ข้อมูลดิบ)</h6>
+        <ul class="mb-0 small">
+            <li><strong>ชื่อลูกค้า (Text):</strong> {{ qt.customer_name }}</li>
+            <li><strong>ID ลูกค้า (Database):</strong> {{ qt.customer_id|default:"NULL (ไม่พบการเชื่อมโยง)" }}</li>
+            <li><strong>รหัสลูกค้า (Code):</strong> {{ qt.customer_code|default:"NULL (ดึงไม่ได้)" }}</li>
+        </ul>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card shadow border-0 rounded-4 h-100">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center rounded-top-4">
                     <h6 class="m-0 fw-bold text-primary"><i class="fas fa-address-card me-2"></i>ข้อมูลลูกค้า</h6>
                     <span class="badge bg-light text-primary border border-primary border-opacity-25 rounded-pill px-3">
                         {{ qt.customer_code|default:"Walk-in" }}
@@ -51,7 +62,6 @@
                         <label class="small fw-bold text-muted mb-1">ที่อยู่</label>
                         <textarea class="form-control bg-white" rows="3" readonly>{{ qt.customer_address }}</textarea>
                     </div>
-
                     <button class="btn btn-warning w-100 shadow-sm text-dark fw-bold rounded-pill">
                         <i class="fas fa-user-edit me-1"></i> แก้ไขข้อมูลลูกค้า
                     </button>
@@ -60,7 +70,6 @@
         </div>
 
         <div class="col-lg-8">
-
             <div class="card shadow border-0 rounded-4 mb-4 border-bottom border-success border-4">
                 <div class="card-header py-3 bg-white rounded-top-4">
                     <h6 class="m-0 fw-bold text-success"><i class="fas fa-cart-plus me-2"></i> เพิ่มรายการสินค้า</h6>
@@ -69,7 +78,6 @@
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="add_item" value="true">
-
                         <div class="card mb-3 border-0 shadow-sm rounded-3">
                             <div class="card-body py-3 px-3">
                                 <label class="small fw-bold text-primary mb-1"><i class="fas fa-search me-1"></i> ค้นหาสินค้าจากคลัง</label>
@@ -83,7 +91,6 @@
                                 </select>
                             </div>
                         </div>
-
                         <div class="row g-2 align-items-end">
                             <div class="col-md-6">
                                 <label class="small fw-bold text-muted mb-1">ชื่อรายการสินค้า *</label>
@@ -153,12 +160,10 @@
                         </tbody>
                     </table>
                 </div>
-
                 <div class="card-footer bg-white p-4 rounded-bottom-4">
                     <form method="post">
                         {% csrf_token %}
                         <input type="hidden" name="update_info" value="true">
-
                         <div class="row">
                             <div class="col-lg-7 border-end pe-lg-4 pb-3 pb-lg-0">
                                 <label class="small fw-bold text-primary mb-2">
@@ -169,7 +174,6 @@
                                     <i class="fas fa-save me-1"></i> บันทึกข้อมูล
                                 </button>
                             </div>
-
                             <div class="col-lg-5 ps-lg-4 d-flex flex-column justify-content-center">
                                 <table class="table table-sm table-borderless mb-0">
                                     <tr class="border-bottom">
@@ -210,7 +214,6 @@
                     </form>
                 </div>
             </div>
-
         </div>
     </div>
 </div>
@@ -219,13 +222,11 @@
 <link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-
 <script>
     $(document).ready(function() {
         var $select = $('#product_selector').select2({
             theme: 'bootstrap4', placeholder: "-- พิมพ์ชื่อสินค้าเพื่อค้นหา --", allowClear: true, width: '100%'
         });
-
         $select.on('select2:select', function (e) {
             var selectedOption = $(this).find(':selected');
             var name = selectedOption.data('name');
@@ -236,17 +237,11 @@
                 $('input[name="quantity"]').select();
             }
         });
-
-        $select.on('select2:clear', function (e) {
-            $('#input_name').val('');
-            $('#input_price').val('');
-        });
+        $select.on('select2:clear', function (e) { $('#input_name').val(''); $('#input_price').val(''); });
     });
 </script>
-
 <style>
     .select2-container--bootstrap4 .select2-selection--single { height: 38px !important; border-color: #dee2e6; }
     .select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered { line-height: 36px; padding-left: 12px; }
 </style>
-
 {% endblock %}

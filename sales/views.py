@@ -117,6 +117,14 @@ def quotation_create(request):
             qt = form.save(commit=False)
             qt.created_by = request.user
 
+            # ✅ 1. รับค่า ID ลูกค้า (Hidden Field) มาบันทึกความสัมพันธ์
+            cust_id = request.POST.get('customer_id')
+            if cust_id:
+                try:
+                    qt.customer = Customer.objects.get(pk=cust_id)
+                except Customer.DoesNotExist:
+                    pass
+
             now = datetime.datetime.now()
             prefix = f"QT-{now.strftime('%y%m')}"
             last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
@@ -149,12 +157,10 @@ def quotation_create(request):
 def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     products = Product.objects.filter(is_active=True)
-    customers = Customer.objects.filter(is_active=True)
 
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
 
     if request.method == 'POST':
-        # --- กรณี 1: เพิ่มสินค้า (❌ ไม่มีข้อความ) ---
         if 'add_item' in request.POST:
             try:
                 item_name = request.POST.get('item_name')
@@ -169,7 +175,6 @@ def quotation_edit(request, qt_id):
                         unit_price=price
                     )
                     calculate_totals(qt)
-                    # ✅ เพิ่มเสร็จแล้วเงียบ (Silent Add)
                 else:
                     messages.error(request, "กรุณาระบุชื่อสินค้า")
             except Exception as e:
@@ -177,14 +182,11 @@ def quotation_edit(request, qt_id):
 
             return redirect('quotation_edit', qt_id=qt.id)
 
-        # --- กรณี 2: บันทึกยอด (✅ มีข้อความ) ---
         elif 'update_info' in request.POST:
             qt.note = request.POST.get('note', '')
             qt.discount = Decimal(request.POST.get('discount', 0))
             qt.shipping_cost = Decimal(request.POST.get('shipping_cost', 0))
             calculate_totals(qt)
-
-            # ✅ โชว์ข้อความนี้อันเดียวครับ!
             messages.success(request, "บันทึกข้อมูลเรียบร้อย")
             return redirect('quotation_edit', qt_id=qt.id)
 
@@ -194,9 +196,7 @@ def quotation_edit(request, qt_id):
         'item_total': item_total
     })
 
-# ==========================================
-# 6. ฟังก์ชันคำนวณ & ลบสินค้า
-# ==========================================
+# ฟังก์ชันคำนวณยอด
 def calculate_totals(qt):
     item_sum = sum(item.quantity * item.unit_price for item in qt.items.all())
     shipping = qt.shipping_cost if qt.shipping_cost else Decimal(0)
@@ -216,7 +216,6 @@ def delete_item(request, item_id):
     qt = item.quotation
     item.delete()
     calculate_totals(qt)
-    # ✅ ลบเสร็จแล้วเงียบ (Silent Delete)
     return redirect('quotation_edit', qt_id=qt.id)
 
 @login_required
@@ -259,16 +258,15 @@ def api_search_customer(request):
     if not query:
         return JsonResponse({'results': []})
 
-    # ค้นหาจาก ชื่อ หรือ รหัส หรือ เบอร์โทร
+    # ✅ ต้องมี 'id' ใน values(...) ด้วยนะครับ ไม่งั้นจะหยิบ ID ไม่ได้
     customers = Customer.objects.filter(
         Q(name__icontains=query) |
         Q(code__icontains=query) |
         Q(phone__icontains=query)
-    ).values('code', 'name', 'tax_id', 'phone', 'address', 'sub_district', 'district', 'province', 'zip_code')[:10] # ดึงมาแค่ 10 คนพอ
+    ).values('id', 'code', 'name', 'tax_id', 'phone', 'address', 'sub_district', 'district', 'province', 'zip_code')[:10]
 
     results = []
     for c in customers:
-        # รวมที่อยู่ให้สวยงาม
         addr_parts = [
             c['address'], c['sub_district'], c['district'],
             c['province'], c['zip_code']
@@ -276,6 +274,7 @@ def api_search_customer(request):
         full_address = " ".join([p for p in addr_parts if p])
 
         results.append({
+            'id': c['id'],   # ✅ บรรทัดนี้สำคัญมาก! ส่ง ID กลับไปหน้าบ้าน
             'code': c['code'],
             'name': c['name'],
             'tax_id': c['tax_id'] or '',
