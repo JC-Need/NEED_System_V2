@@ -165,7 +165,11 @@ def quotation_edit(request, qt_id):
             try:
                 item_name = request.POST.get('item_name')
                 qty = int(request.POST.get('quantity', 1))
-                price = Decimal(request.POST.get('price', 0))
+
+                # ✅ แก้ไขตรงนี้: รับค่ามาเป็น String แล้ว "ลบลูกน้ำทิ้ง" ก่อนแปลงเป็นตัวเลข
+                price_str = request.POST.get('price', '0')
+                price_clean = price_str.replace(',', '')
+                price = Decimal(price_clean)
 
                 if item_name:
                     QuotationItem.objects.create(
@@ -184,8 +188,14 @@ def quotation_edit(request, qt_id):
 
         elif 'update_info' in request.POST:
             qt.note = request.POST.get('note', '')
-            qt.discount = Decimal(request.POST.get('discount', 0))
-            qt.shipping_cost = Decimal(request.POST.get('shipping_cost', 0))
+
+            # ✅ แก้ไขตรงนี้: รับค่ามาเช็คก่อน (ถ้าเป็นช่องว่าง ให้ถือว่าเป็น 0)
+            discount_str = request.POST.get('discount', '').strip()
+            qt.discount = Decimal(discount_str) if discount_str else Decimal(0)
+
+            shipping_str = request.POST.get('shipping_cost', '').strip()
+            qt.shipping_cost = Decimal(shipping_str) if shipping_str else Decimal(0)
+
             calculate_totals(qt)
             messages.success(request, "บันทึกข้อมูลเรียบร้อย")
             return redirect('quotation_edit', qt_id=qt.id)
@@ -196,17 +206,26 @@ def quotation_edit(request, qt_id):
         'item_total': item_total
     })
 
-# ฟังก์ชันคำนวณยอด
+# ฟังก์ชันคำนวณยอด (ระบบอัตโนมัติ)
 def calculate_totals(qt):
+    # 1. รวมราคาสินค้า
     item_sum = sum(item.quantity * item.unit_price for item in qt.items.all())
+
+    # 2. เตรียมตัวแปร (ส่วนลด/ค่าส่ง)
     shipping = qt.shipping_cost if qt.shipping_cost else Decimal(0)
     discount = qt.discount if qt.discount else Decimal(0)
 
+    # 3. ยอดสุทธิ (Grand Total)
     grand_total = (item_sum + shipping) - discount
     if grand_total < Decimal(0): grand_total = Decimal(0)
 
+    # 4. ถอด VAT 7% (คำนวณย้อนกลับ)
     qt.subtotal = grand_total / Decimal('1.07')
-    qt.vat_amount = grand_total - qt.subtotal
+
+    # 5. หาค่า VAT (✅ จุดสำคัญ: ใช้ tax_amount เท่านั้น ระบบถึงจะ Auto)
+    qt.tax_amount = grand_total - qt.subtotal
+
+    # 6. บันทึกลงฐานข้อมูล
     qt.grand_total = grand_total
     qt.save()
 

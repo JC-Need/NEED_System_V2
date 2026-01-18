@@ -3,6 +3,7 @@ from django.core.validators import RegexValidator
 from .models import Quotation
 
 class QuotationForm(forms.ModelForm):
+    # วันที่ (ปิดประวัติด้วย)
     date = forms.DateField(
         widget=forms.DateInput(attrs={'class': 'form-control datepicker', 'placeholder': 'วว/ดด/ปปปป', 'autocomplete': 'off'}),
         input_formats=['%d/%m/%Y', '%Y-%m-%d']
@@ -12,19 +13,19 @@ class QuotationForm(forms.ModelForm):
         input_formats=['%d/%m/%Y', '%Y-%m-%d']
     )
 
-    # --- ส่วนที่ 2: ใช้ไม้ตาย new-password หลอก Browser ---
-
+    # เบอร์โทรศัพท์ (ปิดประวัติ)
     customer_phone = forms.CharField(
         label="เบอร์โทรศัพท์",
         required=True,
-        validators=[RegexValidator(r'^0\d{8,9}$', 'เบอร์โทรต้องเป็นตัวเลข 9-10 หลัก')],
+        validators=[RegexValidator(r'^0\d{8,9}$', 'เบอร์โทรต้องเป็นตัวเลข 9-10 หลัก (เช่น 081xxxxxxx)')],
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': 'ห้ามเว้น ใส่เฉพาะตัวเลขเท่านั้น',
-            'autocomplete': 'off'  # 👈 ไม้ตาย 1
+            'autocomplete': 'off' # ✅ ปิดประวัติ
         })
     )
 
+    # เลขผู้เสียภาษี (ปิดประวัติ)
     customer_tax_id = forms.CharField(
         label="เลขผู้เสียภาษี",
         required=False,
@@ -32,7 +33,7 @@ class QuotationForm(forms.ModelForm):
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': 'ระบุเลข 13 หลัก (ถ้ามี)',
-            'autocomplete': 'off'  # 👈 ไม้ตาย 1
+            'autocomplete': 'off' # ✅ ปิดประวัติ
         })
     )
 
@@ -41,12 +42,16 @@ class QuotationForm(forms.ModelForm):
         fields = ['date', 'valid_until', 'customer_name', 'customer_tax_id', 'customer_phone', 'customer_address', 'note']
         widgets = {
             'customer_name': forms.TextInput(attrs={
-                'class': 'form-control',
-                'required': 'true',
+                'class': 'form-control', 
+                'required': 'true', 
                 'placeholder': 'ระบุชื่อลูกค้า...',
-                'autocomplete': 'new-password' # 👈 ไม้ตาย 1 (หลอกว่าเป็นรหัสผ่านใหม่ ห้ามจำ!)
+                'autocomplete': 'off' # ✅ ปิดประวัติ
             }),
-            'customer_address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'customer_address': forms.Textarea(attrs={
+                'class': 'form-control', 
+                'rows': 3,
+                'autocomplete': 'off' # ✅ ปิดประวัติ
+            }),
             'note': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
         }
 
