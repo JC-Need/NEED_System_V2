@@ -241,7 +241,16 @@ def delete_item(request, item_id):
 def quotation_print(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     company = CompanyInfo.objects.first()
-    return render(request, 'sales/quotation_print.html', {'qt': qt, 'company': company})
+
+    # ✅ เพิ่มบรรทัดนี้: คำนวณยอดรวมสินค้า (item_total) เพื่อส่งไปโชว์ในใบเสนอราคา
+    item_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+
+    # ✅ เพิ่ม 'item_total': item_total ในวงเล็บนี้
+    return render(request, 'sales/quotation_print.html', {
+        'qt': qt,
+        'company': company,
+        'item_total': item_total
+    })
 
 @login_required
 def export_sales_excel(request):

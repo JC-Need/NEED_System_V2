@@ -3,197 +3,327 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>ใบเสนอราคา {{ quote.code }}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;700&display=swap" rel="stylesheet">
+    <title>ใบเสนอราคา {{ qt.code }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
+        :root { --primary-dark: #1a1a1a; --border-color: #000; }
         body { 
             font-family: 'Sarabun', sans-serif; 
-            background: #525659; /* สีพื้นหลังเหมือนโปรแกรม PDF */
-            margin: 0; 
-            padding: 20px;
+            background: #525659; 
+            color: #000;
+            font-size: 14px;
+            line-height: 1.3;
         }
-        
-        /* ตั้งค่าหน้ากระดาษ A4 */
         .page {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 20mm;
-            margin: 0 auto;
-            background: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            width: 210mm; 
+            min-height: 297mm; 
+            padding: 15mm; 
+            margin: 10mm auto; 
+            background: white; 
             position: relative;
-            box-sizing: border-box; /* สำคัญ: ให้ padding ไม่ขยายขนาดกระดาษ */
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
         }
-
-        /* ส่วนหัว */
-        .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
-        .company-info h2 { margin: 0 0 5px 0; color: #333; font-weight: bold; }
-        .company-info p { margin: 0; color: #555; line-height: 1.4; font-size: 0.95em; }
         
-        .doc-title { text-align: right; }
-        .doc-title h1 { margin: 0; color: #0d6efd; text-transform: uppercase; font-size: 24pt; }
-        .doc-title p { margin: 0; letter-spacing: 2px; color: #777; font-weight: bold; }
+        /* HEADER SECTION */
+        .header-section {
+            padding-bottom: 10px;
+            border-bottom: 2px solid #000;
+            margin-bottom: 15px;
+        }
+        .company-title { font-size: 20px; font-weight: 700; color: #000; line-height: 1.1; margin-bottom: 2px; }
+        .company-subtitle { font-size: 13px; color: #555; font-weight: 500; margin-bottom: 4px; }
+        .company-details { font-size: 13px; color: #333; line-height: 1.4; }
+
+        .doc-title { font-size: 28px; font-weight: 700; color: var(--primary-dark); text-align: right; line-height: 1; margin-top: 5px; }
+        .doc-subtitle { font-size: 11px; color: #777; text-align: right; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
         
-        /* ข้อมูลลูกค้า */
-        .info-section { 
-            display: flex; justify-content: space-between; 
-            margin-bottom: 25px; 
-            border-top: 2px solid #333; 
-            border-bottom: 2px solid #333; 
-            padding: 15px 0;
-        }
-        .box { width: 48%; font-size: 0.95em; line-height: 1.5; }
-        .box strong { color: #000; display: inline-block; width: 100px; }
+        .doc-no-group { text-align: right; margin-top: 5px; }
+        .doc-no-label { font-size: 10px; color: #666; font-weight: 600; text-transform: uppercase; }
+        .doc-no-value { font-size: 16px; font-weight: 700; color: #000; }
 
-        /* ตารางสินค้า */
-        .item-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .item-table th { 
-            background: #f0f0f0; border: 1px solid #ccc; padding: 10px; 
-            text-align: center; font-weight: bold; 
-        }
-        .item-table td { 
-            border: 1px solid #ccc; padding: 8px; vertical-align: top; 
-        }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-
-        /* ส่วนท้าย */
-        .total-section { display: flex; justify-content: flex-end; margin-top: 10px; }
-        .total-box { width: 45%; }
-        .total-row { display: flex; justify-content: space-between; padding: 6px 10px; }
-        .grand-total { 
-            background: #f0f0f0; font-weight: bold; font-size: 1.1em; 
-            border: 1px solid #ccc; margin-top: 5px; 
+        .customer-divider {
+            border-top: 1px solid #000;
+            margin: 12px 0;
+            opacity: 1;
         }
 
-        .signature-section { 
-            display: flex; justify-content: space-between; margin-top: 60px; text-align: center; 
-        }
-        .sig-box { width: 40%; }
-        .sig-line { border-bottom: 1px dotted #999; width: 80%; margin: 40px auto 10px auto; }
+        .info-group-label { font-size: 11px; color: #666; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+        .customer-name { font-size: 16px; font-weight: 700; color: #000; margin-bottom: 2px; }
+        .customer-addr { font-size: 14px; line-height: 1.3; margin-bottom: 4px; }
+        .customer-meta { font-size: 13px; color: #000; }
+        
+        .ref-table { width: 100%; }
+        .ref-table td { padding: 1px 0; font-size: 13px; vertical-align: top; }
+        .ref-label { color: #555; width: 90px; font-weight: 500; }
+        .ref-value { font-weight: 600; text-align: right; color: #000; }
 
-        /* ปุ่มพิมพ์ */
-        .btn-print {
-            position: fixed; top: 20px; right: 20px;
-            padding: 12px 24px; background: #0d6efd; color: white;
-            border: none; cursor: pointer; border-radius: 50px; 
-            font-size: 16px; text-decoration: none;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            font-weight: bold; z-index: 1000;
+        /* TABLE */
+        .premium-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .premium-table th { 
+            background-color: #f4f4f4; color: #000; 
+            font-weight: 700; text-transform: uppercase; font-size: 12px; 
+            padding: 8px; border-top: 1px solid #000; border-bottom: 1px solid #000;
+            text-align: center;
         }
-        .btn-print:hover { background: #0b5ed7; transform: translateY(-2px); }
+        .premium-table td { 
+            padding: 6px 8px; 
+            border-bottom: 1px solid #eee; vertical-align: top; font-size: 13px;
+        }
+        
+        /* FOOTER */
+        .total-table { width: 100%; }
+        .total-table td { padding: 3px 0; }
+        .total-label { text-align: right; padding-right: 15px; color: #555; font-size: 13px; }
+        .total-value { text-align: right; font-weight: 600; width: 120px; font-size: 14px; }
+        .grand-total-row td { 
+            padding-top: 8px; padding-bottom: 8px;
+            font-size: 18px; font-weight: 700; color: #000;
+        }
+        
+        .payment-box { font-size: 13px; line-height: 1.4; color: #333; }
+        .note-box { font-size: 12px; color: #555; margin-top: 10px; line-height: 1.3; }
 
-        /* Media Print */
         @media print {
-            body { background: white; margin: 0; padding: 0; }
-            .page { margin: 0; padding: 20mm; box-shadow: none; width: auto; height: auto; }
+            body { background: white; margin: 0; }
+            .page { width: 100%; margin: 0; padding: 10mm; box-shadow: none; border: none; }
             .no-print { display: none !important; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
         }
     </style>
 </head>
 <body>
 
-    <a href="javascript:window.print()" class="btn-print no-print">🖨️ พิมพ์เอกสาร</a>
+    <div class="text-center py-3 no-print sticky-top" style="background: rgba(50,50,50,0.8); backdrop-filter: blur(5px);">
+        <button onclick="window.print()" class="btn btn-light fw-bold shadow-sm rounded-pill px-4 me-2">
+            <i class="fas fa-print me-2"></i> พิมพ์เอกสาร
+        </button>
+        <button onclick="window.close()" class="btn btn-outline-light fw-bold shadow-sm rounded-pill px-4">
+            ปิดหน้าต่าง
+        </button>
+    </div>
 
     <div class="page">
-        <div class="header">
-            <div class="company-info">
-                {% if company.logo %}
-                    <img src="{{ company.logo.url }}" style="height: 70px; margin-bottom: 10px;">
-                {% endif %}
-                <h2>{{ company.name_th|default:"บริษัท ตัวอย่าง จำกัด" }}</h2>
-                <p>
-                    {{ company.address|linebreaksbr }}<br>
-                    <strong>โทร:</strong> {{ company.phone }} | 
-                    <strong>Tax ID:</strong> {{ company.tax_id }}
-                </p>
+        
+        <div class="header-section">
+            <div class="row align-items-start">
+                <div class="col-7">
+                    <div class="d-flex align-items-center mb-2">
+                        {% if company.logo %}
+                            <img src="{{ company.logo.url }}" style="height: 55px; margin-right: 12px;" alt="Logo">
+                        {% endif %}
+                        <div>
+                            <div class="company-title">{{ company.name_th|default:"บริษัท นีด ช็อปปิ้ง จำกัด" }}</div>
+                            <div class="company-subtitle">{{ company.name_en|default:"NEED SHOPPING CO., LTD." }}</div>
+                        </div>
+                    </div>
+                    <div class="company-details ps-1">
+                        {{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}<br>
+                        <strong>โทร:</strong> {{ company.phone|default:"033 166 699" }} &nbsp;|&nbsp; 
+                        <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"0205563029342" }}
+                    </div>
+                </div>
+
+                <div class="col-5">
+                    <div class="doc-title">ใบเสนอราคา</div>
+                    <div class="doc-subtitle">QUOTATION</div>
+                    
+                    <div class="doc-no-group mt-3">
+                        <div class="doc-no-label">เลขที่เอกสาร / QUOTATION NO.</div>
+                        <div class="doc-no-value">{{ qt.code }}</div>
+                    </div>
+                </div>
             </div>
-            <div class="doc-title">
-                <h1>ใบเสนอราคา</h1>
-                <p>QUOTATION</p>
+
+            <div class="customer-divider"></div>
+
+            <div class="row">
+                <div class="col-7 pe-4 border-end border-secondary">
+                    <div class="info-group-label"><i class="fas fa-address-book me-1"></i> ลูกค้า / CUSTOMER</div>
+                    <div class="customer-name">{{ qt.customer_name }}</div>
+                    <div class="customer-addr">
+                        {{ qt.customer_address|default:"-" }}
+                    </div>
+                    <div class="customer-meta mt-1">
+                        <strong>โทร:</strong> {{ qt.customer_phone|default:"-" }} &nbsp;&nbsp;
+                        <strong>เลขผู้เสียภาษี:</strong> {{ qt.customer_tax_id|default:"-" }}
+                    </div>
+                </div>
+
+                <div class="col-5 ps-4">
+                    <div class="info-group-label">ข้อมูลอ้างอิง / REFERENCE</div>
+                    <table class="ref-table">
+                        <tr>
+                            <td class="ref-label">รหัสลูกค้า:</td>
+                            <td class="ref-value">{{ qt.customer_code|default:"Walk-in" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ref-label">วันที่:</td>
+                            <td class="ref-value">{{ qt.date|date:"d/m/Y" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ref-label">ยืนยันราคาถึง:</td>
+                            <td class="ref-value">{{ qt.valid_until|date:"d/m/Y" }}</td>
+                        </tr>
+                        <tr>
+                            <td class="ref-label">พนักงานขาย:</td>
+                            <td class="ref-value">{{ qt.employee.first_name|default:"-" }}</td>
+                        </tr>
+                    </table>
+                </div>
             </div>
         </div>
 
-        <div class="info-section">
-            <div class="box">
-                <div style="font-weight: bold; margin-bottom: 5px; color: #0d6efd;">ลูกค้า (CUSTOMER)</div>
-                {{ quote.customer.name }}<br>
-                {{ quote.customer.address }}<br>
-                <strong>โทร:</strong> {{ quote.customer.phone }}<br>
-                <strong>ผู้ติดต่อ:</strong> {{ quote.customer.contact_person|default:"-" }}
-            </div>
-            <div class="box text-right">
-                <p><strong>เลขที่:</strong> {{ quote.code }}</p>
-                <p><strong>วันที่:</strong> {{ quote.date|date:"d/m/Y" }}</p>
-                <p><strong>ผู้ขาย:</strong> {{ quote.employee.first_name }}</p>
-            </div>
+        <div style="min-height: 400px;">
+            <table class="premium-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">ลำดับ</th>
+                        <th style="width: 50%; text-align: left;">รายการสินค้า / DESCRIPTION</th>
+                        <th style="width: 10%;">จำนวน</th>
+                        <th style="width: 15%; text-align: right;">ราคาต่อหน่วย</th>
+                        <th style="width: 20%; text-align: right;">จำนวนเงิน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in qt.items.all %}
+                    <tr>
+                        <td class="text-center text-muted">{{ forloop.counter }}</td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ item.item_name }}</div>
+                            {% if item.description %}
+                                <div class="small text-muted" style="font-size: 11px;">{{ item.description }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-center fw-bold">{{ item.quantity }}</td>
+                        <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
+                        <td class="text-end fw-bold">{{ item.amount|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                    
+                    {% for i in "1234" %}
+                    <tr><td colspan="5" style="height: 25px;"></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
 
-        <table class="item-table">
-            <thead>
-                <tr>
-                    <th width="50">#</th>
-                    <th>รายละเอียด (Description)</th>
-                    <th width="80">จำนวน</th>
-                    <th width="100">ราคา/หน่วย</th>
-                    <th width="120">จำนวนเงิน</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in items %}
-                <tr>
-                    <td class="text-center">{{ forloop.counter }}</td>
-                    <td>{{ item.product.name }}</td>
-                    <td class="text-center">{{ item.quantity }}</td>
-                    <td class="text-right">{{ item.unit_price|floatformat:2|intcomma }}</td>
-                    <td class="text-right">{{ item.amount|floatformat:2|intcomma }}</td>
-                </tr>
-                {% endfor %}
+        <div class="row">
+            <div class="col-7 pe-5">
+                <div class="py-2 px-3 mb-3 bg-light border text-center fw-bold text-dark rounded" style="font-size: 14px;">
+                    ( <span id="baht-text">...</span> )
+                </div>
+
+                <div class="payment-box mb-3">
+                    <div class="fw-bold mb-1" style="font-size: 12px; text-transform: uppercase;">ข้อมูลการชำระเงิน (Payment Details):</div>
+                    <div class="ps-2 border-start border-3 border-dark">
+                        ธนาคาร: <strong>กสิกรไทย (KBANK)</strong><br>
+                        ชื่อบัญชี: <strong>บริษัท นีด ช็อปปิ้ง จำกัด</strong><br>
+                        เลขบัญชี: <strong>075-3-824782</strong>
+                    </div>
+                </div>
                 
-                {% for i in "12345" %}
-                <tr><td colspan="5" style="height: 30px;"></td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
+                <div class="note-box">
+                    <strong>หมายเหตุ:</strong>
+                    {{ qt.note|default:"-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"|linebreaksbr }}
+                </div>
+            </div>
 
-        <div class="total-section">
-            <div class="total-box">
-                <div class="total-row">
-                    <span>รวมเป็นเงิน (Subtotal):</span>
-                    <span>{{ quote.subtotal|floatformat:2|intcomma }}</span>
-                </div>
-                {% if quote.discount > 0 %}
-                <div class="total-row text-danger">
-                    <span>ส่วนลด (Discount):</span>
-                    <span>-{{ quote.discount|floatformat:2|intcomma }}</span>
-                </div>
-                {% endif %}
-                
-                <div class="total-row grand-total">
-                    <span>จำนวนเงินรวมทั้งสิ้น:</span>
-                    <span>{{ quote.grand_total|floatformat:2|intcomma }} บาท</span>
-                </div>
+            <div class="col-5">
+                <table class="total-table">
+                    <tr>
+                        <td class="total-label">รวมราคาสินค้า</td>
+                        <td class="total-value">{{ item_total|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% if qt.discount > 0 %}
+                    <tr>
+                        <td class="total-label text-danger">หักส่วนลด</td>
+                        <td class="total-value text-danger">-{{ qt.discount|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if qt.shipping_cost > 0 %}
+                    <tr>
+                        <td class="total-label">ค่าขนส่ง</td>
+                        <td class="total-value">{{ qt.shipping_cost|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <td class="total-label">ราคาก่อนภาษี</td>
+                        <td class="total-value">{{ qt.subtotal|floatformat:2|intcomma }}</td>
+                    </tr>
+                    <tr>
+                        <td class="total-label">VAT 7%</td>
+                        <td class="total-value">{{ qt.tax_amount|floatformat:2|intcomma }}</td>
+                    </tr>
+                    <tr class="grand-total-row">
+                        <td class="total-label" style="border-top: 1px solid #000; padding-top: 10px;">ยอดรวมสุทธิ</td>
+                        <td class="total-value" style="border-top: 1px solid #000; padding-top: 10px;">{{ qt.grand_total|floatformat:2|intcomma }}</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td><div style="border-bottom: 3px double #000; margin-top: 2px;"></div></td>
+                    </tr>
+                </table>
             </div>
         </div>
 
-        <div class="signature-section">
-            <div class="sig-box">
-                <div class="sig-line"></div>
-                ผู้สั่งซื้อ / ลูกค้า<br>
-                วันที่ ...../...../..........
+        <div class="row mt-5 pt-3">
+            <div class="col-6 text-center">
+                <div style="border-bottom: 1px dotted #000; width: 60%; margin: 0 auto 5px;"></div>
+                <div class="small fw-bold">ผู้สั่งซื้อ (Buyer)</div>
+                <div class="small text-muted" style="font-size: 10px;">วันที่ ........./........./.............</div>
             </div>
-            <div class="sig-box">
-                {% if company.signature %}
-                    <img src="{{ company.signature.url }}" style="height: 50px; margin-bottom: -20px;"><br>
-                {% else %}
-                    <div style="height: 40px;"></div>
-                {% endif %}
-                <div class="sig-line"></div>
-                ( {{ quote.employee.first_name }} {{ quote.employee.last_name }} )<br>
-                ผู้มีอำนาจลงนาม
+            <div class="col-6 text-center">
+                <div style="border-bottom: 1px dotted #000; width: 60%; margin: 0 auto 5px;"></div>
+                <div class="small fw-bold">ผู้มีอำนาจลงนาม (Authorized Signature)</div>
+                <div class="small text-muted" style="font-size: 10px;">วันที่ {{ qt.date|date:"d/m/Y" }}</div>
             </div>
         </div>
     </div>
 
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            const num = {{ qt.grand_total }};
+            document.getElementById('baht-text').innerText = ThaiBaht(num);
+        });
+
+        function ThaiBaht(number) {
+            const num = parseFloat(number).toFixed(2);
+            if (parseFloat(num) === 0) return "ศูนย์บาทถ้วน";
+            const bahtText = ["ศูนย์", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"];
+            const unitText = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"];
+            let [integer, fraction] = num.split(".");
+            let text = "";
+            for (let i = 0; i < integer.length; i++) {
+                let digit = parseInt(integer.charAt(i));
+                let unit = unitText[(integer.length - 1 - i) % 7];
+                if (digit !== 0) {
+                    if (i === integer.length - 1 && digit === 1 && integer.length > 1) text += "เอ็ด";
+                    else if (i === integer.length - 2 && digit === 2) text += "ยี่";
+                    else if (i === integer.length - 2 && digit === 1) text += "";
+                    else text += bahtText[digit];
+                    text += unit;
+                }
+            }
+            text += "บาท";
+            if (parseInt(fraction) === 0) text += "ถ้วน";
+            else {
+                if (fraction.length === 2) {
+                    let d1 = parseInt(fraction.charAt(0)), d2 = parseInt(fraction.charAt(1));
+                    if (d1 !== 0) {
+                        if (d1 === 1) text += ""; else if (d1 === 2) text += "ยี่"; else text += bahtText[d1];
+                        text += "สิบ";
+                    }
+                    if (d2 !== 0) {
+                        if (d2 === 1 && d1 !== 0) text += "เอ็ด"; else text += bahtText[d2];
+                    }
+                    text += "สตางค์";
+                }
+            }
+            return text;
+        }
+    </script>
 </body>
 </html>
