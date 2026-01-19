@@ -1,5 +1,7 @@
 from django.db import models
-from master_data.models import Supplier # ดึงข้อมูลซัพพลายเออร์จากถังกลาง
+from django.contrib.auth.models import User
+from django.utils import timezone
+from master_data.models import Supplier # อ้างอิงจากไฟล์เดิมที่มี
 
 # ==========================================
 # 1. หมวดหมู่สินค้า (Category)
@@ -7,8 +9,7 @@ from master_data.models import Supplier # ดึงข้อมูลซัพ�
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อหมวดหมู่")
     
-    def __str__(self):
-        return self.name
+    def __str__(self): return self.name
     
     class Meta:
         verbose_name = "1. หมวดหมู่สินค้า"
@@ -28,7 +29,7 @@ class Product(models.Model):
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาทุน")
     sell_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาขาย")
     
-    # สต็อก
+    # สต็อก (สำคัญ!)
     stock_qty = models.IntegerField(default=0, verbose_name="จำนวนคงเหลือ")
     min_level = models.IntegerField(default=5, verbose_name="จุดสั่งซื้อ (Low Stock)")
     
@@ -39,8 +40,47 @@ class Product(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.name} ({self.stock_qty})"
+        return f"{self.name} (คงเหลือ: {self.stock_qty})"
 
     class Meta:
         verbose_name = "2. รายการสินค้า"
         verbose_name_plural = "2. จัดการสินค้า (Products)"
+
+# ==========================================
+# 3. บันทึกการเคลื่อนไหวสต็อก (Stock Movement) - ✅ ส่วนที่เพิ่มใหม่
+# ==========================================
+class StockMovement(models.Model):
+    MOVEMENT_TYPES = [
+        ('IN', 'รับเข้า (ซื้อ/ผลิตเสร็จ)'),
+        ('OUT', 'เบิกออก (ขาย/เสียหาย)'),
+        ('PRODUCTION', 'เบิกไปผลิต'),
+    ]
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้า")
+    movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES, verbose_name="ประเภทรายการ")
+    quantity = models.IntegerField(verbose_name="จำนวน")
+    
+    reference_doc = models.CharField(max_length=50, blank=True, verbose_name="อ้างอิงเอกสาร (PO/SO)")
+    note = models.TextField(blank=True, verbose_name="หมายเหตุ")
+    
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการ")
+    created_at = models.DateTimeField(default=timezone.now, verbose_name="วันที่ทำรายการ")
+
+    def save(self, *args, **kwargs):
+        # ✅ Logic อัตโนมัติ: เมื่อบันทึก Transaction -> ให้ไปตัดยอดที่ Product ทันที
+        if not self.pk: # ทำเฉพาะตอนสร้างใหม่ (กันยอดเพี้ยนตอนแก้ไข)
+            if self.movement_type == 'IN':
+                self.product.stock_qty += self.quantity
+            else: # OUT หรือ PRODUCTION
+                self.product.stock_qty -= self.quantity
+            
+            self.product.save() # บันทึกยอดคงเหลือใหม่ลงสินค้า
+            
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.get_movement_type_display()} - {self.product.name}"
+
+    class Meta:
+        verbose_name = "3. ประวัติสต็อก"
+        verbose_name_plural = "3. ประวัติการเคลื่อนไหว (Stock Movements)"

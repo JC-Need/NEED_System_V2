@@ -1,0 +1,100 @@
+{% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <div class="card border-0 shadow-lg rounded-4 overflow-hidden">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-box-open me-2"></i>{{ title }}</h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-4">
+                                {{ form.code|as_crispy_field }}
+                            </div>
+                            <div class="col-md-8">
+                                {{ form.name|as_crispy_field }}
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-md-8">
+                                {{ form.category|as_crispy_field }}
+                            </div>
+                            <div class="col-md-4">
+                                {{ form.min_level|as_crispy_field }}
+                            </div>
+                        </div>
+
+                        <div class="row g-2 mb-3 p-3 bg-light rounded-3">
+                            <div class="col-md-6">
+                                {{ form.cost_price|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.sell_price|as_crispy_field }}
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            {{ form.image|as_crispy_field }}
+                        </div>
+                        <div class="mb-4">
+                            {{ form.is_active|as_crispy_field }}
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm">
+                                <i class="fas fa-save me-2"></i> บันทึกข้อมูล
+                            </button>
+                            <a href="{% url 'inventory_dashboard' %}" class="btn btn-light text-muted rounded-pill">ยกเลิก</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const numberInputs = document.querySelectorAll('.number-input');
+
+        numberInputs.forEach(input => {
+            // 1. เมื่อคลิกที่ช่อง (Focus)
+            input.addEventListener('focus', function() {
+                // ถ้าค่าเป็น 0.00 หรือ 0 ให้เคลียร์ทิ้งทันที เพื่อให้พิมพ์ง่าย
+                let val = this.value.replace(/,/g, ''); // เอาลูกน้ำออกก่อนเช็ค
+                if (parseFloat(val) === 0 || val === '') {
+                    this.value = '';
+                } else {
+                    // ถ้ามีค่าเดิม ให้เอาลูกน้ำออกเพื่อให้แก้ไขตัวเลขได้
+                    this.value = val;
+                }
+            });
+
+            // 2. เมื่อพิมพ์ (Input) - ยอมให้พิมพ์แค่ตัวเลขและจุด
+            input.addEventListener('input', function() {
+                this.value = this.value.replace(/[^0-9.]/g, '');
+            });
+
+            // 3. เมื่อออกจากช่อง (Blur) - ใส่ลูกน้ำกลับเข้าไป
+            input.addEventListener('blur', function() {
+                if (this.value === '' || isNaN(this.value)) {
+                    this.value = '0.00';
+                } else {
+                    let val = parseFloat(this.value);
+                    // จัดรูปแบบ: มีลูกน้ำ และทศนิยม 2 ตำแหน่ง
+                    this.value = val.toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

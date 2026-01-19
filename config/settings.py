@@ -28,8 +28,12 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     # --- 3rd Party Tools ---
-    'import_export',          # สำหรับนำเข้า/ส่งออก Excel
+    'import_export',           # สำหรับนำเข้า/ส่งออก Excel
     'django.contrib.humanize', # สำหรับจัดรูปแบบตัวเลข (ใส่ลูกน้ำ)
+    
+    # ✅ เพิ่ม Crispy Forms (ตัวตกแต่งฟอร์ม) ที่ขาดหายไป
+    'crispy_forms',
+    'crispy_bootstrap5',
 
     # --- 🏢 อาณาจักรของเรา (Custom Apps) ---
     'master_data',    # 1. ฐานข้อมูลกลาง (บริษัท, ลูกค้า, ซัพพลายเออร์)
@@ -134,3 +138,9 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 LOGIN_URL = 'login'
+
+# ==========================================
+# ✅ เพิ่มการตั้งค่า Crispy Forms (Bootstrap 5)
+# ==========================================
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = "bootstrap5"

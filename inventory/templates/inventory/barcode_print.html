@@ -2,82 +2,101 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>Barcodes: {{ product.name }}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+39+Text&family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+    <title>Print Barcode - {{ product.code }}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&family=Libre+Barcode+39+Text&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Sarabun', sans-serif; background: #555; margin: 0; padding: 20px; }
-        
-        /* หน้ากระดาษ A4 */
-        .page {
-            width: 210mm; min-height: 297mm;
-            padding: 10mm;
-            margin: 0 auto;
-            background: white;
-            display: flex;
-            flex-wrap: wrap; /* ให้เรียงต่อกันแล้วขึ้นบรรทัดใหม่ */
-            align-content: flex-start;
-            gap: 5mm; /* ระยะห่างระหว่างดวง */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Sarabun', sans-serif;
+            background: #eee; /* สีพื้นหลังตอนดูในจอ */
         }
-
-        /* กรอบสติ๊กเกอร์แต่ละดวง (ปรับขนาดได้ตามกระดาษจริง) */
-        .sticker {
-            width: 60mm; 
-            height: 35mm;
-            border: 1px dashed #ccc; /* เส้นประสำหรับตัด (ซ่อนได้ตอนพิมพ์) */
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            padding: 5px;
+        .page {
+            width: 210mm;
+            height: 297mm;
+            padding: 10mm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* 3 คอลัมน์ */
+            grid-template-rows: repeat(10, 1fr);    /* 10 แถว */
+            grid-gap: 5mm; /* ระยะห่างระหว่างดวง */
             box-sizing: border-box;
         }
-
-        /* ชื่อสินค้า */
+        .sticker {
+            border: 1px dashed #ddd; /* เส้นประช่วยเล็ง (จะซ่อนตอนพิมพ์) */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 5px;
+            text-align: center;
+            overflow: hidden;
+        }
         .product-name {
             font-size: 12px;
             font-weight: bold;
+            margin-bottom: 2px;
+            max-width: 100%;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            width: 100%;
         }
-
-        /* ตัวบาร์โค้ด (ใช้ฟอนต์) */
-        .barcode {
-            font-family: 'Libre Barcode 39 Text', cursive;
-            font-size: 40px; /* ปรับขนาดความสูงแท่งตรงนี้ */
-            margin: 0;
-            line-height: 1;
-        }
-
-        /* ราคา */
         .price {
             font-size: 14px;
             font-weight: bold;
+            color: #333;
         }
-
-        .btn-print { position: fixed; top: 20px; right: 20px; padding: 10px 20px; background: #333; color: white; border: none; cursor: pointer; border-radius: 5px; text-decoration: none; font-size: 16px; z-index: 999; }
+        .barcode {
+            font-family: 'Libre Barcode 39 Text', cursive;
+            font-size: 40px; /* ขนาดบาร์โค้ด */
+            margin-top: -5px;
+            white-space: nowrap;
+        }
         
+        /* ตั้งค่าตอนสั่งพิมพ์ */
         @media print {
-            body { background: white; padding: 0; }
-            .page { width: auto; height: auto; margin: 0; border: none; }
-            .sticker { border: none; } /* ซ่อนเส้นประตอนพิมพ์จริง */
+            body { background: white; }
+            .page { 
+                margin: 0; 
+                box-shadow: none; 
+                width: 100%;
+                height: 100%;
+            }
+            .sticker { border: none; } /* ซ่อนเส้นขอบตอนพิมพ์จริง */
             .no-print { display: none; }
         }
+        
+        .btn-print {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .btn-print:hover { background: #0056b3; }
     </style>
 </head>
 <body>
-    <a href="javascript:window.print()" class="btn-print no-print">🖨️ พิมพ์บาร์โค้ด</a>
+
+    <button onclick="window.print()" class="btn-print no-print">🖨️ สั่งพิมพ์ (Print)</button>
 
     <div class="page">
         {% for i in sticker_range %}
         <div class="sticker">
             <div class="product-name">{{ product.name }}</div>
             <div class="barcode">*{{ barcode_val }}*</div>
-            <div class="price">{{ product.sell_price|floatformat:0 }} บาท</div>
+            <div class="price">{{ product.sell_price|floatformat:0 }}.-</div>
         </div>
         {% endfor %}
     </div>
+
 </body>
 </html>

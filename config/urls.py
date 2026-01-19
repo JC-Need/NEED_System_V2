@@ -10,14 +10,12 @@ urlpatterns = [
     path('', include('core.urls')),                # หน้าแรก (Dashboard)
     path('hr/', include('hr.urls')),               # ระบบ HR
     path('sales/', include('sales.urls')),         # ระบบขาย
-    path('inventory/', include('inventory.urls')), # ระบบคลังสินค้า
     
-    # ✅ เพิ่มบรรทัดนี้: เชื่อมต่อระบบข้อมูลลูกค้า (Master Data)
+    # ✅ ระบบคลังสินค้า (Inventory) เชื่อมต่อเรียบร้อยแล้ว
+    path('inventory/', include('inventory.urls')), 
+    
+    # ✅ ระบบข้อมูลลูกค้า (Master Data)
     path('master_data/', include('master_data.urls')), 
-    
-    # ระบบอื่นๆ (รอสร้างในอนาคต)
-    # path('purchasing/', include('purchasing.urls')),
-    # path('manufacturing/', include('manufacturing.urls')), 
 ]
 
 if settings.DEBUG:
