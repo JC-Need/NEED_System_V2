@@ -15,17 +15,26 @@
 
         /* ✅ Navbar แบบขาวคลีน (White Premium) */
         .navbar-custom {
-            background-color: #ffffff; /* เปลี่ยนเป็นสีขาว */
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* เงาบางๆ ให้ดูลอย */
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             padding-top: 15px; padding-bottom: 15px;
         }
         .navbar-brand {
             font-weight: 800;
             font-size: 1.5rem;
-            background: -webkit-linear-gradient(45deg, #c5a059, #d4af37); /* ไล่สีทองที่ตัวหนังสือ */
+            background: -webkit-linear-gradient(45deg, #c5a059, #d4af37);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
+        .nav-link {
+            font-weight: 600;
+            color: #555 !important;
+            margin-right: 15px;
+            transition: all 0.3s;
+        }
+        .nav-link:hover { color: #d4af37 !important; transform: translateY(-2px); }
+        .nav-link.active { color: #c5a059 !important; border-bottom: 2px solid #c5a059; }
+        
         .nav-user { color: #555; font-weight: 600; }
         .btn-logout {
             border: 1px solid #eee; color: #777; background: #f8f9fa;
@@ -39,22 +48,37 @@
         <div class="container-fluid px-4">
             <a class="navbar-brand" href="/">
                 {% if company_info.navbar_image %}
-                    <img src="{{ company_info.navbar_image.url }}" alt="Logo" style="height: 40px; wifth: auto;">
+                    <img src="{{ company_info.navbar_image.url }}" alt="Logo" style="height: 40px; width: auto;">
                 {% else %}
                     <i class="fas fa-rocket me-2" style="color: #c5a059;"></i> NEED System
                 {% endif %}
             </a>
 
-            <div class="d-flex align-items-center">
-                <span class="me-3 d-none d-md-inline nav-user">
-                    <i class="far fa-user-circle me-1"></i> {{ user.first_name|default:user.username }}
-                </span>
-                <form action="{% url 'logout' %}" method="post" class="d-inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-logout rounded-pill px-3">
-                        ออกจากระบบ
-                    </button>
-                </form>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0 ms-3">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/"><i class="fas fa-home me-1"></i> หน้าหลัก</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'inventory_dashboard' %}"><i class="fas fa-boxes me-1"></i> คลังสินค้า</a>
+                    </li>
+                    </ul>
+
+                <div class="d-flex align-items-center">
+                    <span class="me-3 d-none d-md-inline nav-user">
+                        <i class="far fa-user-circle me-1"></i> {{ user.first_name|default:user.username }}
+                    </span>
+                    <form action="{% url 'logout' %}" method="post" class="d-inline">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-logout rounded-pill px-3">
+                            ออกจากระบบ
+                        </button>
+                    </form>
+                </div>
             </div>
         </div>
     </nav>
@@ -79,13 +103,9 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // ตั้งเวลา 3 วินาที (3000 มิลลิวินาที)
             setTimeout(function() {
-                // ค้นหาป้ายแจ้งเตือนทั้งหมดในหน้าจอ
                 var alerts = document.querySelectorAll('.alert');
-
                 alerts.forEach(function(alert) {
-                    // ใช้คำสั่งของ Bootstrap เพื่อสั่งปิดแบบนุ่มนวล (Fade out)
                     var bsAlert = new bootstrap.Alert(alert);
                     bsAlert.close();
                 });

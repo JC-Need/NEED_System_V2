@@ -3,17 +3,15 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-boxes text-primary me-2"></i>คลังสินค้า (Inventory)</h3>
-            <p class="text-muted mb-0">จัดการสินค้าคงคลัง ตรวจสอบยอด และบันทึกการเคลื่อนไหว</p>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-warehouse text-primary me-2"></i>คลังสินค้าโรงงาน (Factory Inventory)</h3>
+            <p class="text-muted mb-0">บริหารจัดการสินค้าสำเร็จรูป (FG) และวัตถุดิบ (RM)</p>
         </div>
-        <div class="mb-3 text-end">
+        <div>
             <a href="{% url 'product_create' %}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold me-2">
-                <i class="fas fa-plus me-2"></i> เพิ่มสินค้าใหม่
+                <i class="fas fa-plus me-2"></i> เพิ่มรายการใหม่
             </a>
-
             <a href="{% url 'stock_in' %}" class="btn btn-success shadow-sm rounded-pill px-4 fw-bold me-2">
                 <i class="fas fa-arrow-down me-2"></i> รับเข้า (In)
             </a>
@@ -23,50 +21,35 @@
         </div>
     </div>
 
-    <div class="row g-3 mb-4">
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100 border-start border-4 border-primary">
-                <div class="card-body">
-                    <div class="text-muted small text-uppercase fw-bold">สินค้าทั้งหมด</div>
-                    <div class="fs-3 fw-bold text-dark">{{ products.count }} <span class="fs-6 fw-normal text-muted">รายการ</span></div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm h-100 border-start border-4 border-danger">
-                <div class="card-body">
-                    <div class="text-danger small text-uppercase fw-bold">สินค้าใกล้หมด (Low Stock)</div>
-                    <div class="fs-3 fw-bold text-danger">{{ low_stock_count }} <span class="fs-6 fw-normal text-muted">รายการ</span></div>
-                </div>
-            </div>
-        </div>
-    </div>
+    <div class="row g-4">
 
-    <div class="row">
         <div class="col-lg-8">
-            <div class="card border-0 shadow-sm rounded-3">
+
+            <div class="card border-0 shadow-sm rounded-3 border-start border-4 border-primary mb-4">
                 <div class="card-header bg-white py-3 border-bottom">
-                    <h6 class="m-0 fw-bold text-primary"><i class="fas fa-list me-2"></i>รายการสินค้าในคลัง</h6>
+                    <h5 class="m-0 fw-bold text-primary"><i class="fas fa-box-open me-2"></i>คลังสินค้าสำเร็จรูป (FG - พร้อมขาย)</h5>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="bg-light text-secondary">
                             <tr>
-                                <th>สินค้า</th>
-                                <th>หมวดหมู่</th>
-                                <th class="text-center">คงเหลือ</th>
-                                <th class="text-center">สถานะ</th>
-                                <th class="text-end">จัดการ</th>
+                                <th width="15%">รหัส</th>
+                                <th width="35%">ชื่อสินค้า</th>
+                                <th class="text-end" width="15%">ราคาขาย</th>
+                                <th class="text-center" width="15%">คงเหลือ</th>
+                                <th class="text-center" width="10%">สถานะ</th>
+                                <th class="text-end" width="10%"></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for p in products %}
+                            {% for p in fg_products %}
                             <tr>
+                                <td class="fw-bold text-primary">{{ p.code }}</td>
                                 <td>
-                                    <div class="fw-bold text-dark">{{ p.name }}</div>
-                                    <div class="small text-muted">{{ p.code }}</div>
+                                    <div class="fw-bold">{{ p.name }}</div>
+                                    <small class="text-muted">{{ p.category.name|default:"-" }}</small>
                                 </td>
-                                <td><span class="badge bg-light text-dark border">{{ p.category.name|default:"-" }}</span></td>
+                                <td class="text-end">{{ p.sell_price|intcomma }}</td>
                                 <td class="text-center">
                                     <span class="fs-5 fw-bold {% if p.stock_qty <= p.min_level %}text-danger{% else %}text-success{% endif %}">
                                         {{ p.stock_qty|intcomma }}
@@ -74,52 +57,126 @@
                                 </td>
                                 <td class="text-center">
                                     {% if p.stock_qty == 0 %}
-                                        <span class="badge bg-danger">หมดสต็อก</span>
+                                        <span class="badge bg-danger">หมด</span>
                                     {% elif p.stock_qty <= p.min_level %}
-                                        <span class="badge bg-warning text-dark">ใกล้หมด</span>
+                                        <span class="badge bg-warning text-dark">ต่ำ</span>
                                     {% else %}
                                         <span class="badge bg-success bg-opacity-10 text-success">ปกติ</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-end">
-                                    <a href="{% url 'print_barcode' p.id %}" target="_blank" class="btn btn-sm btn-outline-secondary" title="พิมพ์บาร์โค้ด">
+                                    <a href="{% url 'print_barcode' p.id %}" target="_blank" class="btn btn-sm btn-light text-muted" title="พิมพ์บาร์โค้ด">
                                         <i class="fas fa-barcode"></i>
+                                    </a>
+                                    <a href="{% url 'product_update' p.id %}" class="btn btn-sm btn-light text-muted" title="แก้ไข">
+                                        <i class="fas fa-edit"></i>
                                     </a>
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr><td colspan="5" class="text-center py-4 text-muted">ยังไม่มีสินค้าในระบบ</td></tr>
+                            <tr><td colspan="6" class="text-center py-4 text-muted">-- ไม่มีสินค้าสำเร็จรูป --</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            <div class="card border-0 shadow-sm rounded-3 border-start border-4 border-warning">
+                <div class="card-header bg-white py-3 border-bottom">
+                    <h5 class="m-0 fw-bold text-dark"><i class="fas fa-cubes me-2 text-warning"></i>คลังวัตถุดิบ (RM - เพื่อผลิต)</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary">
+                            <tr>
+                                <th width="15%">รหัส</th>
+                                <th width="35%">ชื่อวัตถุดิบ</th>
+                                <th class="text-end" width="15%">ต้นทุน</th>
+                                <th class="text-center" width="15%">คงเหลือ</th>
+                                <th class="text-center" width="10%">สถานะ</th>
+                                <th class="text-end" width="10%"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in rm_products %}
+                            <tr>
+                                <td class="fw-bold text-dark">{{ p.code }}</td>
+                                <td>
+                                    <div class="fw-bold">{{ p.name }}</div>
+                                    <small class="text-muted">{{ p.category.name|default:"-" }}</small>
+                                </td>
+                                <td class="text-end">{{ p.cost_price|intcomma }}</td>
+                                <td class="text-center">
+                                    <span class="fs-5 fw-bold {% if p.stock_qty <= p.min_level %}text-danger{% else %}text-secondary{% endif %}">
+                                        {{ p.stock_qty|intcomma }}
+                                    </span>
+                                </td>
+                                <td class="text-center">
+                                    {% if p.stock_qty <= p.min_level %}
+                                        <span class="badge bg-danger">สั่งซื้อด่วน</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary">เพียงพอ</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    <a href="{% url 'product_update' p.id %}" class="btn btn-sm btn-light text-muted" title="แก้ไข">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="6" class="text-center py-4 text-muted">-- ไม่มีรายการวัตถุดิบ --</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
         </div>
 
         <div class="col-lg-4">
+
+            <div class="card border-0 shadow-sm mb-4 bg-danger bg-opacity-10">
+                <div class="card-body d-flex align-items-center">
+                    <div class="fs-1 text-danger me-3"><i class="fas fa-exclamation-circle"></i></div>
+                    <div>
+                        <h6 class="fw-bold text-danger mb-1">แจ้งเตือนของใกล้หมด</h6>
+                        <div class="fs-4 fw-bold text-dark">{{ low_stock_count }} <span class="fs-6 fw-normal text-muted">รายการ</span></div>
+                    </div>
+                </div>
+            </div>
+
             <div class="card border-0 shadow-sm rounded-3">
                 <div class="card-header bg-white py-3 border-bottom">
                     <h6 class="m-0 fw-bold text-dark"><i class="fas fa-history me-2"></i>ความเคลื่อนไหวล่าสุด</h6>
                 </div>
                 <div class="list-group list-group-flush">
-                    {% for move in recent_movements %}
+                    {% for doc in recent_docs %}
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="badge {% if move.movement_type == 'IN' %}bg-success{% else %}bg-warning text-dark{% endif %} rounded-pill">
-                                {{ move.get_movement_type_display }}
-                            </span>
-                            <small class="text-muted">{{ move.created_at|date:"d/m/Y H:i" }}</small>
+                            <span class="badge {% if doc.doc_type == 'GR' %}bg-success{% else %}bg-warning text-dark{% endif %} rounded-pill">
+                                {{ doc.doc_no }} </span>
+                            <small class="text-muted">{{ doc.created_at|date:"d/m/Y H:i" }}</small>
                         </div>
-                        <div class="fw-bold text-dark">{{ move.product.name }}</div>
+
+                        {% for move in doc.movements.all %}
+                        <div class="d-flex justify-content-between align-items-center ps-2 border-start border-2 ms-1 my-1">
+                            <span class="text-dark small">{{ move.product.name }}</span>
+                            <span class="fw-bold small {% if doc.doc_type == 'GR' %}text-success{% else %}text-danger{% endif %}">
+                                {% if doc.doc_type == 'GR' %}+{% else %}-{% endif %}{{ move.quantity }}
+                            </span>
+                        </div>
+                        {% endfor %}
+
                         <div class="d-flex justify-content-between align-items-center mt-1">
-                            <span class="small text-muted">โดย: {{ move.created_by.first_name }}</span>
-                            <span class="fw-bold {% if move.movement_type == 'IN' %}text-success{% else %}text-danger{% endif %}">
-                                {% if move.movement_type == 'IN' %}+{% else %}-{% endif %}{{ move.quantity }}
+                            <span class="small text-muted" style="font-size: 0.75rem;">
+                                <i class="fas fa-user-circle"></i> {{ doc.created_by.first_name }}
+                                {% if doc.reference %} | Ref: {{ doc.reference }}{% endif %}
                             </span>
                         </div>
                     </div>
                     {% empty %}
-                    <div class="p-4 text-center text-muted small">ยังไม่มีรายการเคลื่อนไหว</div>
+                    <div class="p-4 text-center text-muted small">ยังไม่มีรายการเอกสาร</div>
                     {% endfor %}
                 </div>
             </div>
