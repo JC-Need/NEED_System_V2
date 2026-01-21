@@ -154,8 +154,11 @@
                     {% for doc in recent_docs %}
                     <div class="list-group-item">
                         <div class="d-flex justify-content-between align-items-center mb-1">
-                            <span class="badge {% if doc.doc_type == 'GR' %}bg-success{% else %}bg-warning text-dark{% endif %} rounded-pill">
-                                {{ doc.doc_no }} </span>
+                            <a href="{% url 'print_document' doc.doc_no %}" target="_blank" class="text-decoration-none">
+                                <span class="badge {% if doc.doc_type == 'GR' %}bg-success{% else %}bg-warning text-dark{% endif %} rounded-pill" style="cursor: pointer;">
+                                    <i class="fas fa-print me-1"></i> {{ doc.doc_no }}
+                                </span>
+                            </a>
                             <small class="text-muted">{{ doc.created_at|date:"d/m/Y H:i" }}</small>
                         </div>
 
