@@ -8,15 +8,17 @@
             <h3 class="fw-bold text-dark mb-1"><i class="fas fa-warehouse text-primary me-2"></i>คลังสินค้าโรงงาน (Factory Inventory)</h3>
             <p class="text-muted mb-0">บริหารจัดการสินค้าสำเร็จรูป (FG) และวัตถุดิบ (RM)</p>
         </div>
-        <div>
-            <a href="{% url 'product_create' %}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold me-2">
-                <i class="fas fa-plus me-2"></i> เพิ่มรายการใหม่
+        <div class="d-flex gap-2">
+            <a href="{% url 'product_create' %}" class="btn btn-primary shadow-sm rounded-pill px-3 fw-bold">
+                <i class="fas fa-plus me-1"></i> เพิ่มสินค้า/วัตถุดิบ
             </a>
-            <a href="{% url 'stock_in' %}" class="btn btn-success shadow-sm rounded-pill px-4 fw-bold me-2">
-                <i class="fas fa-arrow-down me-2"></i> รับเข้า (In)
+
+            <a href="{% url 'document_list_in' %}" class="btn btn-success shadow-sm rounded-pill px-3 fw-bold">
+                <i class="fas fa-file-import me-1"></i> ใบรับสินค้า/วัตถุดิบ
             </a>
-            <a href="{% url 'stock_out' %}" class="btn btn-warning text-dark shadow-sm rounded-pill px-4 fw-bold">
-                <i class="fas fa-arrow-up me-2"></i> เบิกออก (Out)
+
+            <a href="{% url 'document_list_out' %}" class="btn btn-warning text-dark shadow-sm rounded-pill px-3 fw-bold">
+                <i class="fas fa-file-export me-1"></i> ใบเบิกสินค้า/วัตถุดิบ
             </a>
         </div>
     </div>
@@ -24,10 +26,10 @@
     <div class="row g-4">
 
         <div class="col-lg-8">
-
             <div class="card border-0 shadow-sm rounded-3 border-start border-4 border-primary mb-4">
-                <div class="card-header bg-white py-3 border-bottom">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="m-0 fw-bold text-primary"><i class="fas fa-box-open me-2"></i>คลังสินค้าสำเร็จรูป (FG - พร้อมขาย)</h5>
+                    <span class="badge bg-primary bg-opacity-10 text-primary rounded-pill px-3">{{ fg_products.count }} รายการ</span>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
@@ -82,8 +84,9 @@
             </div>
 
             <div class="card border-0 shadow-sm rounded-3 border-start border-4 border-warning">
-                <div class="card-header bg-white py-3 border-bottom">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="m-0 fw-bold text-dark"><i class="fas fa-cubes me-2 text-warning"></i>คลังวัตถุดิบ (RM - เพื่อผลิต)</h5>
+                    <span class="badge bg-warning bg-opacity-10 text-dark rounded-pill px-3">{{ rm_products.count }} รายการ</span>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
@@ -131,11 +134,10 @@
                     </table>
                 </div>
             </div>
-
         </div>
 
         <div class="col-lg-4">
-
+            {% if low_stock_count > 0 %}
             <div class="card border-0 shadow-sm mb-4 bg-danger bg-opacity-10">
                 <div class="card-body d-flex align-items-center">
                     <div class="fs-1 text-danger me-3"><i class="fas fa-exclamation-circle"></i></div>
@@ -145,11 +147,12 @@
                     </div>
                 </div>
             </div>
+            {% endif %}
 
             <div class="card border-0 shadow-sm rounded-3">
-                <div class="card-header bg-white py-3 border-bottom">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark"><i class="fas fa-history me-2"></i>ความเคลื่อนไหวล่าสุด</h6>
-                </div>
+                    </div>
                 <div class="list-group list-group-flush">
                     {% for doc in recent_docs %}
                     <div class="list-group-item">
@@ -161,7 +164,6 @@
                             </a>
                             <small class="text-muted">{{ doc.created_at|date:"d/m/Y H:i" }}</small>
                         </div>
-
                         {% for move in doc.movements.all %}
                         <div class="d-flex justify-content-between align-items-center ps-2 border-start border-2 ms-1 my-1">
                             <span class="text-dark small">{{ move.product.name }}</span>
@@ -170,7 +172,6 @@
                             </span>
                         </div>
                         {% endfor %}
-
                         <div class="d-flex justify-content-between align-items-center mt-1">
                             <span class="small text-muted" style="font-size: 0.75rem;">
                                 <i class="fas fa-user-circle"></i> {{ doc.created_by.first_name }}

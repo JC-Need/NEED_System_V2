@@ -1,0 +1,49 @@
+{% extends 'core/base.html' %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="text-center mb-5">
+        <h2 class="fw-bold text-dark">เลือกประเภทรายการที่ต้องการเพิ่ม</h2>
+        <p class="text-muted">กรุณาเลือกประเภทให้ถูกต้อง เพื่อการแยกคลังสินค้าที่ชัดเจน</p>
+    </div>
+
+    <div class="row justify-content-center g-4">
+        <div class="col-md-5">
+            <a href="{% url 'product_create' %}?type=FG" class="text-decoration-none">
+                <div class="card h-100 border-0 shadow-sm hover-up text-center py-5 rounded-4 border-top border-5 border-primary">
+                    <div class="card-body">
+                        <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex p-4 mb-4">
+                            <i class="fas fa-box-open fa-3x text-primary"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark">สินค้าสำเร็จรูป (FG)</h4>
+                        <p class="text-muted mb-0">Products for Sale</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-md-5">
+            <a href="{% url 'product_create' %}?type=RM" class="text-decoration-none">
+                <div class="card h-100 border-0 shadow-sm hover-up text-center py-5 rounded-4 border-top border-5 border-warning">
+                    <div class="card-body">
+                        <div class="bg-warning bg-opacity-10 rounded-circle d-inline-flex p-4 mb-4">
+                            <i class="fas fa-cubes fa-3x text-warning"></i>
+                        </div>
+                        <h4 class="fw-bold text-dark">วัตถุดิบ (RM)</h4>
+                        <p class="text-muted mb-0">Raw Materials for Production</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+
+    <div class="text-center mt-5">
+        <a href="{% url 'inventory_dashboard' %}" class="btn btn-light rounded-pill px-4 text-muted">ย้อนกลับ</a>
+    </div>
+</div>
+
+<style>
+    .hover-up { transition: transform 0.3s; }
+    .hover-up:hover { transform: translateY(-10px); }
+</style>
+{% endblock %}

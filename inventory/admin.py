@@ -1,33 +1,73 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from .models import Category, Product
+from .models import Category, Product, InventoryDoc, StockMovement, FinishedGood, RawMaterial
 
+# 1. หมวดหมู่
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name',)
 
+# ฟังก์ชันช่วยแสดงรูปภาพ (ใช้ร่วมกัน)
+def show_image_preview(obj):
+    if obj.image:
+        return format_html('<img src="{}" style="width: 40px; height: 40px; object-fit: cover; border-radius: 4px;" />', obj.image.url)
+    return "-"
+show_image_preview.short_description = 'รูป'
+
+# ฟังก์ชันช่วยแสดงปุ่มบาร์โค้ด (ใช้ร่วมกัน)
+def show_barcode_btn(obj):
+    url = reverse('print_barcode', args=[obj.id])
+    return format_html('<a href="{}" target="_blank" style="background:#333; color:fff; padding:3px 8px; border-radius:3px; text-decoration:none;">🏷️ Print</a>', url)
+show_barcode_btn.short_description = 'Barcode'
+
+# 2. สินค้ารวม (Product All) - เอาไว้ดูภาพรวม
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    # ✅ เพิ่ม 'show_image' เข้าไปใน list_display (ตรงตำแหน่งที่คุณวงกลม)
-    list_display = ('code', 'name', 'category', 'stock_qty', 'sell_price', 'show_image', 'is_active', 'print_button')
-    
+    list_display = ('code', show_image_preview, 'name', 'product_type', 'stock_qty', 'is_active')
+    list_filter = ('product_type', 'category', 'is_active')
+    search_fields = ('code', 'name')
+
+# ✅ 2.1 เมนูสินค้าสำเร็จรูป (FG)
+@admin.register(FinishedGood)
+class FinishedGoodAdmin(admin.ModelAdmin):
+    # เน้นโชว์ "ราคาขาย"
+    list_display = ('code', show_image_preview, 'name', 'category', 'sell_price', 'stock_qty', 'is_active', show_barcode_btn)
     list_filter = ('category', 'is_active')
-    search_fields = ('name', 'code', 'barcode')
-    list_editable = ('stock_qty', 'sell_price', 'is_active')
-
-    # 🖼️ ฟังก์ชันแสดงรูปภาพจิ๋ว
-    def show_image(self, obj):
-        if obj.image:
-            # แสดงรูปขนาด 50x50 pixel
-            return format_html('<img src="{}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 5px;" />', obj.image.url)
-        return "-" # ถ้าไม่มีรูป ให้ขีดละไว้
+    search_fields = ('code', 'name')
     
-    show_image.short_description = 'รูปสินค้า'
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(product_type='FG')
 
-    # 🏷️ ฟังก์ชันปุ่มบาร์โค้ด (อันเดิม)
-    def print_button(self, obj):
-        url = reverse('print_barcode', args=[obj.id])
-        return format_html('<a href="{}" target="_blank" class="button" style="background-color:#333; color:white; padding:5px 10px; border-radius:5px; text-decoration:none;">🏷️ Barcode</a>', url)
-    
-    print_button.short_description = 'สติ๊กเกอร์'
+    def save_model(self, request, obj, form, change):
+        obj.product_type = 'FG' # บังคับเป็น FG
+        super().save_model(request, obj, form, change)
+
+# ✅ 2.2 เมนูวัตถุดิบ (RM)
+@admin.register(RawMaterial)
+class RawMaterialAdmin(admin.ModelAdmin):
+    # เน้นโชว์ "ราคาทุน"
+    list_display = ('code', show_image_preview, 'name', 'category', 'cost_price', 'stock_qty', 'is_active', show_barcode_btn)
+    list_filter = ('category', 'is_active')
+    search_fields = ('code', 'name')
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(product_type='RM')
+
+    def save_model(self, request, obj, form, change):
+        obj.product_type = 'RM' # บังคับเป็น RM
+        super().save_model(request, obj, form, change)
+
+# 3. เอกสาร (Inventory Doc)
+class StockMovementInline(admin.TabularInline):
+    model = StockMovement
+    extra = 0
+    readonly_fields = ('product', 'quantity', 'movement_type')
+    can_delete = False
+
+@admin.register(InventoryDoc)
+class InventoryDocAdmin(admin.ModelAdmin):
+    list_display = ('doc_no', 'doc_type', 'created_at', 'created_by')
+    list_filter = ('doc_type', 'created_at')
+    search_fields = ('doc_no', 'reference')
+    inlines = [StockMovementInline]

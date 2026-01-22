@@ -27,13 +27,13 @@ class Product(models.Model):
     barcode = models.CharField(max_length=50, blank=True, null=True, verbose_name="บาร์โค้ด")
     name = models.CharField(max_length=200, verbose_name="ชื่อสินค้า")
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, verbose_name="หมวดหมู่")
-    
+
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาทุน")
     sell_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาขาย")
-    
+
     stock_qty = models.IntegerField(default=0, verbose_name="จำนวนคงเหลือ")
     min_level = models.IntegerField(default=5, verbose_name="จุดสั่งซื้อ (Low Stock)")
-    
+
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ซัพพลายเออร์หลัก")
     image = models.ImageField(upload_to='products/', blank=True, null=True, verbose_name="รูปสินค้า")
     is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
@@ -81,7 +81,7 @@ class InventoryDoc(models.Model):
     def save(self, *args, **kwargs):
         if not self.doc_no:
             today = datetime.date.today()
-            year_month = today.strftime('%y%m') 
+            year_month = today.strftime('%y%m')
             prefix = f"{self.doc_type}-{year_month}-"
             last_doc = InventoryDoc.objects.filter(doc_no__startswith=prefix).order_by('doc_no').last()
             if last_doc:
@@ -107,15 +107,15 @@ class InventoryDoc(models.Model):
 class StockMovement(models.Model):
     # ✅ เชื่อมกับหัวเอกสาร (InventoryDoc)
     doc = models.ForeignKey(InventoryDoc, on_delete=models.CASCADE, related_name='movements', verbose_name="เลขที่เอกสาร", null=True, blank=True)
-    
+
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้า")
     quantity = models.IntegerField(verbose_name="จำนวน")
     movement_type = models.CharField(max_length=10, choices=[('IN', 'เข้า'), ('OUT', 'ออก')], verbose_name="ประเภท")
     reference_doc = models.CharField(max_length=50, blank=True, verbose_name="อ้างอิงเดิม (Legacy)")
-    
+
     # ✅ ใส่ field นี้กลับมาแล้วครับ
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
-    
+
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการ")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาบันทึก")
 
@@ -134,3 +134,19 @@ class StockMovement(models.Model):
     class Meta:
         verbose_name = "4. รายการสินค้าในเอกสาร"
         verbose_name_plural = "4. รายการเคลื่อนไหว (Details)"
+
+# ==========================================
+# 5. Proxy Models สำหรับแยกเมนูใน Admin ✅ (เพิ่มส่วนนี้)
+# ==========================================
+
+class FinishedGood(Product):
+    class Meta:
+        proxy = True # ใช้ตาราง Product เดิม แต่แยกชื่อเรียก
+        verbose_name = "2.1 สินค้าสำเร็จรูป (FG)"
+        verbose_name_plural = "2.1 สินค้าสำเร็จรูป (FG)"
+
+class RawMaterial(Product):
+    class Meta:
+        proxy = True
+        verbose_name = "2.2 วัตถุดิบ (RM)"
+        verbose_name_plural = "2.2 วัตถุดิบ (RM)"
