@@ -7,26 +7,155 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q
+from django.db.models import Q, Sum, Count, Max
 from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
 from django.utils import timezone 
 
-from .models import Quotation, QuotationItem, POSOrder, POSOrderItem
+from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice
 from inventory.models import Product, Category
 from master_data.models import Customer, CompanyInfo
 from hr.models import Employee
 from .forms import QuotationForm
 
 # ==========================================
+# 🔧 Utility: สร้างเลขที่เอกสารกลาง (DLN-YYMM-XXXX)
+# ==========================================
+def get_next_document_number():
+    now = timezone.now()
+    prefix = f"DLN-{now.strftime('%y%m')}"
+    last_inv = Invoice.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
+    last_pos = POSOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
+    max_seq = 0
+    if last_inv:
+        try: max_seq = max(max_seq, int(last_inv.split('-')[-1]))
+        except: pass
+    if last_pos:
+        try: max_seq = max(max_seq, int(last_pos.split('-')[-1]))
+        except: pass
+    new_seq = max_seq + 1
+    return f"{prefix}-{new_seq:04d}"
+
+# ==========================================
+# 🕵️‍♂️ Helper: ฟังก์ชันหาขอบเขตพนักงาน (ใช้ร่วมกันทั้ง Dashboard และ List)
+# ==========================================
+def get_target_employees(user):
+    current_emp = getattr(user, 'employee', None)
+    
+    if user.is_superuser:
+        return Employee.objects.all(), "Admin View"
+        
+    elif current_emp:
+        rank = current_emp.business_rank.lower()
+        job_title = current_emp.position.title.lower() if current_emp.position else ""
+        
+        if rank in ['manager', 'director'] or 'manager' in job_title:
+            return Employee.objects.all(), "Manager View"
+            
+        elif rank == 'supervisor':
+            if current_emp.department:
+                # เห็นตัวเอง + คนในแผนกเดียวกัน
+                return Employee.objects.filter(department=current_emp.department), f"Team {current_emp.department.name}"
+            else:
+                # เห็นตัวเอง + ลูกน้องสายตรง
+                return Employee.objects.filter(Q(id=current_emp.id) | Q(introducer=current_emp)), "Direct Team"
+        else:
+            # เห็นแค่ตัวเอง
+            return Employee.objects.filter(id=current_emp.id), "Self View"
+    else:
+        return Employee.objects.none(), "-"
+
+# ==========================================
 # 1. หน้า Dashboard
 # ==========================================
 @login_required
 def sales_dashboard(request):
-    return render(request, 'sales/dashboard.html')
+    today = timezone.now().date()
+    
+    # ✅ เรียกใช้ Helper เพื่อหาคนที่เรามองเห็น
+    target_employees, scope_title = get_target_employees(request.user)
+
+    # 1. ยอดขายวันนี้
+    pos_today = POSOrder.objects.filter(created_at__date=today, status='PAID', employee__in=target_employees).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    inv_today = Invoice.objects.filter(date=today, status='PAID', employee__in=target_employees).aggregate(Sum('grand_total'))['grand_total__sum'] or 0
+    total_sales_today = pos_today + inv_today
+
+    # 2. จำนวนบิลวันนี้
+    count_pos = POSOrder.objects.filter(created_at__date=today, employee__in=target_employees).count()
+    count_inv = Invoice.objects.filter(date=today, employee__in=target_employees).count()
+    total_orders = count_pos + count_inv
+
+    # 3. ใบเสนอราคาค้าง (Quotes)
+    # ✅ เพิ่ม: รออนุมัติ (DRAFT)
+    pending_approval_quotes = Quotation.objects.filter(status='DRAFT', employee__in=target_employees).count()
+    # ✅ แก้ไข: รอปิดการขาย (APPROVED แต่ยังไม่ CONVERTED)
+    pending_closing_quotes = Quotation.objects.filter(status='APPROVED', employee__in=target_employees).count()
+
+    # 4. Top Seller
+    current_month = today.month
+    top_seller = POSOrder.objects.filter(created_at__month=current_month, employee__in=target_employees)\
+        .values('employee__first_name', 'employee__photo')\
+        .annotate(total=Sum('total_amount'))\
+        .order_by('-total').first()
+
+    # 5. รายการล่าสุด
+    recent_pos = POSOrder.objects.filter(employee__in=target_employees).order_by('-created_at')[:5]
+
+    context = {
+        'total_sales_today': total_sales_today,
+        'total_orders': total_orders,
+        'pending_approval_quotes': pending_approval_quotes, # ส่งค่าใหม่ไป
+        'pending_closing_quotes': pending_closing_quotes,   # ส่งค่าใหม่ไป
+        'top_seller': top_seller,
+        'recent_sales': recent_pos,
+        'scope_title': scope_title,
+    }
+    return render(request, 'sales/dashboard.html', context)
 
 # ==========================================
-# 2. ระบบ POS
+# 2. Sales Hub
+# ==========================================
+@login_required
+def sales_hub(request):
+    current_emp = getattr(request.user, 'employee', None)
+    
+    # ✅ ใช้ Helper เดียวกัน เพื่อให้เห็นใบเสนอราคาของลูกน้องด้วย (ถ้าเป็น Supervisor)
+    target_employees, _ = get_target_employees(request.user)
+    
+    # กรองเฉพาะ Approved เพื่อเตรียมเปิดบิล
+    qs = Quotation.objects.filter(status='APPROVED', employee__in=target_employees)
+    ready_quotes = qs.order_by('-created_at')
+    
+    today = timezone.now().date()
+    inv_qs = Invoice.objects.filter(date=today, employee__in=target_employees)
+    pos_qs = POSOrder.objects.filter(created_at__date=today, employee__in=target_employees)
+
+    return render(request, 'sales/sales_hub.html', {
+        'ready_quotes': ready_quotes,
+        'today_invoices': inv_qs.order_by('-created_at'),
+        'today_pos': pos_qs.order_by('-created_at')
+    })
+
+@login_required
+def convert_quote_to_invoice(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    new_code = get_next_document_number()
+    invoice = Invoice.objects.create(
+        code=new_code,
+        quotation_ref=qt,
+        date=timezone.now().date(),
+        customer=qt.customer,
+        employee=request.user.employee if hasattr(request.user, 'employee') else None,
+        grand_total=qt.grand_total,
+        status='UNPAID'
+    )
+    qt.status = 'CONVERTED'
+    qt.save()
+    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อยแล้ว")
+    return redirect('sales_hub')
+
+# ==========================================
+# 3. ระบบ POS
 # ==========================================
 @login_required
 def pos_home(request):
@@ -43,9 +172,7 @@ def pos_checkout(request):
             cart = data.get('cart', [])
             total_amount = data.get('total_amount', 0)
             received_amount = data.get('received_amount', total_amount)
-
-            now_str = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-            order_code = f"POS-{now_str}"
+            order_code = get_next_document_number()
             current_emp = getattr(request.user, 'employee', None)
 
             order = POSOrder.objects.create(
@@ -57,7 +184,6 @@ def pos_checkout(request):
                 payment_method='CASH',
                 status='PAID'
             )
-
             for item in cart:
                 product = Product.objects.get(id=item['id'])
                 POSOrderItem.objects.create(
@@ -70,12 +196,9 @@ def pos_checkout(request):
                 )
                 product.stock_qty -= int(item['qty'])
                 product.save()
-
             return JsonResponse({'success': True, 'order_code': order_code})
-
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
-
     return JsonResponse({'success': False, 'error': 'Invalid Request'})
 
 @login_required
@@ -86,74 +209,43 @@ def pos_print_slip(request, order_code):
     return render(request, 'sales/slip_print.html', context)
 
 # ==========================================
-# 3. ใบเสนอราคา: หน้ารายการ (List)
+# 4. ระบบใบเสนอราคา (Updated: Logic กรองเหมือน Dashboard)
 # ==========================================
 @login_required
 def quotation_list(request):
-    current_emp = getattr(request.user, 'employee', None)
+    # ✅ 1. ใช้ Helper เดียวกันกับ Dashboard (Supervisor เห็นลูกน้องแล้ว!)
+    target_employees, _ = get_target_employees(request.user)
     
-    # ✅ เช็คสิทธิ์ Manager เพื่อส่งไปหน้า Template
-    is_manager = False
-    if request.user.is_superuser:
-        is_manager = True
-    elif current_emp:
-        job_title = current_emp.position.title.lower() if current_emp.position else ""
-        rank = current_emp.business_rank
-        if ('manager' in job_title) or ('director' in job_title) or (rank in ['manager', 'director']):
-            is_manager = True
+    queryset = Quotation.objects.filter(employee__in=target_employees).order_by('-created_at')
 
-    # --- Logic: การมองเห็นข้อมูล ---
-    if is_manager: # ถ้าเป็น Manager (หรือ Superuser) เห็นทั้งหมด
-        queryset = Quotation.objects.all()
-    elif current_emp:
-        # Sale เห็นของตัวเอง + ลูกน้อง
-        subordinates = Employee.objects.none()
-        try:
-            found_subs = Employee.objects.filter(manager=current_emp)
-            if found_subs.count() > 0: subordinates = found_subs
-        except Exception: pass
+    # ✅ 2. รองรับการกรองตามสถานะ (จากปุ่ม Dashboard)
+    status_filter = request.GET.get('status')
+    if status_filter:
+        queryset = queryset.filter(status=status_filter)
 
-        if subordinates.exists():
-            team_ids = list(subordinates.values_list('id', flat=True))
-            team_ids.append(current_emp.id)
-            queryset = Quotation.objects.filter(employee_id__in=team_ids)
-        else:
-            queryset = Quotation.objects.filter(employee=current_emp)
-    else:
-        # กรณี User ทั่วไปที่ไม่ผูก Employee (และไม่ใช่ Superuser) -> เห็นทั้งหมด (Default)
-        queryset = Quotation.objects.all()
-
-    queryset = queryset.order_by('-created_at')
-
-    # --- Search & Filter ---
+    # 3. ค้นหาทั่วไป
     search_query = request.GET.get('q', '')
     if search_query:
-        queryset = queryset.filter(
-            Q(code__icontains=search_query) |
-            Q(customer_name__icontains=search_query) |
-            Q(employee__first_name__icontains=search_query)
-        )
-
-    date_start = request.GET.get('start_date')
-    date_end = request.GET.get('end_date')
-    if date_start: queryset = queryset.filter(date__gte=parse_date(date_start))
-    if date_end: queryset = queryset.filter(date__lte=parse_date(date_end))
+        queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
 
     paginator = Paginator(queryset, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
+    page_obj = paginator.get_page(request.GET.get('page'))
+    
+    # ส่งค่า is_manager ไปด้วยเพื่อโชว์ปุ่มอนุมัติ
+    is_manager = False
+    current_emp = getattr(request.user, 'employee', None)
+    if request.user.is_superuser: is_manager = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower()
+        if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower():
+            is_manager = True
+            
     return render(request, 'sales/quotation_list.html', {
-        'page_obj': page_obj,
-        'search_query': search_query,
-        'date_start': date_start,
-        'date_end': date_end,
-        'is_manager': is_manager, # ✅ ส่งค่านี้ไปบอกหน้าจอว่า "ฉันคือผู้จัดการนะ"
+        'page_obj': page_obj, 
+        'search_query': search_query, 
+        'is_manager': is_manager
     })
 
-# ==========================================
-# 4. ใบเสนอราคา: สร้างใหม่ & แก้ไข
-# ==========================================
 @login_required
 def quotation_create(request):
     if request.method == 'POST':
@@ -162,12 +254,10 @@ def quotation_create(request):
             qt = form.save(commit=False)
             qt.created_by = request.user 
             if hasattr(request.user, 'employee'): qt.employee = request.user.employee
-
             cust_id = request.POST.get('customer_id')
             if cust_id:
                 try: qt.customer = Customer.objects.get(pk=cust_id)
                 except Customer.DoesNotExist: pass
-
             now = datetime.datetime.now()
             prefix = f"QT-{now.strftime('%y%m')}"
             last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
@@ -185,31 +275,22 @@ def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     products = Product.objects.filter(is_active=True)
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
-
     if request.method == 'POST':
         if 'add_item' in request.POST:
-            try:
-                item_name = request.POST.get('item_name')
-                qty = int(request.POST.get('quantity', 1))
-                price_clean = request.POST.get('price', '0').replace(',', '')
-                price = Decimal(price_clean)
-                if item_name:
-                    QuotationItem.objects.create(quotation=qt, item_name=item_name, quantity=qty, unit_price=price)
-                    calculate_totals(qt)
-                else: messages.error(request, "กรุณาระบุชื่อสินค้า")
-            except Exception as e: messages.error(request, f"เกิดข้อผิดพลาด: {e}")
+            item_name = request.POST.get('item_name')
+            qty = int(request.POST.get('quantity', 1))
+            price = Decimal(request.POST.get('price', '0').replace(',', ''))
+            if item_name:
+                QuotationItem.objects.create(quotation=qt, item_name=item_name, quantity=qty, unit_price=price)
+                calculate_totals(qt)
             return redirect('quotation_edit', qt_id=qt.id)
-
         elif 'update_info' in request.POST:
             qt.note = request.POST.get('note', '')
-            discount_str = request.POST.get('discount', '').strip()
-            qt.discount = Decimal(discount_str) if discount_str else Decimal(0)
-            shipping_str = request.POST.get('shipping_cost', '').strip()
-            qt.shipping_cost = Decimal(shipping_str) if shipping_str else Decimal(0)
+            qt.discount = Decimal(request.POST.get('discount', '0') or 0)
+            qt.shipping_cost = Decimal(request.POST.get('shipping_cost', '0') or 0)
             calculate_totals(qt)
             messages.success(request, "บันทึกข้อมูลเรียบร้อย")
             return redirect('quotation_edit', qt_id=qt.id)
-
     return render(request, 'sales/quotation_edit.html', {'qt': qt, 'products': products, 'item_total': item_total})
 
 def calculate_totals(qt):
@@ -217,7 +298,7 @@ def calculate_totals(qt):
     shipping = qt.shipping_cost if qt.shipping_cost else Decimal(0)
     discount = qt.discount if qt.discount else Decimal(0)
     grand_total = (item_sum + shipping) - discount
-    if grand_total < Decimal(0): grand_total = Decimal(0)
+    if grand_total < 0: grand_total = 0
     qt.subtotal = grand_total / Decimal('1.07')
     qt.tax_amount = grand_total - qt.subtotal
     qt.grand_total = grand_total
@@ -231,33 +312,14 @@ def delete_item(request, item_id):
     calculate_totals(qt)
     return redirect('quotation_edit', qt_id=qt.id)
 
-# ----------------------------------------------------
-# ✅ ฟังก์ชันอนุมัติใบเสนอราคา (Approve Logic)
-# ----------------------------------------------------
 @login_required
 def quotation_approve(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
-    
     current_emp = getattr(request.user, 'employee', None)
-    is_manager = False
-    
-    if request.user.is_superuser:
-        is_manager = True
-    elif current_emp:
-        job_title = current_emp.position.title.lower() if current_emp.position else ""
-        rank = current_emp.business_rank
-        if ('manager' in job_title) or ('director' in job_title) or (rank in ['manager', 'director']):
-            is_manager = True
-
-    if not is_manager:
-        messages.error(request, "❌ คุณไม่มีสิทธิ์อนุมัติเอกสารนี้")
-        return redirect('quotation_list')
-
     qt.status = 'APPROVED'
-    qt.approved_by = current_emp 
+    qt.approved_by = current_emp
     qt.approved_at = timezone.now()
     qt.save()
-    
     messages.success(request, f"✅ อนุมัติใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
     return redirect('quotation_list')
 
@@ -270,30 +332,39 @@ def quotation_print(request, qt_id):
 
 @login_required
 def export_sales_excel(request):
-    try: import openpyxl
-    except ImportError: return HttpResponse("Server Error", status=500)
     wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Sales Report"
-    ws.append(["วันที่/เวลา", "เลขที่บิล", "พนักงานขาย", "วิธีชำระ", "ยอดขาย (บาท)"])
-    orders = POSOrder.objects.all().order_by('-created_at')
-    total_sales = 0
-    for order in orders:
-        emp_name = order.employee.first_name if order.employee else "Admin"
-        ws.append([order.created_at.strftime('%Y-%m-%d %H:%M'), order.code, emp_name, order.payment_method, order.total_amount])
-        total_sales += order.total_amount
-    ws.append([]); ws.append(["", "", "", "รวมทั้งสิ้น:", total_sales])
+    ws.append(["วันที่", "เลขที่เอกสาร", "ประเภท", "ยอดขาย"])
+    for p in POSOrder.objects.all():
+        ws.append([p.created_at.strftime('%Y-%m-%d'), p.code, "POS", p.total_amount])
+    for i in Invoice.objects.all():
+        ws.append([i.date.strftime('%Y-%m-%d'), i.code, "Invoice", i.grand_total])
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="Sales_Report.xlsx"'
     wb.save(response)
     return response
 
+# ✅ แก้ไข: รวมที่อยู่ (Address Concatenation)
 @login_required
 def api_search_customer(request):
     query = request.GET.get('q', '').strip()
     if not query: return JsonResponse({'results': []})
-    customers = Customer.objects.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(phone__icontains=query)).values('id', 'code', 'name', 'tax_id', 'phone', 'address', 'sub_district', 'district', 'province', 'zip_code')[:10]
+    customers = Customer.objects.filter(Q(name__icontains=query) | Q(code__icontains=query))[:10]
     results = []
     for c in customers:
-        addr_parts = [c['address'], c['sub_district'], c['district'], c['province'], c['zip_code']]
-        full_address = " ".join([p for p in addr_parts if p])
-        results.append({'id': c['id'], 'code': c['code'], 'name': c['name'], 'tax_id': c['tax_id'] or '', 'phone': c['phone'] or '', 'address': full_address})
+        addr_parts = [
+            c.address,
+            f"ต.{c.sub_district}" if c.sub_district else "",
+            f"อ.{c.district}" if c.district else "",
+            f"จ.{c.province}" if c.province else "",
+            c.zip_code
+        ]
+        full_address = " ".join(filter(None, addr_parts))
+        results.append({
+            'id': c.id, 
+            'name': c.name, 
+            'code': c.code, 
+            'address': full_address,
+            'tax_id': c.tax_id,
+            'phone': c.phone
+        })
     return JsonResponse({'results': results})

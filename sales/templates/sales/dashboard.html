@@ -2,64 +2,171 @@
 {% load humanize %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="row mb-4 align-items-center">
-        <div class="col">
-            <h2 class="fw-bold text-dark"><i class="fas fa-cash-register text-primary me-2"></i>ระบบฝ่ายขาย (Sales Portal)</h2>
-            <p class="text-muted">จัดการยอดขาย ออกบิล และใบเสนอราคา</p>
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0"><i class="fas fa-chart-pie me-2 text-warning"></i>ภาพรวมฝ่ายขาย (Sales Overview)</h2>
+            <p class="text-muted mb-0">ข้อมูล Realtime ประจำวันที่ {% now "j F Y" %} | <span class="badge bg-info text-dark">{{ scope_title }}</span></p>
         </div>
-        <div class="col-auto">
-             <a href="{% url 'export_sales_excel' %}" class="btn btn-success shadow-sm rounded-pill px-4">
-                <i class="fas fa-file-excel me-2"></i>Export รายงานขาย
+        <div class="d-flex gap-2">
+            <a href="{% url 'sales_hub' %}" class="btn btn-primary btn-lg rounded-pill shadow-sm px-4">
+                <i class="fas fa-plus-circle me-2"></i>เปิดบิลขาย / POS
+            </a>
+            <a href="{% url 'quotation_create' %}" class="btn btn-outline-dark btn-lg rounded-pill shadow-sm px-4">
+                <i class="fas fa-file-invoice me-2"></i>เปิดใบเสนอราคา
             </a>
         </div>
     </div>
 
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 rounded-4 overflow-hidden" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white;">
+                <div class="card-body p-4 position-relative">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="mb-0 opacity-75 text-uppercase small fw-bold">ยอดขายวันนี้ (Today)</p>
+                            <h2 class="fw-bold display-6 mb-0 mt-2">฿{{ total_sales_today|floatformat:2|intcomma }}</h2>
+                        </div>
+                        <div class="bg-white bg-opacity-25 p-3 rounded-circle">
+                            <i class="fas fa-coins fa-2x text-white"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div>
+                            <h6 class="text-muted text-uppercase fw-bold mb-1">จำนวนบิล</h6>
+                            <h3 class="fw-bold mb-0 text-dark">{{ total_orders|intcomma }} <small class="text-muted fs-6">ใบ</small></h3>
+                        </div>
+                        <div class="bg-success bg-opacity-10 p-3 rounded-circle">
+                            <i class="fas fa-receipt fa-2x text-success"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-info bg-opacity-10 p-3 rounded-circle me-3">
+                                <i class="fas fa-user-clock fa-2x text-info"></i>
+                            </div>
+                            <div>
+                                <h6 class="text-muted text-uppercase fw-bold mb-1">รออนุมัติ</h6>
+                                <h3 class="fw-bold mb-0 text-dark">{{ pending_approval_quotes }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="{% url 'quotation_list' %}?status=DRAFT" class="btn btn-sm btn-outline-info rounded-pill w-100 mt-2">
+                        ไปอนุมัติ <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-warning bg-opacity-10 p-3 rounded-circle me-3">
+                                <i class="fas fa-file-signature fa-2x text-warning"></i>
+                            </div>
+                            <div>
+                                <h6 class="text-muted text-uppercase fw-bold mb-1">รอปิดการขาย</h6>
+                                <h3 class="fw-bold mb-0 text-dark">{{ pending_closing_quotes }}</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <a href="{% url 'quotation_list' %}?status=APPROVED" class="btn btn-sm btn-outline-warning rounded-pill w-100 mt-2">
+                        ติดตามงาน <i class="fas fa-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row g-4">
-        <div class="col-md-6 col-lg-4">
-            <a href="{% url 'pos_home' %}" class="text-decoration-none">
-                <div class="card h-100 border-0 shadow-sm hover-scale bg-primary text-white rounded-4 overflow-hidden">
-                    <div class="card-body p-4 text-center d-flex flex-column justify-content-center align-items-center">
-                        <div class="bg-white bg-opacity-25 p-3 rounded-circle mb-3">
-                            <i class="fas fa-desktop fa-3x text-white"></i>
-                        </div>
-                        <h4 class="fw-bold mb-1">ขายหน้าร้าน (POS)</h4>
-                        <p class="opacity-75 mb-0 small">เปิดบิล คิดเงิน ตัดสต็อก</p>
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0"><i class="fas fa-history me-2 text-primary"></i>รายการขายล่าสุด (Live Feed)</h6>
+                    <a href="{% url 'export_sales_excel' %}" class="btn btn-sm btn-light text-success fw-bold"><i class="fas fa-file-excel me-1"></i>Export Excel</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="bg-light text-muted small text-uppercase">
+                                <tr>
+                                    <th class="ps-4">เวลา</th>
+                                    <th>เลขที่เอกสาร</th>
+                                    <th>พนักงาน</th>
+                                    <th>ยอดเงิน</th>
+                                    <th>สถานะ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in recent_sales %}
+                                <tr>
+                                    <td class="ps-4 text-muted small">{{ item.created_at|date:"H:i" }}</td>
+                                    <td><span class="fw-bold text-dark">{{ item.code }}</span></td>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            {% if item.employee.photo %}
+                                                <img src="{{ item.employee.photo.url }}" class="rounded-circle me-2" style="width: 25px; height: 25px; object-fit: cover;">
+                                            {% else %}
+                                                <div class="bg-secondary rounded-circle me-2 d-flex align-items-center justify-content-center text-white" style="width: 25px; height: 25px; font-size: 10px;">{{ item.employee.first_name|slice:":1" }}</div>
+                                            {% endif %}
+                                            <span class="small">{{ item.employee.first_name }}</span>
+                                        </div>
+                                    </td>
+                                    <td class="fw-bold text-success">+{{ item.total_amount|intcomma }}</td>
+                                    <td><span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2">ชำระแล้ว</span></td>
+                                </tr>
+                                {% empty %}
+                                <tr><td colspan="5" class="text-center py-4 text-muted">ยังไม่มีรายการขายวันนี้</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-            </a>
+            </div>
         </div>
 
-        <div class="col-md-6 col-lg-4">
-            <a href="{% url 'quotation_list' %}" class="text-decoration-none">
-                <div class="card h-100 border-0 shadow-sm hover-scale bg-white text-dark rounded-4">
-                    <div class="card-body p-4 text-center d-flex flex-column justify-content-center align-items-center">
-                        <div class="bg-warning bg-opacity-10 p-3 rounded-circle mb-3">
-                            <i class="fas fa-file-invoice fa-3x text-warning"></i>
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 bg-dark text-white" style="background: linear-gradient(to bottom, #323232, #000000);">
+                <div class="card-body text-center p-4">
+                    <h6 class="text-uppercase text-warning fw-bold mb-4"><i class="fas fa-crown me-2"></i>Top Seller of the Month</h6>
+                    
+                    {% if top_seller %}
+                        <div class="position-relative d-inline-block mb-3">
+                            {% if top_seller.employee__photo %}
+                                <img src="/media/{{ top_seller.employee__photo }}" class="rounded-circle border border-3 border-warning" style="width: 120px; height: 120px; object-fit: cover; box-shadow: 0 0 20px rgba(255, 193, 7, 0.3);">
+                            {% else %}
+                                <div class="rounded-circle bg-secondary d-flex align-items-center justify-content-center border border-3 border-warning" style="width: 120px; height: 120px; font-size: 40px;">👤</div>
+                            {% endif %}
+                            <div class="position-absolute bottom-0 start-50 translate-middle-x bg-warning text-dark px-3 py-1 rounded-pill fw-bold small shadow">อันดับ 1</div>
                         </div>
-                        <h4 class="fw-bold mb-1">ใบเสนอราคา</h4>
-                        <p class="text-muted mb-0 small">สร้างและติดตามใบเสนอราคา</p>
-                    </div>
-                </div>
-            </a>
-        </div>
-
-        <div class="col-md-6 col-lg-4">
-            <div class="card h-100 border-0 shadow-sm bg-white text-dark rounded-4">
-                <div class="card-body p-4 d-flex flex-column justify-content-center">
-                    <h6 class="fw-bold text-muted text-uppercase small mb-2">
-                        <i class="fas fa-chart-line me-1"></i> ภาพรวมวันนี้
-                    </h6>
-                    <h2 class="fw-bold text-success mb-0">พร้อมขาย!</h2>
-                    <small class="text-muted mt-2">ระบบพร้อมใช้งาน</small>
+                        <h4 class="fw-bold mb-1">{{ top_seller.employee__first_name }}</h4>
+                        <p class="text-white-50 mb-4">ยอดขายรวมสูงสุดเดือนนี้</p>
+                        <h2 class="text-warning fw-bold mb-0">฿{{ top_seller.total|floatformat:0|intcomma }}</h2>
+                    {% else %}
+                        <div class="py-5 text-white-50">
+                            <i class="fas fa-trophy fa-3x mb-3 opacity-25"></i>
+                            <p>ยังไม่มีข้อมูลยอดขายเดือนนี้</p>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
-
-<style>
-    .hover-scale { transition: transform 0.2s; }
-    .hover-scale:hover { transform: translateY(-5px); }
-</style>
 {% endblock %}

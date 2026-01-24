@@ -7,20 +7,17 @@
     .flatpickr-input { background-color: #fff !important; cursor: pointer; }
     .btn-white { background-color: #fff; }
     .btn-white:hover { background-color: #f8f9fa; }
-    /* ดีไซน์ปุ่มอนุมัติใหม่ */
+    /* ปุ่มอนุมัติ */
     .btn-approve {
-        background-color: #2ecc71; 
-        color: white; 
-        border: none;
-        font-size: 0.8rem;
-        padding: 5px 12px;
-        transition: all 0.2s;
+        background-color: #2ecc71; color: white; border: none; font-size: 0.8rem; padding: 5px 12px; transition: all 0.2s;
     }
-    .btn-approve:hover {
-        background-color: #27ae60;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px rgba(46, 204, 113, 0.3);
+    .btn-approve:hover { background-color: #27ae60; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(46, 204, 113, 0.3); }
+    
+    /* ปุ่มเปิดบิล (Convert) */
+    .btn-convert {
+        background-color: #6f42c1; color: white; border: none; font-size: 0.8rem; padding: 5px 12px; transition: all 0.2s;
     }
+    .btn-convert:hover { background-color: #5a32a3; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(111, 66, 193, 0.3); color: white; }
 </style>
 
 <div class="container py-5">
@@ -99,6 +96,8 @@
                                 <td class="text-center">
                                     {% if qt.status == 'APPROVED' %}
                                         <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3">อนุมัติแล้ว</span>
+                                    {% elif qt.status == 'CONVERTED' %}
+                                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill px-3">เปิดบิลแล้ว</span>
                                     {% elif qt.status == 'REJECTED' %}
                                         <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3">ไม่อนุมัติ</span>
                                     {% else %}
@@ -110,7 +109,13 @@
                                         
                                         {% if is_manager and qt.status == 'DRAFT' %}
                                             <a href="{% url 'quotation_approve' qt.id %}" class="btn btn-approve shadow-sm rounded-pill d-flex align-items-center gap-1" title="คลิกเพื่ออนุมัติ" onclick="return confirm('ยืนยันการอนุมัติเอกสารนี้?');">
-                                                <i class="fas fa-check-circle"></i> อนุมัติเอกสาร
+                                                <i class="fas fa-check-circle"></i> อนุมัติ
+                                            </a>
+                                        {% endif %}
+
+                                        {% if qt.status == 'APPROVED' %}
+                                            <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-convert shadow-sm rounded-pill d-flex align-items-center gap-1" title="เปลี่ยนเป็นใบขายสินค้า" onclick="return confirm('ต้องการเปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');">
+                                                <i class="fas fa-file-invoice-dollar"></i> เปิดบิล
                                             </a>
                                         {% endif %}
 

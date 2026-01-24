@@ -6,7 +6,7 @@ from hr.models import Employee
 from inventory.models import Product
 
 # =========================
-# 1. ระบบ POS (ขายหน้าร้าน)
+# 1. ระบบ POS (ขายหน้าร้านแบบด่วน)
 # =========================
 class POSOrder(models.Model):
     STATUS_CHOICES = [('PENDING', 'รอชำระเงิน'), ('PAID', 'ชำระเงินแล้ว'), ('CANCELLED', 'ยกเลิก')]
@@ -39,8 +39,9 @@ class POSOrderItem(models.Model):
 # =========================
 class Quotation(models.Model):
     STATUS_CHOICES = [
-        ('DRAFT', 'รออนุมัติ'),     # สถานะเริ่มต้น
-        ('APPROVED', 'อนุมัติแล้ว'), # สถานะที่พิมพ์ลายเซ็นต์ได้
+        ('DRAFT', 'รออนุมัติ'),     
+        ('APPROVED', 'อนุมัติแล้ว'), 
+        ('CONVERTED', 'เปิดบิลขายแล้ว'), 
         ('REJECTED', 'ไม่อนุมัติ')
     ]
 
@@ -66,7 +67,6 @@ class Quotation(models.Model):
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     created_at = models.DateTimeField(auto_now_add=True)
 
-    # ✅ เพิ่ม field สำหรับการอนุมัติ
     approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_quotations', verbose_name="ผู้อนุมัติ")
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่อนุมัติ")
 
@@ -85,3 +85,23 @@ class QuotationItem(models.Model):
     def save(self, *args, **kwargs):
         self.amount = self.quantity * self.unit_price
         super().save(*args, **kwargs)
+
+# =========================
+# 3. ระบบ Invoice (ใบขายสินค้าเต็มรูปแบบ)
+# =========================
+class Invoice(models.Model):
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบกำกับภาษี/ใบเสร็จ")
+    quotation_ref = models.OneToOneField(Quotation, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="อ้างอิงใบเสนอราคา")
+    
+    date = models.DateField(default=timezone.now, verbose_name="วันที่เอกสาร")
+    due_date = models.DateField(null=True, blank=True, verbose_name="ครบกำหนดชำระ")
+    
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, verbose_name="ลูกค้า")
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
+    
+    grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดสุทธิ")
+    status = models.CharField(max_length=20, choices=[('UNPAID', 'ยังไม่ชำระ'), ('PAID', 'ชำระแล้ว')], default='UNPAID', verbose_name="สถานะ")
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self): return self.code

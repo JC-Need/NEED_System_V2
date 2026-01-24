@@ -168,19 +168,30 @@
         const long = pos.coords.longitude;
         const link = `http://googleusercontent.com/maps.google.com/?q=${lat},${long}`;
         document.getElementById('input_location').value = link;
-        const btn = document.getElementById('link_map');
-        btn.href = link;
-        btn.classList.remove('btn-secondary'); btn.classList.add('btn-primary');
+        updateMapLink(link);
     }
     function showError(error) { alert("ไม่สามารถดึงพิกัดได้: " + error.message); }
+    function updateMapLink(link) {
+        const btn = document.getElementById('link_map');
+        if(link) {
+            btn.href = link;
+            btn.classList.remove('btn-secondary'); btn.classList.add('btn-primary');
+        }
+    }
 
-    // 2. Script จังหวัด-อำเภอ-ตำบล (คงเดิม)
+    // 2. Script จังหวัด-อำเภอ-ตำบล (✅ แก้ไขใหม่: โหลดข้อมูลเดิมอัตโนมัติ)
     document.addEventListener('DOMContentLoaded', function() {
         const provSelect = document.getElementById('select_province');
         const ampSelect = document.getElementById('select_amphure');
         const tamSelect = document.getElementById('select_tambon');
         const zipInput = document.getElementById('input_zipcode');
 
+        // อ่านค่าเดิมจาก data-default (ถ้ามี)
+        const defaultProv = provSelect.dataset.default;
+        const defaultAmp = ampSelect.dataset.default;
+        const defaultTam = tamSelect.dataset.default;
+
+        // 🟢 1. โหลดจังหวัดทั้งหมด
         fetch("{% url 'get_provinces' %}")
             .then(r => r.json())
             .then(data => {
@@ -189,48 +200,90 @@
                     opt.dataset.id = p.id;
                     provSelect.add(opt);
                 });
+
+                // ✅ ถ้ามีค่าเดิม -> เลือกจังหวัดนั้น -> แล้วโหลดอำเภอต่อ
+                if (defaultProv) {
+                    provSelect.value = defaultProv;
+                    // หา ID ของจังหวัดที่เลือก เพื่อไปโหลดอำเภอ
+                    const selectedOpt = Array.from(provSelect.options).find(o => o.value === defaultProv);
+                    if (selectedOpt) {
+                        loadAmphures(selectedOpt.dataset.id, defaultAmp, defaultTam);
+                    }
+                }
             });
 
-        provSelect.addEventListener('change', function() {
+        // ฟังก์ชันโหลดอำเภอ (แยกออกมาเพื่อให้เรียกใช้ซ้ำได้)
+        function loadAmphures(provId, selectedAmp = null, nextTam = null) {
             ampSelect.innerHTML = '<option value="">-- เลือกอำเภอ --</option>';
             tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
-            zipInput.value = '';
-            const selectedOption = this.options[this.selectedIndex];
-            const provId = selectedOption.dataset.id;
-            if(provId) {
-                fetch(`{% url 'get_amphures' %}?province_id=${provId}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        data.forEach(a => {
-                            let opt = new Option(a.name_th, a.name_th);
-                            opt.dataset.id = a.id;
-                            ampSelect.add(opt);
-                        });
+            
+            fetch(`{% url 'get_amphures' %}?province_id=${provId}`)
+                .then(r => r.json())
+                .then(data => {
+                    data.forEach(a => {
+                        let opt = new Option(a.name_th, a.name_th);
+                        opt.dataset.id = a.id;
+                        ampSelect.add(opt);
                     });
+
+                    // ✅ ถ้ามีค่าเดิม -> เลือกอำเภอนั้น -> แล้วโหลดตำบลต่อ
+                    if (selectedAmp) {
+                        ampSelect.value = selectedAmp;
+                        const selectedOpt = Array.from(ampSelect.options).find(o => o.value === selectedAmp);
+                        if (selectedOpt) {
+                            loadTambons(selectedOpt.dataset.id, nextTam);
+                        }
+                    }
+                });
+        }
+
+        // ฟังก์ชันโหลดตำบล
+        function loadTambons(ampId, selectedTam = null) {
+            tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
+            
+            fetch(`{% url 'get_tambons' %}?amphure_id=${ampId}`)
+                .then(r => r.json())
+                .then(data => {
+                    data.forEach(t => {
+                        let opt = new Option(t.name_th, t.name_th);
+                        opt.dataset.zip = t.zip_code;
+                        tamSelect.add(opt);
+                    });
+
+                    // ✅ ถ้ามีค่าเดิม -> เลือกตำบลนั้น
+                    if (selectedTam) {
+                        tamSelect.value = selectedTam;
+                    }
+                });
+        }
+
+        // Event Listeners (สำหรับการเลือกใหม่ด้วยมือ)
+        provSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            if (selectedOption.dataset.id) {
+                loadAmphures(selectedOption.dataset.id);
+            } else {
+                ampSelect.innerHTML = '<option value="">-- เลือกอำเภอ --</option>';
+                tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
             }
         });
 
         ampSelect.addEventListener('change', function() {
-            tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
-            zipInput.value = '';
             const selectedOption = this.options[this.selectedIndex];
-            const ampId = selectedOption.dataset.id;
-            if(ampId) {
-                fetch(`{% url 'get_tambons' %}?amphure_id=${ampId}`)
-                    .then(r => r.json())
-                    .then(data => {
-                        data.forEach(t => {
-                            let opt = new Option(t.name_th, t.name_th);
-                            opt.dataset.zip = t.zip_code;
-                            tamSelect.add(opt);
-                        });
-                    });
+            if (selectedOption.dataset.id) {
+                loadTambons(selectedOption.dataset.id);
+            } else {
+                tamSelect.innerHTML = '<option value="">-- เลือกตำบล --</option>';
             }
         });
+
         tamSelect.addEventListener('change', function() {
             const opt = this.options[this.selectedIndex];
             if(opt.dataset.zip) zipInput.value = opt.dataset.zip;
         });
+        
+        // Init Map Link
+        updateMapLink(document.getElementById('input_location').value);
     });
 </script>
 {% endblock %}

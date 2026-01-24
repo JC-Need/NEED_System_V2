@@ -8,18 +8,41 @@ admin.site.index_title = "ระบบจัดการข้อมูลหล
 # 1. จัดการพนักงาน
 @admin.register(Employee)
 class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ('emp_id', 'first_name', 'last_name', 'department', 'position', 'status')
-    list_filter = ('department', 'status', 'emp_type')
+    # ✅ เพิ่ม business_rank ในตารางรวม เพื่อให้ดูง่ายว่าใครระดับไหน
+    list_display = ('emp_id', 'first_name', 'last_name', 'department', 'business_rank', 'status')
+    
+    # ✅ เพิ่มตัวกรอง business_rank
+    list_filter = ('department', 'business_rank', 'status', 'emp_type')
+    
     search_fields = ('first_name', 'last_name', 'emp_id')
     ordering = ('emp_id',)
 
     fieldsets = (
-        # ✅ แก้ไข: เพิ่ม 'signature' (ลายเซ็นต์) ให้แสดงคู่กับ 'photo'
         ('ข้อมูลทั่วไป', {'fields': (('emp_id', 'user'), ('status', 'emp_type'), ('photo', 'signature'))}),
         
         ('ประวัติส่วนตัว', {'fields': (('prefix', 'first_name', 'last_name', 'nickname'), ('gender', 'birth_date'), 'id_card', 'phone', 'address')}),
+        
         ('การทำงาน', {'fields': (('department', 'position'), ('start_date', 'resign_date'))}),
-        ('บัญชีเงินเดือน', {'fields': ('salary', 'bank_account_no', 'social_security_id'), 'classes': ('collapse',)}),
+        
+        # ✅ เพิ่มหมวดใหม่: โครงสร้างทีม & ผลตอบแทน (Sales)
+        ('โครงสร้างทีม & ระดับ (Sales Team)', {
+            'fields': (
+                ('business_rank', 'commission_rate'), # ระดับ และ % คอมมิชชั่น
+                'introducer' # หัวหน้าทีม/ผู้แนะนำ
+            )
+        }),
+        
+        # บัญชีเงินเดือน (Payroll)
+        ('บัญชีเงินเดือน', {
+            'fields': ('salary', 'bank_account_no', 'social_security_id'), 
+            'classes': ('collapse',)
+        }),
+
+        # ✅ บัญชีรับค่าคอมมิชชั่น (แยกกับเงินเดือน)
+        ('บัญชีรับค่าคอมมิชชั่น', {
+            'fields': (('bank_name', 'bank_account'),), 
+            'classes': ('collapse',)
+        }),
     )
 
 # 2. Master Data
