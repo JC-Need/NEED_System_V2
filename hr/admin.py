@@ -14,7 +14,9 @@ class EmployeeAdmin(admin.ModelAdmin):
     ordering = ('emp_id',)
 
     fieldsets = (
-        ('ข้อมูลทั่วไป', {'fields': (('emp_id', 'user'), ('status', 'emp_type'), 'photo')}),
+        # ✅ แก้ไข: เพิ่ม 'signature' (ลายเซ็นต์) ให้แสดงคู่กับ 'photo'
+        ('ข้อมูลทั่วไป', {'fields': (('emp_id', 'user'), ('status', 'emp_type'), ('photo', 'signature'))}),
+        
         ('ประวัติส่วนตัว', {'fields': (('prefix', 'first_name', 'last_name', 'nickname'), ('gender', 'birth_date'), 'id_card', 'phone', 'address')}),
         ('การทำงาน', {'fields': (('department', 'position'), ('start_date', 'resign_date'))}),
         ('บัญชีเงินเดือน', {'fields': ('salary', 'bank_account_no', 'social_security_id'), 'classes': ('collapse',)}),
@@ -25,7 +27,9 @@ class EmployeeAdmin(admin.ModelAdmin):
 class DepartmentAdmin(admin.ModelAdmin): pass
 
 @admin.register(Position)
-class PositionAdmin(admin.ModelAdmin): list_display = ('title', 'department'); list_filter = ('department',)
+class PositionAdmin(admin.ModelAdmin):
+    list_display = ('title', 'department')
+    list_filter = ('department',)
 
 @admin.register(EmployeeType)
 class EmployeeTypeAdmin(admin.ModelAdmin): pass
@@ -46,7 +50,7 @@ class LeaveRequestAdmin(admin.ModelAdmin):
     def approve_leaves(self, request, queryset): queryset.update(status='approved')
     def reject_leaves(self, request, queryset): queryset.update(status='rejected')
 
-# 4. เงินเดือน (Payroll) - เพิ่มใหม่!
+# 4. เงินเดือน (Payroll)
 @admin.register(Payslip)
 class PayslipAdmin(admin.ModelAdmin):
     list_display = ('employee', 'month_year_display', 'base_salary', 'net_salary', 'status')
