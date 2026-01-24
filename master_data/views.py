@@ -36,7 +36,7 @@ def customer_list(request):
         customers = paginator.page(paginator.num_pages)
 
     return render(request, 'master_data/customer/customer_list.html', {
-        'customers': customers, 
+        'customers': customers,
         'search': search
     })
 
@@ -47,7 +47,13 @@ def customer_create(request):
         if form.is_valid():
             cust = form.save()
             messages.success(request, f"เพิ่มลูกค้า {cust.name} เรียบร้อย")
-            return redirect('customer_list')
+
+            # ✅ เช็คว่ามีคำสั่งให้ "เด้งกลับ" หรือไม่ (Next URL)
+            next_url = request.GET.get('next')
+            if next_url:
+                return redirect(next_url) # เด้งกลับไปหน้าใบเสนอราคา (หรือหน้าที่ส่งมา)
+
+            return redirect('customer_list') # ถ้าไม่มี ก็ไปหน้ารายชื่อลูกค้าตามปกติ
     else:
         form = CustomerForm()
 

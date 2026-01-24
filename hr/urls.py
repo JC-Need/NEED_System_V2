@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 from . import views_employee
 from . import views_network
-from . import views_payroll  # ✅ 1. เพิ่มบรรทัดนี้: เพื่อดึงระบบเงินเดือนมาใช้
+from . import views_payroll
 
 urlpatterns = [
     # --- ระบบหลัก (Core HR) ---
@@ -17,18 +17,20 @@ urlpatterns = [
     path('manager/reject/<int:leave_id>/', views.reject_leave, name='reject_leave'),
 
     # --- ระบบผู้บริหาร (Executive Analytics) ---
-    path('analytics/', views.hr_executive_dashboard, name='hr_executive_dashboard'), # ใช้ path นี้เป็นหลัก
-    # path('admin-dashboard/', ... ) # อันเก่าถ้าไม่ได้ใช้แล้ว ลบออกได้ครับ เพื่อไม่ให้ซ้ำซ้อน
+    path('analytics/', views.hr_executive_dashboard, name='hr_executive_dashboard'),
 
     # --- ระบบพนักงาน & โครงสร้างทีม (Modular Views) ---
-    path('employee/add/', views_employee.employee_create, name='employee_create'),
+    
+    # ✅ แก้ไขตรงนี้: เปลี่ยนจาก views_employee เป็น views (เพื่อให้ใช้ฟอร์มใหม่ที่มีลายเซ็นต์)
+    path('employee/add/', views.employee_add, name='employee_create'),
+    
     path('network/tree/', views_network.network_tree, name='network_tree'),
 
     # --- API สำหรับปุ่ม Quick Add (+) ---
     path('api/create-position/', views_employee.api_create_position, name='api_create_position'),
     path('api/create-department/', views_employee.api_create_department, name='api_create_department'),
 
-    # --- ✅ 2. ระบบเงินเดือน (Payroll) เพิ่มใหม่ ---
+    # --- ระบบเงินเดือน (Payroll) ---
     path('payslips/', views_payroll.payslip_list, name='payslip_list'),
     path('payslip/<int:payslip_id>/', views_payroll.payslip_detail, name='payslip_detail'),
 ]
