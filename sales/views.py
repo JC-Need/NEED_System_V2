@@ -19,7 +19,7 @@ from hr.models import Employee
 from .forms import QuotationForm
 
 # ==========================================
-# 🔧 Utility: สร้างเลขที่เอกสารกลาง (DLN-YYMM-XXXX)
+# 🔧 Utility & Helper
 # ==========================================
 def get_next_document_number():
     now = timezone.now()
@@ -36,31 +36,21 @@ def get_next_document_number():
     new_seq = max_seq + 1
     return f"{prefix}-{new_seq:04d}"
 
-# ==========================================
-# 🕵️‍♂️ Helper: ฟังก์ชันหาขอบเขตพนักงาน (ใช้ร่วมกันทั้ง Dashboard และ List)
-# ==========================================
 def get_target_employees(user):
     current_emp = getattr(user, 'employee', None)
-    
     if user.is_superuser:
         return Employee.objects.all(), "Admin View"
-        
     elif current_emp:
         rank = current_emp.business_rank.lower()
         job_title = current_emp.position.title.lower() if current_emp.position else ""
-        
         if rank in ['manager', 'director'] or 'manager' in job_title:
             return Employee.objects.all(), "Manager View"
-            
         elif rank == 'supervisor':
             if current_emp.department:
-                # เห็นตัวเอง + คนในแผนกเดียวกัน
                 return Employee.objects.filter(department=current_emp.department), f"Team {current_emp.department.name}"
             else:
-                # เห็นตัวเอง + ลูกน้องสายตรง
                 return Employee.objects.filter(Q(id=current_emp.id) | Q(introducer=current_emp)), "Direct Team"
         else:
-            # เห็นแค่ตัวเอง
             return Employee.objects.filter(id=current_emp.id), "Self View"
     else:
         return Employee.objects.none(), "-"
@@ -71,24 +61,20 @@ def get_target_employees(user):
 @login_required
 def sales_dashboard(request):
     today = timezone.now().date()
-    
-    # ✅ เรียกใช้ Helper เพื่อหาคนที่เรามองเห็น
     target_employees, scope_title = get_target_employees(request.user)
 
-    # 1. ยอดขายวันนี้
+    # 1. คำนวณยอดรวม (เงิน)
     pos_today = POSOrder.objects.filter(created_at__date=today, status='PAID', employee__in=target_employees).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     inv_today = Invoice.objects.filter(date=today, status='PAID', employee__in=target_employees).aggregate(Sum('grand_total'))['grand_total__sum'] or 0
     total_sales_today = pos_today + inv_today
 
-    # 2. จำนวนบิลวันนี้
+    # 2. นับจำนวนบิล (POS + Invoice)
     count_pos = POSOrder.objects.filter(created_at__date=today, employee__in=target_employees).count()
     count_inv = Invoice.objects.filter(date=today, employee__in=target_employees).count()
     total_orders = count_pos + count_inv
 
-    # 3. ใบเสนอราคาค้าง (Quotes)
-    # ✅ เพิ่ม: รออนุมัติ (DRAFT)
+    # 3. งานค้าง
     pending_approval_quotes = Quotation.objects.filter(status='DRAFT', employee__in=target_employees).count()
-    # ✅ แก้ไข: รอปิดการขาย (APPROVED แต่ยังไม่ CONVERTED)
     pending_closing_quotes = Quotation.objects.filter(status='APPROVED', employee__in=target_employees).count()
 
     # 4. Top Seller
@@ -98,31 +84,31 @@ def sales_dashboard(request):
         .annotate(total=Sum('total_amount'))\
         .order_by('-total').first()
 
-    # 5. รายการล่าสุด
-    recent_pos = POSOrder.objects.filter(employee__in=target_employees).order_by('-created_at')[:5]
+    # 5. รายการขายล่าสุด (รวม POS และ Invoice)
+    recent_pos = list(POSOrder.objects.filter(employee__in=target_employees).order_by('-created_at')[:10])
+    recent_inv = list(Invoice.objects.filter(employee__in=target_employees).order_by('-created_at')[:10])
+    
+    combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
 
     context = {
         'total_sales_today': total_sales_today,
         'total_orders': total_orders,
-        'pending_approval_quotes': pending_approval_quotes, # ส่งค่าใหม่ไป
-        'pending_closing_quotes': pending_closing_quotes,   # ส่งค่าใหม่ไป
+        'pending_approval_quotes': pending_approval_quotes,
+        'pending_closing_quotes': pending_closing_quotes,
         'top_seller': top_seller,
-        'recent_sales': recent_pos,
+        'recent_sales': combined_sales, 
         'scope_title': scope_title,
     }
     return render(request, 'sales/dashboard.html', context)
 
 # ==========================================
-# 2. Sales Hub
+# 2. Sales Hub & Convert
 # ==========================================
 @login_required
 def sales_hub(request):
     current_emp = getattr(request.user, 'employee', None)
-    
-    # ✅ ใช้ Helper เดียวกัน เพื่อให้เห็นใบเสนอราคาของลูกน้องด้วย (ถ้าเป็น Supervisor)
     target_employees, _ = get_target_employees(request.user)
     
-    # กรองเฉพาะ Approved เพื่อเตรียมเปิดบิล
     qs = Quotation.objects.filter(status='APPROVED', employee__in=target_employees)
     ready_quotes = qs.order_by('-created_at')
     
@@ -152,7 +138,7 @@ def convert_quote_to_invoice(request, qt_id):
     qt.status = 'CONVERTED'
     qt.save()
     messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อยแล้ว")
-    return redirect('sales_hub')
+    return redirect('invoice_list')
 
 # ==========================================
 # 3. ระบบ POS
@@ -209,21 +195,17 @@ def pos_print_slip(request, order_code):
     return render(request, 'sales/slip_print.html', context)
 
 # ==========================================
-# 4. ระบบใบเสนอราคา (Updated: Logic กรองเหมือน Dashboard)
+# 4. ระบบใบเสนอราคา
 # ==========================================
 @login_required
 def quotation_list(request):
-    # ✅ 1. ใช้ Helper เดียวกันกับ Dashboard (Supervisor เห็นลูกน้องแล้ว!)
     target_employees, _ = get_target_employees(request.user)
-    
     queryset = Quotation.objects.filter(employee__in=target_employees).order_by('-created_at')
 
-    # ✅ 2. รองรับการกรองตามสถานะ (จากปุ่ม Dashboard)
     status_filter = request.GET.get('status')
     if status_filter:
         queryset = queryset.filter(status=status_filter)
 
-    # 3. ค้นหาทั่วไป
     search_query = request.GET.get('q', '')
     if search_query:
         queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
@@ -231,7 +213,6 @@ def quotation_list(request):
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
     
-    # ส่งค่า is_manager ไปด้วยเพื่อโชว์ปุ่มอนุมัติ
     is_manager = False
     current_emp = getattr(request.user, 'employee', None)
     if request.user.is_superuser: is_manager = True
@@ -343,7 +324,6 @@ def export_sales_excel(request):
     wb.save(response)
     return response
 
-# ✅ แก้ไข: รวมที่อยู่ (Address Concatenation)
 @login_required
 def api_search_customer(request):
     query = request.GET.get('q', '').strip()
@@ -368,3 +348,65 @@ def api_search_customer(request):
             'phone': c.phone
         })
     return JsonResponse({'results': results})
+
+# ==========================================
+# 5. ระบบใบรับชำระเงิน (Invoice + POS) ★ แก้ไขใหม่
+# ==========================================
+@login_required
+def invoice_list(request):
+    target_employees, _ = get_target_employees(request.user)
+    
+    # 1. เตรียม Queryset ทั้ง 2 แบบ
+    qs_invoice = Invoice.objects.filter(employee__in=target_employees)
+    qs_pos = POSOrder.objects.filter(employee__in=target_employees)
+
+    # 2. กรองข้อมูล (Search)
+    search_query = request.GET.get('q', '')
+    if search_query:
+        qs_invoice = qs_invoice.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
+        qs_pos = qs_pos.filter(code__icontains=search_query) # POS ไม่มี Customer
+
+    # 3. กรองวันที่
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+    if start_date:
+        qs_invoice = qs_invoice.filter(date__gte=start_date)
+        qs_pos = qs_pos.filter(created_at__date__gte=start_date)
+    if end_date:
+        qs_invoice = qs_invoice.filter(date__lte=end_date)
+        qs_pos = qs_pos.filter(created_at__date__lte=end_date)
+
+    # 4. แปลงเป็น List และรวมกัน
+    list_invoice = list(qs_invoice)
+    list_pos = list(qs_pos)
+    
+    # รวมและเรียงลำดับ (ใหม่สุดขึ้นก่อน)
+    combined_list = sorted(list_invoice + list_pos, key=lambda x: x.created_at, reverse=True)
+
+    # 5. แบ่งหน้า (Pagination)
+    paginator = Paginator(combined_list, 15) # แสดง 15 รายการต่อหน้า
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'sales/invoice_list.html', {
+        'page_obj': page_obj, 
+        'search_query': search_query,
+        'start_date': start_date,
+        'end_date': end_date
+    })
+
+@login_required
+def invoice_print(request, inv_id):
+    inv = get_object_or_404(Invoice, pk=inv_id)
+    company = CompanyInfo.objects.first()
+    
+    # ดึงรายการสินค้า (มาจาก Quotation หรือ POS)
+    items = []
+    if inv.quotation_ref:
+        items = inv.quotation_ref.items.all()
+    
+    return render(request, 'sales/invoice_print.html', {
+        'inv': inv, 
+        'company': company, 
+        'items': items
+    })

@@ -29,13 +29,13 @@ class CompanyInfo(models.Model):
     phone = models.CharField(max_length=50, blank=True, verbose_name="เบอร์โทร")
     email = models.EmailField(blank=True, verbose_name="อีเมล")
     website = models.URLField(blank=True, verbose_name="เว็บไซต์")
-    
+
     logo = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้")
     login_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="รูปหน้า Login")
     navbar_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้บนแถบเมนู")
     
-    # ✅ เพิ่มตราประทับบริษัท
-    seal = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="ตราประทับบริษัท")
+    # ✅ เพิ่มตราประทับกลับเข้าไปครับ
+    seal = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="ตราประทับบริษัท (Seal)")
 
     class Meta: verbose_name_plural = "1. ตั้งค่าข้อมูลบริษัท"
     def __str__(self): return self.name_th
