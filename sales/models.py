@@ -10,16 +10,38 @@ from inventory.models import Product
 # =========================
 class POSOrder(models.Model):
     STATUS_CHOICES = [('PENDING', 'รอชำระเงิน'), ('PAID', 'ชำระเงินแล้ว'), ('CANCELLED', 'ยกเลิก')]
+    PAYMENT_CHOICES = [
+        ('CASH', 'เงินสด'),
+        ('TRANSFER', 'โอนเงิน'),
+        ('CHECK', 'เช็คธนาคาร')
+    ]
+
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสร็จ")
     employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
-    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ลูกค้า")
+    
+    # --- ข้อมูลลูกค้า (เพิ่มใหม่) ---
+    customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ลูกค้า (สมาชิก)")
+    customer_name = models.CharField(max_length=200, blank=True, verbose_name="ชื่อลูกค้า (ระบุเอง)")
+    customer_address = models.TextField(blank=True, verbose_name="ที่อยู่")
+    customer_tax_id = models.CharField(max_length=20, blank=True, verbose_name="เลขผู้เสียภาษี")
+    customer_phone = models.CharField(max_length=20, blank=True, verbose_name="เบอร์โทรศัพท์")
+
+    # --- การเงิน ---
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดรวม")
     received_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รับเงินมา")
     change_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="เงินทอน")
-    payment_method = models.CharField(max_length=50, choices=[('CASH','เงินสด'), ('QR','โอน/สแกน')], default='CASH', verbose_name="วิธีชำระ")
+    
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, default='CASH', verbose_name="วิธีชำระ")
+    
+    # --- หลักฐานการโอน/เช็ค (เพิ่มใหม่) ---
+    transfer_slip = models.ImageField(upload_to='pos_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
+    check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PAID', verbose_name="สถานะ") 
     is_commission_calculated = models.BooleanField(default=False, verbose_name="คำนวณคอมฯแล้ว")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาที่ขาย")
+    
     def __str__(self): return self.code
 
 class POSOrderItem(models.Model):
@@ -35,7 +57,7 @@ class POSOrderItem(models.Model):
         super().save(*args, **kwargs)
 
 # =========================
-# 2. ระบบ Quotation (ใบเสนอราคา)
+# 2. ระบบ Quotation (ใบเสนอราคา) - คงเดิม
 # =========================
 class Quotation(models.Model):
     STATUS_CHOICES = [
@@ -87,7 +109,7 @@ class QuotationItem(models.Model):
         super().save(*args, **kwargs)
 
 # =========================
-# 3. ระบบ Invoice (ใบขายสินค้าเต็มรูปแบบ)
+# 3. ระบบ Invoice (ใบขายสินค้าเต็มรูปแบบ) - คงเดิม
 # =========================
 class Invoice(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบกำกับภาษี/ใบเสร็จ")

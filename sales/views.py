@@ -55,6 +55,12 @@ def get_target_employees(user):
     else:
         return Employee.objects.none(), "-"
 
+def get_sales_queryset(model_class, user, target_employees):
+    if user.is_superuser:
+        return model_class.objects.all()
+    else:
+        return model_class.objects.filter(employee__in=target_employees)
+
 # ==========================================
 # 1. หน้า Dashboard
 # ==========================================
@@ -63,16 +69,20 @@ def sales_dashboard(request):
     today = timezone.now().date()
     target_employees, scope_title = get_target_employees(request.user)
 
-    pos_today = POSOrder.objects.filter(created_at__date=today, status='PAID', employee__in=target_employees).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    inv_today = Invoice.objects.filter(date=today, status='PAID', employee__in=target_employees).aggregate(Sum('grand_total'))['grand_total__sum'] or 0
+    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees)
+    inv_qs = get_sales_queryset(Invoice, request.user, target_employees)
+    qt_qs = get_sales_queryset(Quotation, request.user, target_employees)
+
+    pos_today = pos_qs.filter(created_at__date=today, status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    inv_today = inv_qs.filter(date=today, status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
     total_sales_today = pos_today + inv_today
 
-    count_pos = POSOrder.objects.filter(created_at__date=today, employee__in=target_employees).count()
-    count_inv = Invoice.objects.filter(date=today, employee__in=target_employees).count()
+    count_pos = pos_qs.filter(created_at__date=today).count()
+    count_inv = inv_qs.filter(date=today).count()
     total_orders = count_pos + count_inv
 
-    pending_approval_quotes = Quotation.objects.filter(status='DRAFT', employee__in=target_employees).count()
-    pending_closing_quotes = Quotation.objects.filter(status='APPROVED', employee__in=target_employees).count()
+    pending_approval_quotes = qt_qs.filter(status='DRAFT').count()
+    pending_closing_quotes = qt_qs.filter(status='APPROVED').count()
 
     current_month = today.month
     top_seller = POSOrder.objects.filter(created_at__month=current_month, employee__in=target_employees)\
@@ -80,8 +90,8 @@ def sales_dashboard(request):
         .annotate(total=Sum('total_amount'))\
         .order_by('-total').first()
 
-    recent_pos = list(POSOrder.objects.filter(employee__in=target_employees).order_by('-created_at')[:10])
-    recent_inv = list(Invoice.objects.filter(employee__in=target_employees).order_by('-created_at')[:10])
+    recent_pos = list(pos_qs.order_by('-created_at')[:10])
+    recent_inv = list(inv_qs.order_by('-created_at')[:10])
     combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
 
     context = {
@@ -101,17 +111,19 @@ def sales_dashboard(request):
 @login_required
 def sales_hub(request):
     target_employees, _ = get_target_employees(request.user)
-    qs = Quotation.objects.filter(status='APPROVED', employee__in=target_employees)
-    ready_quotes = qs.order_by('-created_at')
-    
+    qt_qs = get_sales_queryset(Quotation, request.user, target_employees)
+    inv_qs = get_sales_queryset(Invoice, request.user, target_employees)
+    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees)
+
+    ready_quotes = qt_qs.filter(status='APPROVED').order_by('-created_at')
     today = timezone.now().date()
-    inv_qs = Invoice.objects.filter(date=today, employee__in=target_employees)
-    pos_qs = POSOrder.objects.filter(created_at__date=today, employee__in=target_employees)
+    today_invoices = inv_qs.filter(date=today).order_by('-created_at')
+    today_pos = pos_qs.filter(created_at__date=today).order_by('-created_at')
 
     return render(request, 'sales/sales_hub.html', {
         'ready_quotes': ready_quotes,
-        'today_invoices': inv_qs.order_by('-created_at'),
-        'today_pos': pos_qs.order_by('-created_at')
+        'today_invoices': today_invoices,
+        'today_pos': today_pos
     })
 
 @login_required
@@ -133,7 +145,7 @@ def convert_quote_to_invoice(request, qt_id):
     return redirect('invoice_list')
 
 # ==========================================
-# 3. ระบบ POS
+# 3. ระบบ POS (แก้ไข checkout ให้บันทึก ID ลูกค้า)
 # ==========================================
 @login_required
 def pos_home(request):
@@ -146,22 +158,54 @@ def pos_home(request):
 def pos_checkout(request):
     if request.method == 'POST':
         try:
-            data = json.loads(request.body)
-            cart = data.get('cart', [])
-            total_amount = data.get('total_amount', 0)
-            received_amount = data.get('received_amount', total_amount)
+            payment_method = request.POST.get('payment_method', 'CASH')
+            total_amount = Decimal(request.POST.get('total_amount', 0))
+            received_amount = Decimal(request.POST.get('received_amount', 0))
+            
+            # รับข้อมูลลูกค้า
+            cust_id = request.POST.get('customer_id') # ★ รับ ID ลูกค้ามาด้วย
+            cust_name = request.POST.get('customer_name', '')
+            cust_addr = request.POST.get('customer_address', '')
+            cust_phone = request.POST.get('customer_phone', '')
+            cust_tax = request.POST.get('customer_tax_id', '')
+
+            cart_json = request.POST.get('cart', '[]')
+            cart = json.loads(cart_json)
+
             order_code = get_next_document_number()
             current_emp = getattr(request.user, 'employee', None)
+
+            # ค้นหา Object Customer ถ้ามี ID ส่งมา
+            customer_obj = None
+            if cust_id:
+                try: customer_obj = Customer.objects.get(id=cust_id)
+                except: pass
 
             order = POSOrder.objects.create(
                 code=order_code,
                 employee=current_emp,
                 total_amount=total_amount,
                 received_amount=received_amount,
-                change_amount=float(received_amount) - float(total_amount),
-                payment_method='CASH',
-                status='PAID'
+                change_amount=received_amount - total_amount,
+                payment_method=payment_method,
+                status='PAID',
+                # บันทึกทั้ง Link และ Text
+                customer=customer_obj, 
+                customer_name=cust_name,
+                customer_address=cust_addr,
+                customer_phone=cust_phone,
+                customer_tax_id=cust_tax
             )
+
+            if payment_method == 'TRANSFER':
+                if 'transfer_slip' in request.FILES:
+                    order.transfer_slip = request.FILES['transfer_slip']
+            elif payment_method == 'CHECK':
+                order.check_number = request.POST.get('check_number', '')
+                order.check_bank = request.POST.get('check_bank', '')
+            
+            order.save()
+
             for item in cart:
                 product = Product.objects.get(id=item['id'])
                 POSOrderItem.objects.create(
@@ -174,26 +218,29 @@ def pos_checkout(request):
                 )
                 product.stock_qty -= int(item['qty'])
                 product.save()
+
             return JsonResponse({'success': True, 'order_code': order_code})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid Request'})
 
-# ★ ฟังก์ชันพิมพ์ POS แบบใหม่ (ใช้ฟอร์ม A4) ★
 @login_required
 def pos_print_slip(request, order_code):
     order = get_object_or_404(POSOrder, code=order_code)
     company = CompanyInfo.objects.first()
     
-    # 1. แปลงเป็น list() เพื่อให้แก้ไขค่าได้และไม่หาย
     items = list(order.items.all())
-    
-    # 2. ปรับชื่อตัวแปรให้ตรงกับ Template (Standardization)
     for item in items:
         item.item_name = item.product_name  
         item.unit_price = item.price        
         item.amount = item.total_price      
         
+    payment_note = "ชำระโดย: เงินสด (Cash)"
+    if order.payment_method == 'TRANSFER':
+        payment_note = "ชำระโดย: โอนเงิน (Bank Transfer)"
+    elif order.payment_method == 'CHECK':
+        payment_note = f"ชำระโดย: เช็คธนาคาร {order.check_bank} #{order.check_number}"
+
     context = {
         'inv': order,
         'company': company,
@@ -202,38 +249,30 @@ def pos_print_slip(request, order_code):
         'tax_amount': 0,
         'discount': 0,
         'shipping_cost': 0,
-        'note': "ชำระโดย: เงินสด (Cash)",
+        'note': payment_note,
         'is_pos': True 
     }
     return render(request, 'sales/invoice_print.html', context)
 
 # ==========================================
-# 4. ระบบใบเสนอราคา
+# 4. Quotation
 # ==========================================
 @login_required
 def quotation_list(request):
     target_employees, _ = get_target_employees(request.user)
-    queryset = Quotation.objects.filter(employee__in=target_employees).order_by('-created_at')
-
+    queryset = get_sales_queryset(Quotation, request.user, target_employees).order_by('-created_at')
     status_filter = request.GET.get('status')
-    if status_filter:
-        queryset = queryset.filter(status=status_filter)
-
+    if status_filter: queryset = queryset.filter(status=status_filter)
     search_query = request.GET.get('q', '')
-    if search_query:
-        queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
-
+    if search_query: queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
-    
     is_manager = False
     current_emp = getattr(request.user, 'employee', None)
     if request.user.is_superuser: is_manager = True
     elif current_emp:
         rank = current_emp.business_rank.lower()
-        if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower():
-            is_manager = True
-            
+        if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower(): is_manager = True
     return render(request, 'sales/quotation_list.html', {'page_obj': page_obj, 'search_query': search_query, 'is_manager': is_manager})
 
 @login_required
@@ -333,23 +372,78 @@ def export_sales_excel(request):
     wb.save(response)
     return response
 
+# ==========================================
+# ★ API: Search Customer (สำหรับ POS & QT)
+# ==========================================
 @login_required
 def api_search_customer(request):
     query = request.GET.get('q', '').strip()
     if not query: return JsonResponse({'results': []})
-    customers = Customer.objects.filter(Q(name__icontains=query) | Q(code__icontains=query))[:10]
+    customers = Customer.objects.filter(Q(name__icontains=query) | Q(code__icontains=query) | Q(phone__icontains=query))[:10]
     results = []
     for c in customers:
         addr_parts = [c.address, f"ต.{c.sub_district}" if c.sub_district else "", f"อ.{c.district}" if c.district else "", f"จ.{c.province}" if c.province else "", c.zip_code]
         full_address = " ".join(filter(None, addr_parts))
-        results.append({'id': c.id, 'name': c.name, 'code': c.code, 'address': full_address, 'tax_id': c.tax_id, 'phone': c.phone})
+        results.append({
+            'id': c.id, 
+            'name': c.name, 
+            'code': c.code, 
+            'address': full_address, 
+            'tax_id': c.tax_id, 
+            'phone': c.phone
+        })
     return JsonResponse({'results': results})
 
+# ==========================================
+# ★ API: Create Customer (สำหรับเพิ่มลูกค้าผ่าน POS)
+# ==========================================
+@csrf_exempt
+@login_required
+def api_create_customer(request):
+    if request.method == 'POST':
+        try:
+            name = request.POST.get('name')
+            code = request.POST.get('code')
+            phone = request.POST.get('phone')
+            tax_id = request.POST.get('tax_id')
+            address = request.POST.get('address')
+            
+            # ถ้าไม่ได้ระบุรหัส ให้ Auto Run
+            if not code:
+                count = Customer.objects.count() + 1
+                code = f"C{count:04d}"
+
+            customer = Customer.objects.create(
+                name=name,
+                code=code,
+                phone=phone,
+                tax_id=tax_id,
+                address=address
+            )
+            
+            # ส่งข้อมูลกลับไปให้หน้าจอใช้ต่อได้เลย
+            return JsonResponse({
+                'success': True,
+                'customer': {
+                    'id': customer.id,
+                    'name': customer.name,
+                    'address': customer.address,
+                    'tax_id': customer.tax_id,
+                    'phone': customer.phone
+                }
+            })
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    return JsonResponse({'success': False, 'error': 'Invalid Method'})
+
+# ==========================================
+# 5. Invoice List & Print
+# ==========================================
 @login_required
 def invoice_list(request):
     target_employees, _ = get_target_employees(request.user)
-    qs_invoice = Invoice.objects.filter(employee__in=target_employees)
-    qs_pos = POSOrder.objects.filter(employee__in=target_employees)
+    qs_invoice = get_sales_queryset(Invoice, request.user, target_employees)
+    qs_pos = get_sales_queryset(POSOrder, request.user, target_employees)
 
     search_query = request.GET.get('q', '')
     if search_query:
@@ -373,7 +467,6 @@ def invoice_list(request):
         'page_obj': page_obj, 'search_query': search_query, 'start_date': start_date, 'end_date': end_date
     })
 
-# ★ แก้ไขใหม่: ดึงข้อมูลเป็น List เพื่อแก้ Bug ค่าหาย และเติม total_amount หลอกๆ ★
 @login_required
 def invoice_print(request, inv_id):
     inv = get_object_or_404(Invoice, pk=inv_id)
@@ -388,21 +481,15 @@ def invoice_print(request, inv_id):
 
     if inv.quotation_ref:
         qt = inv.quotation_ref
-        
-        # ✅ แปลงเป็น list() ด่วน! ค่าที่คำนวณจะได้ไม่หาย
         items = list(qt.items.all()) 
-        
         for item in items:
-            # คำนวณยอดเงินและแปะเข้าไปในตัวแปร item (ที่อยู่ใน List)
             item.amount = item.quantity * item.unit_price 
-        
         subtotal = qt.subtotal
         tax_amount = qt.tax_amount
         discount = qt.discount
         shipping_cost = qt.shipping_cost
         note = qt.note
     
-    # ✅ ยัดเยียด total_amount ให้กับ Object Invoice (เพื่อให้หน้าจอไม่ Error)
     if not hasattr(inv, 'total_amount'):
         inv.total_amount = inv.grand_total
 

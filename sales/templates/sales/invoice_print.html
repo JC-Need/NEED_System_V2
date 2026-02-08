@@ -93,23 +93,19 @@
             <div class="row">
                 <div class="col-7 pe-4 border-end border-secondary">
                     <div class="info-group-label"><i class="fas fa-address-book me-1"></i> ลูกค้า / CUSTOMER</div>
+                    
                     <div class="customer-name">
-                        {% if inv.customer %} {{ inv.customer.name }} {% else %} ลูกค้าทั่วไป (Walk-in) {% endif %}
+                        {{ inv.quotation_ref.customer_name|default:inv.customer_name|default:inv.customer.name|default:"ลูกค้าทั่วไป (Walk-in)" }}
                     </div>
+                    
                     <div class="customer-addr">
-                        {% if inv.quotation_ref %}
-                             {{ inv.quotation_ref.customer_address|default:"-" }}
-                        {% elif inv.customer %}
-                             {{ inv.customer.address|default:"-" }}
-                        {% else %}
-                             - (ซื้อหน้าร้าน) -
-                        {% endif %}
+                        {{ inv.quotation_ref.customer_address|default:inv.customer_address|default:inv.customer.address|default:"-" }}
                     </div>
+                    
                     <div class="customer-meta mt-1">
-                        {% if inv.customer %}
-                            <strong>โทร:</strong> {{ inv.customer.phone|default:"-" }} &nbsp;&nbsp;
-                            <strong>เลขผู้เสียภาษี:</strong> {{ inv.customer.tax_id|default:"-" }}
-                        {% endif %}
+                        <strong>โทร:</strong> {{ inv.quotation_ref.customer_phone|default:inv.customer_phone|default:inv.customer.phone|default:"-" }} 
+                        &nbsp;&nbsp;
+                        <strong>เลขผู้เสียภาษี:</strong> {{ inv.quotation_ref.customer_tax_id|default:inv.customer_tax_id|default:inv.customer.tax_id|default:"-" }}
                     </div>
                 </div>
                 <div class="col-5 ps-4">
@@ -221,7 +217,6 @@
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
-            // เช็คว่าค่าไหนมีตัวเลข (รองรับทั้ง grand_total และ total_amount)
             const num = {{ inv.grand_total|default:inv.total_amount|default:0 }};
             document.getElementById('baht-text').innerText = ThaiBaht(num);
         });

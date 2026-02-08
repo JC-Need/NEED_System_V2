@@ -26,7 +26,8 @@ urlpatterns = [
     path('invoice/', views.invoice_list, name='invoice_list'),
     path('invoice/print/<int:inv_id>/', views.invoice_print, name='invoice_print'),
 
-    # 6. Others
+    # 6. Others / API
     path('api/customer-search/', views.api_search_customer, name='api_search_customer'),
+    path('api/customer-create/', views.api_create_customer, name='api_create_customer'), # ★ เพิ่มบรรทัดนี้
     path('export/excel/', views.export_sales_excel, name='export_sales_excel'),
 ]
