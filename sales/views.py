@@ -63,31 +63,25 @@ def sales_dashboard(request):
     today = timezone.now().date()
     target_employees, scope_title = get_target_employees(request.user)
 
-    # 1. คำนวณยอดรวม (เงิน)
     pos_today = POSOrder.objects.filter(created_at__date=today, status='PAID', employee__in=target_employees).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     inv_today = Invoice.objects.filter(date=today, status='PAID', employee__in=target_employees).aggregate(Sum('grand_total'))['grand_total__sum'] or 0
     total_sales_today = pos_today + inv_today
 
-    # 2. นับจำนวนบิล (POS + Invoice)
     count_pos = POSOrder.objects.filter(created_at__date=today, employee__in=target_employees).count()
     count_inv = Invoice.objects.filter(date=today, employee__in=target_employees).count()
     total_orders = count_pos + count_inv
 
-    # 3. งานค้าง
     pending_approval_quotes = Quotation.objects.filter(status='DRAFT', employee__in=target_employees).count()
     pending_closing_quotes = Quotation.objects.filter(status='APPROVED', employee__in=target_employees).count()
 
-    # 4. Top Seller
     current_month = today.month
     top_seller = POSOrder.objects.filter(created_at__month=current_month, employee__in=target_employees)\
         .values('employee__first_name', 'employee__photo')\
         .annotate(total=Sum('total_amount'))\
         .order_by('-total').first()
 
-    # 5. รายการขายล่าสุด (รวม POS และ Invoice)
     recent_pos = list(POSOrder.objects.filter(employee__in=target_employees).order_by('-created_at')[:10])
     recent_inv = list(Invoice.objects.filter(employee__in=target_employees).order_by('-created_at')[:10])
-    
     combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
 
     context = {
@@ -106,9 +100,7 @@ def sales_dashboard(request):
 # ==========================================
 @login_required
 def sales_hub(request):
-    current_emp = getattr(request.user, 'employee', None)
     target_employees, _ = get_target_employees(request.user)
-    
     qs = Quotation.objects.filter(status='APPROVED', employee__in=target_employees)
     ready_quotes = qs.order_by('-created_at')
     
@@ -187,12 +179,33 @@ def pos_checkout(request):
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid Request'})
 
+# ★ ฟังก์ชันพิมพ์ POS แบบใหม่ (ใช้ฟอร์ม A4) ★
 @login_required
 def pos_print_slip(request, order_code):
     order = get_object_or_404(POSOrder, code=order_code)
     company = CompanyInfo.objects.first()
-    context = {'order': order, 'items': order.items.all(), 'company': company}
-    return render(request, 'sales/slip_print.html', context)
+    
+    # 1. แปลงเป็น list() เพื่อให้แก้ไขค่าได้และไม่หาย
+    items = list(order.items.all())
+    
+    # 2. ปรับชื่อตัวแปรให้ตรงกับ Template (Standardization)
+    for item in items:
+        item.item_name = item.product_name  
+        item.unit_price = item.price        
+        item.amount = item.total_price      
+        
+    context = {
+        'inv': order,
+        'company': company,
+        'items': items,
+        'subtotal': order.total_amount,
+        'tax_amount': 0,
+        'discount': 0,
+        'shipping_cost': 0,
+        'note': "ชำระโดย: เงินสด (Cash)",
+        'is_pos': True 
+    }
+    return render(request, 'sales/invoice_print.html', context)
 
 # ==========================================
 # 4. ระบบใบเสนอราคา
@@ -221,11 +234,7 @@ def quotation_list(request):
         if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower():
             is_manager = True
             
-    return render(request, 'sales/quotation_list.html', {
-        'page_obj': page_obj, 
-        'search_query': search_query, 
-        'is_manager': is_manager
-    })
+    return render(request, 'sales/quotation_list.html', {'page_obj': page_obj, 'search_query': search_query, 'is_manager': is_manager})
 
 @login_required
 def quotation_create(request):
@@ -331,42 +340,22 @@ def api_search_customer(request):
     customers = Customer.objects.filter(Q(name__icontains=query) | Q(code__icontains=query))[:10]
     results = []
     for c in customers:
-        addr_parts = [
-            c.address,
-            f"ต.{c.sub_district}" if c.sub_district else "",
-            f"อ.{c.district}" if c.district else "",
-            f"จ.{c.province}" if c.province else "",
-            c.zip_code
-        ]
+        addr_parts = [c.address, f"ต.{c.sub_district}" if c.sub_district else "", f"อ.{c.district}" if c.district else "", f"จ.{c.province}" if c.province else "", c.zip_code]
         full_address = " ".join(filter(None, addr_parts))
-        results.append({
-            'id': c.id, 
-            'name': c.name, 
-            'code': c.code, 
-            'address': full_address,
-            'tax_id': c.tax_id,
-            'phone': c.phone
-        })
+        results.append({'id': c.id, 'name': c.name, 'code': c.code, 'address': full_address, 'tax_id': c.tax_id, 'phone': c.phone})
     return JsonResponse({'results': results})
 
-# ==========================================
-# 5. ระบบใบรับชำระเงิน (Invoice + POS) ★ แก้ไขใหม่
-# ==========================================
 @login_required
 def invoice_list(request):
     target_employees, _ = get_target_employees(request.user)
-    
-    # 1. เตรียม Queryset ทั้ง 2 แบบ
     qs_invoice = Invoice.objects.filter(employee__in=target_employees)
     qs_pos = POSOrder.objects.filter(employee__in=target_employees)
 
-    # 2. กรองข้อมูล (Search)
     search_query = request.GET.get('q', '')
     if search_query:
         qs_invoice = qs_invoice.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
-        qs_pos = qs_pos.filter(code__icontains=search_query) # POS ไม่มี Customer
+        qs_pos = qs_pos.filter(code__icontains=search_query)
 
-    # 3. กรองวันที่
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
     if start_date:
@@ -376,37 +365,55 @@ def invoice_list(request):
         qs_invoice = qs_invoice.filter(date__lte=end_date)
         qs_pos = qs_pos.filter(created_at__date__lte=end_date)
 
-    # 4. แปลงเป็น List และรวมกัน
-    list_invoice = list(qs_invoice)
-    list_pos = list(qs_pos)
-    
-    # รวมและเรียงลำดับ (ใหม่สุดขึ้นก่อน)
-    combined_list = sorted(list_invoice + list_pos, key=lambda x: x.created_at, reverse=True)
-
-    # 5. แบ่งหน้า (Pagination)
-    paginator = Paginator(combined_list, 15) # แสดง 15 รายการต่อหน้า
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    combined_list = sorted(list(qs_invoice) + list(qs_pos), key=lambda x: x.created_at, reverse=True)
+    paginator = Paginator(combined_list, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
 
     return render(request, 'sales/invoice_list.html', {
-        'page_obj': page_obj, 
-        'search_query': search_query,
-        'start_date': start_date,
-        'end_date': end_date
+        'page_obj': page_obj, 'search_query': search_query, 'start_date': start_date, 'end_date': end_date
     })
 
+# ★ แก้ไขใหม่: ดึงข้อมูลเป็น List เพื่อแก้ Bug ค่าหาย และเติม total_amount หลอกๆ ★
 @login_required
 def invoice_print(request, inv_id):
     inv = get_object_or_404(Invoice, pk=inv_id)
     company = CompanyInfo.objects.first()
     
-    # ดึงรายการสินค้า (มาจาก Quotation หรือ POS)
     items = []
+    subtotal = 0
+    tax_amount = 0
+    discount = 0
+    shipping_cost = 0
+    note = ""
+
     if inv.quotation_ref:
-        items = inv.quotation_ref.items.all()
+        qt = inv.quotation_ref
+        
+        # ✅ แปลงเป็น list() ด่วน! ค่าที่คำนวณจะได้ไม่หาย
+        items = list(qt.items.all()) 
+        
+        for item in items:
+            # คำนวณยอดเงินและแปะเข้าไปในตัวแปร item (ที่อยู่ใน List)
+            item.amount = item.quantity * item.unit_price 
+        
+        subtotal = qt.subtotal
+        tax_amount = qt.tax_amount
+        discount = qt.discount
+        shipping_cost = qt.shipping_cost
+        note = qt.note
     
-    return render(request, 'sales/invoice_print.html', {
-        'inv': inv, 
-        'company': company, 
-        'items': items
-    })
+    # ✅ ยัดเยียด total_amount ให้กับ Object Invoice (เพื่อให้หน้าจอไม่ Error)
+    if not hasattr(inv, 'total_amount'):
+        inv.total_amount = inv.grand_total
+
+    context = {
+        'inv': inv,
+        'company': company,
+        'items': items,
+        'subtotal': subtotal,
+        'tax_amount': tax_amount,
+        'discount': discount,
+        'shipping_cost': shipping_cost,
+        'note': note,
+    }
+    return render(request, 'sales/invoice_print.html', context)
