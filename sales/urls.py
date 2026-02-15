@@ -22,12 +22,14 @@ urlpatterns = [
     path('quotation/print/<int:qt_id>/', views.quotation_print, name='quotation_print'),
     path('quotation/approve/<int:qt_id>/', views.quotation_approve, name='quotation_approve'),
 
-    # 5. Invoice
+    # 5. Invoice & Payment
     path('invoice/', views.invoice_list, name='invoice_list'),
     path('invoice/print/<int:inv_id>/', views.invoice_print, name='invoice_print'),
+    # ★ เพิ่มบรรทัดนี้: เพื่อให้ปุ่ม "ยืนยันยอด" ทำงานได้ ★
+    path('confirm-payment/<str:doc_type>/<int:doc_id>/', views.confirm_payment, name='confirm_payment'),
 
     # 6. Others / API
     path('api/customer-search/', views.api_search_customer, name='api_search_customer'),
-    path('api/customer-create/', views.api_create_customer, name='api_create_customer'), # ★ เพิ่มบรรทัดนี้
+    path('api/customer-create/', views.api_create_customer, name='api_create_customer'),
     path('export/excel/', views.export_sales_excel, name='export_sales_excel'),
 ]
