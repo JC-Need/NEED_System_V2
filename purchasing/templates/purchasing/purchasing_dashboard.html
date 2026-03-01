@@ -11,6 +11,19 @@
         <a href="/" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับหน้าหลัก</a>
     </div>
 
+    <div class="card border-0 shadow-sm rounded-4 mb-4" style="background-color: #fffdf5; border-left: 5px solid #ffc107 !important;">
+        <div class="card-body p-3 d-flex flex-wrap align-items-center gap-3">
+            <span class="text-muted fw-bold small me-2"><i class="fas fa-bolt text-warning me-1"></i> เครื่องมือด่วน (Quick Actions):</span>
+            
+            <a href="{% url 'ppo_prepare' %}" class="btn btn-warning rounded-pill px-4 shadow-sm fw-bold">
+                <i class="fas fa-magic me-2"></i> เตรียมการสั่งซื้อ (PPO)
+            </a>
+            
+            <a href="{% url 'bom_list' %}" class="btn btn-info rounded-pill px-4 shadow-sm fw-bold text-dark" style="background-color: #e0f7fa; border-color: #b2ebf2;">
+                <i class="fas fa-clipboard-list me-2"></i> จัดการสูตรผลิต (BOM)
+            </a>
+        </div>
+    </div>
     <div class="row g-4 mb-4">
         <div class="col-md-3">
             <div class="card border-0 shadow-sm rounded-4 h-100 bg-white position-relative overflow-hidden">

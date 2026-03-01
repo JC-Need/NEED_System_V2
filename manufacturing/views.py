@@ -2,17 +2,17 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Max
+from django.db.models import Max, Count
 import datetime
 
 from .models import ProductionOrder, BOM
 from master_data.models import CompanyInfo
 from inventory.models import Product
 from purchasing.models import PurchaseOrder, PurchaseOrderItem
+from .forms import BOMForm, BOMItemFormSet
 
 @login_required
 def ppo_prepare(request):
-    """ หน้าเตรียมการสั่งซื้อ (PPO) - ส่งข้อมูลสินค้าแบบละเอียด """
     fg_products = Product.objects.filter(product_type='FG', is_active=True)
     fg_id = request.GET.get('fg_id')
     fg_qty = request.GET.get('fg_qty', 1)
@@ -60,17 +60,13 @@ def ppo_prepare(request):
         'selected_fg': int(fg_id) if fg_id else None
     })
 
-# ★ เติมส่วนที่ขาดหายไปเพื่อให้ URL ทำงานได้ ★
-
 @login_required
 def production_detail(request, pk):
-    """ แสดงรายละเอียดใบสั่งผลิต """
     order = get_object_or_404(ProductionOrder, pk=pk)
     return render(request, 'manufacturing/production_detail.html', {'order': order})
 
 @login_required
 def generate_pos_from_production(request, pk):
-    """ ฟังก์ชันสร้าง PO อัตโนมัติจากใบสั่งผลิต (ถ้าจำเป็นต้องใช้) """
     messages.info(request, "ฟังก์ชันนี้กำลังอยู่ระหว่างการพัฒนาเพิ่มเติม")
     return redirect('ppo_prepare')
 
@@ -80,3 +76,80 @@ def production_print(request, po_id):
     bom = BOM.objects.filter(product=po.product).first()
     company = CompanyInfo.objects.first()
     return render(request, 'manufacturing/production_print.html', {'po': po, 'bom': bom, 'company': company})
+
+# ==========================================
+# ส่วนจัดการสูตรการผลิต (BOM)
+# ==========================================
+
+@login_required
+def bom_list(request):
+    boms = BOM.objects.select_related('product').annotate(item_count=Count('items')).order_by('-id')
+    return render(request, 'manufacturing/bom_list.html', {'boms': boms})
+
+@login_required
+def bom_create(request):
+    if request.method == 'POST':
+        form = BOMForm(request.POST)
+        formset = BOMItemFormSet(request.POST)
+        
+        if form.is_valid() and formset.is_valid():
+            bom = form.save()
+            formset.instance = bom
+            formset.save()
+            messages.success(request, f"✅ สร้างสูตรผลิตสำหรับ {bom.product.name} เรียบร้อยแล้ว!")
+            return redirect('bom_detail', pk=bom.pk)
+        else:
+            messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ถูกต้องครบถ้วน")
+    else:
+        form = BOMForm()
+        formset = BOMItemFormSet()
+
+    return render(request, 'manufacturing/bom_form.html', {
+        'form': form,
+        'formset': formset,
+        'title': 'สร้างสูตรผลิตใหม่ (New BOM)'
+    })
+
+@login_required
+def bom_detail(request, pk):
+    bom = get_object_or_404(BOM, pk=pk)
+    items = bom.items.all()
+    
+    total_cost = 0
+    for item in items:
+        item_cost = float(item.quantity) * float(item.raw_material.cost_price)
+        item.calculated_total_cost = item_cost 
+        total_cost += item_cost
+
+    return render(request, 'manufacturing/bom_detail.html', {
+        'bom': bom,
+        'items': items,
+        'total_cost': total_cost
+    })
+
+# 🌟 ฟังก์ชันใหม่: สำหรับแก้ไขสูตรการผลิต 🌟
+@login_required
+def bom_edit(request, pk):
+    bom = get_object_or_404(BOM, pk=pk)
+    
+    if request.method == 'POST':
+        # ส่ง instance=bom เข้าไปเพื่อให้รู้ว่าเป็นการอัปเดตข้อมูลเก่า
+        form = BOMForm(request.POST, instance=bom)
+        formset = BOMItemFormSet(request.POST, instance=bom)
+        
+        if form.is_valid() and formset.is_valid():
+            form.save()
+            formset.save()
+            messages.success(request, f"✅ แก้ไขสูตรผลิต {bom.product.name} เรียบร้อยแล้ว!")
+            return redirect('bom_detail', pk=bom.pk)
+        else:
+            messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ถูกต้องครบถ้วน")
+    else:
+        form = BOMForm(instance=bom)
+        formset = BOMItemFormSet(instance=bom)
+
+    return render(request, 'manufacturing/bom_form.html', {
+        'form': form,
+        'formset': formset,
+        'title': f'แก้ไขสูตรผลิต: {bom.product.code}'
+    })

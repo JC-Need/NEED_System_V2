@@ -3,20 +3,22 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
             <h3 class="fw-bold text-dark mb-1"><i class="fas fa-warehouse text-primary me-2"></i>คลังสินค้าโรงงาน (Factory Inventory)</h3>
             <p class="text-muted mb-0">บริหารจัดการสินค้าสำเร็จรูป (FG) และวัตถุดิบ (RM)</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'bom_list' %}" class="btn shadow-sm rounded-pill px-3 fw-bold text-dark" style="background-color: #e0f7fa; border: 1px solid #b2ebf2;">
+                <i class="fas fa-clipboard-list me-1 text-info"></i> จัดการสูตรผลิต (BOM)
+            </a>
+
             <a href="{% url 'product_create' %}" class="btn btn-primary shadow-sm rounded-pill px-3 fw-bold">
                 <i class="fas fa-plus me-1"></i> เพิ่มสินค้า/วัตถุดิบ
             </a>
-
             <a href="{% url 'document_list_in' %}" class="btn btn-success shadow-sm rounded-pill px-3 fw-bold">
                 <i class="fas fa-file-import me-1"></i> ใบรับสินค้า/วัตถุดิบ
             </a>
-
             <a href="{% url 'document_list_out' %}" class="btn btn-warning text-dark shadow-sm rounded-pill px-3 fw-bold">
                 <i class="fas fa-file-export me-1"></i> ใบเบิกสินค้า/วัตถุดิบ
             </a>
@@ -24,7 +26,6 @@
     </div>
 
     <div class="row g-4">
-
         <div class="col-lg-8">
             <div class="card border-0 shadow-sm rounded-3 border-start border-4 border-primary mb-4">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
@@ -110,9 +111,9 @@
                                 </td>
                                 <td class="text-end">{{ p.cost_price|intcomma }}</td>
                                 <td class="text-center">
-                                    <span class="fs-5 fw-bold {% if p.stock_qty <= p.min_level %}text-danger{% else %}text-secondary{% endif %}">
+                                     <span class="fs-5 fw-bold {% if p.stock_qty <= p.min_level %}text-danger{% else %}text-secondary{% endif %}">
                                         {{ p.stock_qty|intcomma }}
-                                    </span>
+                                     </span>
                                 </td>
                                 <td class="text-center">
                                     {% if p.stock_qty <= p.min_level %}
@@ -152,7 +153,7 @@
             <div class="card border-0 shadow-sm rounded-3">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark"><i class="fas fa-history me-2"></i>ความเคลื่อนไหวล่าสุด</h6>
-                    </div>
+                </div>
                 <div class="list-group list-group-flush">
                     {% for doc in recent_docs %}
                     <div class="list-group-item">
