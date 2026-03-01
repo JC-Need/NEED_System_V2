@@ -9,7 +9,10 @@ import datetime
 # ==========================================
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อหมวดหมู่")
-    def __str__(self): return self.name
+    
+    def __str__(self): 
+        return self.name
+        
     class Meta:
         verbose_name = "1. หมวดหมู่สินค้า"
         verbose_name_plural = "1. จัดการหมวดหมู่ (Categories)"
@@ -34,7 +37,9 @@ class Product(models.Model):
     stock_qty = models.IntegerField(default=0, verbose_name="จำนวนคงเหลือ")
     min_level = models.IntegerField(default=5, verbose_name="จุดสั่งซื้อ (Low Stock)")
 
+    # ✅ ผูกกับ Supplier เรียบร้อย
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ซัพพลายเออร์หลัก")
+    
     image = models.ImageField(upload_to='products/', blank=True, null=True, verbose_name="รูปสินค้า")
     is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -47,6 +52,7 @@ class Product(models.Model):
             today = datetime.date.today()
             year_month = today.strftime('%y%m')
             prefix = f"RM-{year_month}-" if self.product_type == 'RM' else f"PD-{year_month}-"
+            
             last_product = Product.objects.filter(code__startswith=prefix).order_by('code').last()
             if last_product:
                 try:
@@ -63,7 +69,7 @@ class Product(models.Model):
         verbose_name_plural = "2. จัดการสินค้า (Products)"
 
 # ==========================================
-# 3. หัวเอกสารคลังสินค้า (Inventory Document) - ✅ ส่วนที่เพิ่มมาใหม่
+# 3. หัวเอกสารคลังสินค้า (Inventory Document)
 # ==========================================
 class InventoryDoc(models.Model):
     DOC_TYPES = [
@@ -77,7 +83,6 @@ class InventoryDoc(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการ")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="วันที่เอกสาร")
 
-    # ✅ Logic การรันเลขที่เอกสาร (GR-2601-XXX)
     def save(self, *args, **kwargs):
         if not self.doc_no:
             today = datetime.date.today()
@@ -105,23 +110,17 @@ class InventoryDoc(models.Model):
 # 4. รายการเคลื่อนไหว (Stock Movement)
 # ==========================================
 class StockMovement(models.Model):
-    # ✅ เชื่อมกับหัวเอกสาร (InventoryDoc)
     doc = models.ForeignKey(InventoryDoc, on_delete=models.CASCADE, related_name='movements', verbose_name="เลขที่เอกสาร", null=True, blank=True)
-
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้า")
     quantity = models.IntegerField(verbose_name="จำนวน")
     movement_type = models.CharField(max_length=10, choices=[('IN', 'เข้า'), ('OUT', 'ออก')], verbose_name="ประเภท")
     reference_doc = models.CharField(max_length=50, blank=True, verbose_name="อ้างอิงเดิม (Legacy)")
-
-    # ✅ ใส่ field นี้กลับมาแล้วครับ
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
-
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการ")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาบันทึก")
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # Update Stock อัตโนมัติ
         if self.movement_type == 'IN':
             self.product.stock_qty += self.quantity
         elif self.movement_type == 'OUT':
@@ -136,12 +135,11 @@ class StockMovement(models.Model):
         verbose_name_plural = "4. รายการเคลื่อนไหว (Details)"
 
 # ==========================================
-# 5. Proxy Models สำหรับแยกเมนูใน Admin ✅ (เพิ่มส่วนนี้)
+# 5. Proxy Models สำหรับแยกเมนูใน Admin
 # ==========================================
-
 class FinishedGood(Product):
     class Meta:
-        proxy = True # ใช้ตาราง Product เดิม แต่แยกชื่อเรียก
+        proxy = True
         verbose_name = "2.1 สินค้าสำเร็จรูป (FG)"
         verbose_name_plural = "2.1 สินค้าสำเร็จรูป (FG)"
 

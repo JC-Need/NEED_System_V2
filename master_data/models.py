@@ -33,7 +33,7 @@ class CompanyInfo(models.Model):
     logo = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้")
     login_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="รูปหน้า Login")
     navbar_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้บนแถบเมนู")
-    
+
     # ✅ เพิ่มตราประทับกลับเข้าไปครับ
     seal = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="ตราประทับบริษัท (Seal)")
 
@@ -82,5 +82,25 @@ class Supplier(models.Model):
     tax_id = models.CharField(max_length=20, blank=True, verbose_name="เลขผู้เสียภาษี")
     phone = models.CharField(max_length=50, blank=True, verbose_name="เบอร์โทร")
     address = models.TextField(blank=True, verbose_name="ที่อยู่")
-    class Meta: verbose_name_plural = "3. ฐานข้อมูลผู้ขาย"
-    def __str__(self): return f"{self.code} - {self.name}"
+
+    class Meta:
+        verbose_name_plural = "3. ฐานข้อมูลผู้ขาย"
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+    def save(self, *args, **kwargs):
+        if not self.code:  # ถ้ารหัสว่างเปล่า ให้เริ่มรันเลขใหม่
+            last_supplier = Supplier.objects.filter(code__startswith='SUP-').order_by('code').last()
+            if last_supplier and last_supplier.code:
+                try:
+                    # ตัดเอาเฉพาะตัวเลขด้านหลังมา +1
+                    last_num = int(last_supplier.code.split('-')[1])
+                    new_num = last_num + 1
+                except (IndexError, ValueError):
+                    new_num = 1
+            else:
+                new_num = 1
+            self.code = f"SUP-{new_num:03d}"
+
+        super().save(*args, **kwargs) # ★ 2 บรรทัดที่หายไปคือตรงนี้ครับ ★

@@ -7,7 +7,6 @@ from hr.models import Employee
 # 1. สูตรการผลิต (Bill of Materials - BOM)
 # ==========================================
 class BOM(models.Model):
-    # สูตรนี้สำหรับผลิตสินค้าอะไร?
     product = models.OneToOneField(Product, on_delete=models.CASCADE, verbose_name="สินค้าสำเร็จรูป (FG)")
     name = models.CharField(max_length=200, verbose_name="ชื่อสูตร (เช่น สูตรมาตรฐาน)")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
@@ -47,6 +46,10 @@ class ProductionOrder(models.Model):
     
     responsible_person = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ควบคุมการผลิต")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PLANNED', verbose_name="สถานะ")
+    
+    # 🌟 ฟิลด์ใหม่: เพื่อเช็คว่าออเดอร์นี้ถูกนำไปคำนวณและออก PO จัดซื้อหรือยัง ป้องกันกดซ้ำ 🌟
+    is_materials_ordered = models.BooleanField(default=False, verbose_name="สั่งซื้อวัตถุดิบแล้ว")
+    
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
 
     class Meta:

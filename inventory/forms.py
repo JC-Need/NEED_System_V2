@@ -2,16 +2,15 @@ from django import forms
 from .models import StockMovement, Product
 
 # ==========================================
-# 1. ฟอร์มรับสินค้าเข้า (Stock In) - ✅ ปรับปรุงใหม่
+# 1. ฟอร์มรับสินค้าเข้า (Stock In)
 # ==========================================
 class StockInForm(forms.ModelForm):
-    # เพิ่มช่องกรอกข้อมูลหัวเอกสาร (ไม่ผูกกับ Model โดยตรง)
     doc_reference = forms.CharField(required=False, label="อ้างอิงเอกสาร (PO)", widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น PO-2601-001'}))
     doc_note = forms.CharField(required=False, label="หมายเหตุ", widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'รายละเอียดเพิ่มเติม...'}))
 
     class Meta:
         model = StockMovement
-        fields = ['product', 'quantity'] # เอาเฉพาะข้อมูลสินค้า
+        fields = ['product', 'quantity']
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select select2'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'placeholder': 'จำนวนที่รับ'}),
@@ -23,7 +22,7 @@ class StockInForm(forms.ModelForm):
         self.fields['product'].label = "เลือกสินค้า/วัตถุดิบ"
 
 # ==========================================
-# 2. ฟอร์มเบิกสินค้าออก (Stock Out) - ✅ ปรับปรุงใหม่
+# 2. ฟอร์มเบิกสินค้าออก (Stock Out)
 # ==========================================
 class StockOutForm(forms.ModelForm):
     doc_reference = forms.CharField(required=False, label="อ้างอิงเอกสาร (Job No.)", widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น ใบสั่งผลิต / ใบเสีย'}))
@@ -43,7 +42,7 @@ class StockOutForm(forms.ModelForm):
         self.fields['product'].label = "เลือกสินค้า/วัตถุดิบ"
 
 # ==========================================
-# 3. ฟอร์มจัดการสินค้า (ProductForm) - (คงเดิม)
+# 3. ฟอร์มจัดการสินค้า (ProductForm)
 # ==========================================
 class ProductForm(forms.ModelForm):
     cost_price = forms.CharField(label="ราคาทุน", widget=forms.TextInput(attrs={'class': 'form-control number-input', 'style': 'text-align: right;', 'placeholder': '0.00'}))
@@ -51,12 +50,14 @@ class ProductForm(forms.ModelForm):
 
     class Meta:
         model = Product
-        fields = ['product_type', 'code', 'name', 'category', 'cost_price', 'sell_price', 'min_level', 'image', 'is_active']
+        # ✅ เพิ่ม 'supplier' เข้าไปใน fields
+        fields = ['product_type', 'code', 'name', 'category', 'supplier', 'cost_price', 'sell_price', 'min_level', 'image', 'is_active']
         widgets = {
             'product_type': forms.Select(attrs={'class': 'form-select'}),
             'code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เว้นว่างเพื่อสร้างรหัสอัตโนมัติ'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'category': forms.Select(attrs={'class': 'form-select select2'}),
+            'supplier': forms.Select(attrs={'class': 'form-select select2'}), # ✅ เพิ่ม Widget ให้ Supplier
             'min_level': forms.NumberInput(attrs={'class': 'form-control', 'value': 5}),
             'image': forms.FileInput(attrs={'class': 'form-control'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),

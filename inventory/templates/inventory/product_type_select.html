@@ -1,49 +1,52 @@
 {% extends 'core/base.html' %}
+{% load static %}
 
 {% block content %}
-<div class="container py-5">
+<style>
+    .hover-lift { transition: all 0.3s ease; }
+    .hover-lift:hover { transform: translateY(-10px); box-shadow: 0 15px 30px rgba(0,0,0,0.1) !important; cursor: pointer; }
+</style>
+
+<div class="container py-5" style="max-width: 900px;">
     <div class="text-center mb-5">
-        <h2 class="fw-bold text-dark">เลือกประเภทรายการที่ต้องการเพิ่ม</h2>
-        <p class="text-muted">กรุณาเลือกประเภทให้ถูกต้อง เพื่อการแยกคลังสินค้าที่ชัดเจน</p>
+        <h3 class="fw-bold text-dark mb-2"><i class="fas fa-cubes text-primary me-2"></i>เพิ่มข้อมูลคลังสินค้าใหม่</h3>
+        <p class="text-muted">กรุณาเลือกประเภทของข้อมูลที่คุณต้องการสร้าง เพื่อการแยกคลังสินค้าที่ชัดเจน</p>
     </div>
 
     <div class="row justify-content-center g-4">
         <div class="col-md-5">
             <a href="{% url 'product_create' %}?type=FG" class="text-decoration-none">
-                <div class="card h-100 border-0 shadow-sm hover-up text-center py-5 rounded-4 border-top border-5 border-primary">
-                    <div class="card-body">
-                        <div class="bg-primary bg-opacity-10 rounded-circle d-inline-flex p-4 mb-4">
-                            <i class="fas fa-box-open fa-3x text-primary"></i>
+                <div class="card border-0 shadow-sm h-100 rounded-4 text-center p-5 hover-lift border-top border-5 border-primary">
+                    <div class="mb-4">
+                        <div class="d-inline-flex align-items-center justify-content-center bg-primary bg-opacity-10 rounded-circle" style="width: 100px; height: 100px;">
+                            <i class="fas fa-home text-primary" style="font-size: 3.5rem;"></i>
                         </div>
-                        <h4 class="fw-bold text-dark">สินค้าสำเร็จรูป (FG)</h4>
-                        <p class="text-muted mb-0">Products for Sale</p>
                     </div>
+                    <h4 class="fw-bold text-dark mb-1">สินค้าสำเร็จรูป (FG)</h4>
+                    <p class="text-muted small mb-0">แบบบ้านน็อคดาวน์ หรือสินค้าที่ประกอบเสร็จพร้อมขาย</p>
                 </div>
             </a>
         </div>
 
         <div class="col-md-5">
             <a href="{% url 'product_create' %}?type=RM" class="text-decoration-none">
-                <div class="card h-100 border-0 shadow-sm hover-up text-center py-5 rounded-4 border-top border-5 border-warning">
-                    <div class="card-body">
-                        <div class="bg-warning bg-opacity-10 rounded-circle d-inline-flex p-4 mb-4">
-                            <i class="fas fa-cubes fa-3x text-warning"></i>
+                <div class="card border-0 shadow-sm h-100 rounded-4 text-center p-5 hover-lift border-top border-5 border-warning">
+                    <div class="mb-4">
+                        <div class="d-inline-flex align-items-center justify-content-center bg-warning bg-opacity-10 rounded-circle" style="width: 100px; height: 100px;">
+                            <i class="fas fa-toolbox text-warning" style="font-size: 3.5rem;"></i>
                         </div>
-                        <h4 class="fw-bold text-dark">วัตถุดิบ (RM)</h4>
-                        <p class="text-muted mb-0">Raw Materials for Production</p>
                     </div>
+                    <h4 class="fw-bold text-dark mb-1">วัตถุดิบ (RM)</h4>
+                    <p class="text-muted small mb-0">วัสดุก่อสร้าง อุปกรณ์ หรือชิ้นส่วนที่ต้องสั่งซื้อจากร้านค้า</p>
                 </div>
             </a>
         </div>
     </div>
-
+    
     <div class="text-center mt-5">
-        <a href="{% url 'inventory_dashboard' %}" class="btn btn-light rounded-pill px-4 text-muted">ย้อนกลับ</a>
+        <a href="{% url 'inventory_dashboard' %}" class="btn btn-light border rounded-pill px-4 shadow-sm text-muted">
+            <i class="fas fa-arrow-left me-2"></i> กลับหน้าคลังสินค้า
+        </a>
     </div>
 </div>
-
-<style>
-    .hover-up { transition: transform 0.3s; }
-    .hover-up:hover { transform: translateY(-10px); }
-</style>
 {% endblock %}

@@ -16,6 +16,12 @@ urlpatterns = [
     
     # ✅ ระบบข้อมูลลูกค้า (Master Data)
     path('master_data/', include('master_data.urls')), 
+
+    # 🌟 เพิ่มใหม่: เชื่อมต่อระบบจัดซื้อ (Purchasing) 🌟
+    path('purchasing/', include('purchasing.urls')),
+
+    # 🌟 เพิ่มใหม่: เชื่อมต่อระบบฝ่ายผลิต (Manufacturing) 🌟
+    path('manufacturing/', include('manufacturing.urls')),
 ]
 
 if settings.DEBUG:

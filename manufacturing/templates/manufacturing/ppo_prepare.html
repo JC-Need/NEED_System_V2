@@ -1,0 +1,100 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-clipboard-list text-primary me-2"></i>เตรียมการสั่งซื้อ (PPO)</h4>
+            <p class="text-muted small mb-0">คำนวณวัตถุดิบตามแบบบ้านและแยกรายการตามร้านค้า</p>
+        </div>
+        <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับ</a>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4" style="background-color: #f0f7ff; border-left: 5px solid #0d6efd !important;">
+        <div class="card-body p-4">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label text-dark small fw-bold">เลือกแบบบ้านน็อคดาวน์ (FG)</label>
+                    <select name="fg_id" class="form-select shadow-sm" required>
+                        <option value="">-- กรุณาเลือกแบบบ้าน --</option>
+                        {% for fg in fg_products %}
+                            <option value="{{ fg.id }}" {% if selected_fg == fg.id %}selected{% endif %}>{{ fg.code }} - {{ fg.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-dark small fw-bold">จำนวนที่จะผลิต (หลัง)</label>
+                    <input type="number" name="fg_qty" class="form-control shadow-sm" min="1" value="{{ fg_qty }}" required>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary fw-bold w-100 shadow-sm"><i class="fas fa-calculator me-2"></i>คำนวณรายการสั่งซื้อ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if ppo_code %}
+    <div class="alert alert-info border-0 rounded-4 mb-4 shadow-sm">
+        <i class="fas fa-info-circle me-2"></i> เลขที่อ้างอิงสำหรับการเตรียมสั่งซื้อครั้งนี้คือ: <strong>{{ ppo_code }}</strong>
+    </div>
+
+    {% for sup_id, data in materials_by_supplier.items %}
+    <div class="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+            <h6 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-store text-warning me-2"></i>ร้านค้า: <span class="text-primary">{{ data.name }}</span>
+            </h6>
+            <button type="button" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold" 
+                    onclick="transferToPO('{{ sup_id }}', '{{ ppo_code }}', '{{ data.items|escapejs }}')">
+                <i class="fas fa-paper-plane me-1"></i> ส่งไปทำใบ PO ร้านนี้
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light small text-secondary">
+                    <tr>
+                        <th class="ps-4">วัตถุดิบ</th>
+                        <th class="text-center">จำนวนที่ต้องใช้</th>
+                        <th class="text-end">ราคา/หน่วย</th>
+                        <th class="text-end pe-4">รวมเป็นเงิน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in data.items %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark">{{ item.product_name }}</div>
+                            <small class="text-muted">{{ item.product_code }}</small>
+                        </td>
+                        <td class="text-center fw-bold">{{ item.qty }}</td>
+                        <td class="text-end">{{ item.cost|stringformat:".2f" }}</td>
+                        <td class="text-end pe-4 fw-bold text-primary">{{ item.total|stringformat:".2f" }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+    {% endif %}
+</div>
+
+<script>
+function transferToPO(supplierId, ppoRef, itemsData) {
+    // กรองเอาเฉพาะข้อมูลที่จำเป็นเพื่อส่งผ่าน URL
+    const rawData = JSON.parse(itemsData.replace(/'/g, '"'));
+    const cleanItems = rawData.map(item => ({
+        id: item.product_id,
+        qty: item.qty,
+        cost: item.cost,
+        total: item.total
+    }));
+
+    const itemsJson = encodeURIComponent(JSON.stringify(cleanItems));
+    
+    // วาร์ปไปยังหน้าสร้าง PO ใหม่
+    window.location.href = `/purchasing/po/create/?ppo_ref=${ppoRef}&supplier_id=${supplierId}&items_data=${itemsJson}`;
+}
+</script>
+{% endblock %}

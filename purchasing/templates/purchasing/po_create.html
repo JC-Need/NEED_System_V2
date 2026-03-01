@@ -1,0 +1,208 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-plus-circle text-primary me-2"></i>สร้างใบสั่งซื้อใหม่ (New PO)</h4>
+            <p class="text-muted small mb-0">เพิ่มรายการสินค้าและบันทึกเอกสาร</p>
+        </div>
+        <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับ</a>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4" style="background-color: #fffdf5; border-left: 5px solid #ffc107 !important;">
+        <div class="card-body p-3">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-5">
+                    <label class="form-label text-dark small fw-bold"><i class="fas fa-magic text-warning me-1"></i> ดึงวัตถุดิบอัตโนมัติจากแบบบ้าน (BOM)</label>
+                    <select name="fg_id" class="form-select shadow-sm" required>
+                        <option value="">-- เลือกแบบบ้านน็อคดาวน์ --</option>
+                        {% for fg in fg_products %}
+                            <option value="{{ fg.id }}" {% if request.GET.fg_id == fg.id|stringformat:"s" %}selected{% endif %}>{{ fg.code }} - {{ fg.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label text-muted small fw-bold">จำนวนที่จะผลิต (หลัง)</label>
+                    <input type="number" name="fg_qty" class="form-control shadow-sm" min="1" value="{{ request.GET.fg_qty|default:1 }}" required>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-warning fw-bold w-100 shadow-sm"><i class="fas fa-calculator me-1"></i> คำนวณและดึงรายการวัตถุดิบ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <form method="POST" id="po-form">
+        {% csrf_token %}
+        
+        <div class="card shadow-sm border-0 rounded-4 mb-4">
+            <div class="card-header bg-white border-bottom py-3">
+                <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-file-invoice me-2"></i>ข้อมูลใบสั่งซื้อ</h6>
+            </div>
+            <div class="card-body p-4 row g-3">
+                <div class="col-md-4">
+                    <label class="form-label text-muted small fw-bold">{{ form.supplier.label }} <span class="text-danger">*</span></label>
+                    {{ form.supplier }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-muted small fw-bold">{{ form.expected_date.label }}</label>
+                    {{ form.expected_date }}
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label text-muted small fw-bold">{{ form.status.label }}</label>
+                    {{ form.status }}
+                </div>
+                <div class="col-md-12">
+                    <label class="form-label text-muted small fw-bold">{{ form.note.label }}</label>
+                    {{ form.note }}
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden">
+            <div class="card-header bg-light border-bottom py-3 d-flex justify-content-between align-items-center">
+                <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-box-open me-2"></i>รายการวัตถุดิบ / สินค้า</h6>
+                <div class="fw-bold text-dark bg-white px-3 py-1 rounded border shadow-sm">
+                    ยอดรวมสุทธิ: <span id="grand-total" class="text-danger fs-5">0.00</span> บาท
+                </div>
+            </div>
+            <div class="table-responsive">
+                {{ formset.management_form }}
+                <table class="table table-hover align-middle mb-0" id="items-table">
+                    <thead class="text-secondary" style="font-size: 0.8rem; text-transform: uppercase;">
+                        <tr>
+                            <th class="ps-4 py-3 border-0" style="width: 40%;">สินค้า/วัตถุดิบ</th>
+                            <th class="py-3 border-0 text-center" style="width: 15%;">จำนวนที่สั่ง</th>
+                            <th class="py-3 border-0 text-end" style="width: 20%;">ต้นทุนต่อหน่วย</th>
+                            <th class="py-3 border-0 text-end" style="width: 20%;">รวมเป็นเงิน</th>
+                            <th class="pe-4 py-3 border-0 text-center" style="width: 5%;">ลบ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="formset-container">
+                        {% for item_form in formset %}
+                        <tr class="item-row">
+                            <td class="ps-4">
+                                {{ item_form.id }}
+                                {{ item_form.product }}
+                            </td>
+                            <td>{{ item_form.quantity }}</td>
+                            <td>{{ item_form.unit_cost }}</td>
+                            <td>{{ item_form.total_cost }}</td>
+                            <td class="pe-4 text-center">
+                                {% if item_form.instance.pk %}{{ item_form.DELETE }}{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-between align-items-center">
+                <button type="button" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3" id="add-item-btn">
+                    <i class="fas fa-plus me-1"></i> เพิ่มรายการสินค้าเอง
+                </button>
+                <div class="text-muted small">** หากมีวัตถุดิบที่ไม่ได้สั่งจากร้านค้า (Supplier) ที่เลือก กรุณากดลบรายการออก</div>
+            </div>
+        </div>
+
+        <div class="text-end mb-5">
+            <button type="submit" class="btn btn-success btn-lg rounded-pill px-5 shadow fw-bold">
+                <i class="fas fa-save me-2"></i> บันทึกใบสั่งซื้อ
+            </button>
+        </div>
+    </form>
+</div>
+
+<table style="display: none;">
+    <tbody id="empty-form">
+        <tr class="item-row">
+            <td class="ps-4">{{ formset.empty_form.product }}</td>
+            <td>{{ formset.empty_form.quantity }}</td>
+            <td>{{ formset.empty_form.unit_cost }}</td>
+            <td>{{ formset.empty_form.total_cost }}</td>
+            <td class="pe-4 text-center"></td>
+        </tr>
+    </tbody>
+</table>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const addButton = document.getElementById('add-item-btn');
+        const container = document.getElementById('formset-container');
+        const emptyFormTemplate = document.getElementById('empty-form').innerHTML;
+        const totalFormsInput = document.getElementById('id_items-TOTAL_FORMS');
+
+        // --- 🌟 ระบบเพิ่มแถว 🌟 ---
+        addButton.addEventListener('click', function() {
+            let formIdx = parseInt(totalFormsInput.value);
+            let newRowHtml = emptyFormTemplate.replace(/__prefix__/g, formIdx);
+            container.insertAdjacentHTML('beforeend', newRowHtml);
+            totalFormsInput.value = formIdx + 1;
+        });
+
+        // --- 🌟 ระบบคำนวณเงิน 🌟 ---
+        function calculateGrandTotal() {
+            let grandTotal = 0;
+            document.querySelectorAll('.item-row').forEach(row => {
+                let qtyInput = row.querySelector('.qty-input');
+                let costInput = row.querySelector('.cost-input');
+                let totalInput = row.querySelector('.total-input');
+                
+                if (qtyInput && costInput && totalInput) {
+                    let qty = parseFloat(qtyInput.value) || 0;
+                    let cost = parseFloat(costInput.value) || 0;
+                    let total = qty * cost;
+                    totalInput.value = total.toFixed(2);
+                    grandTotal += total;
+                }
+            });
+            document.getElementById('grand-total').textContent = grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2});
+        }
+
+        // จับเหตุการณ์เวลาพิมพ์
+        document.getElementById('items-table').addEventListener('input', function(e) {
+            if (e.target.classList.contains('qty-input') || e.target.classList.contains('cost-input')) {
+                calculateGrandTotal();
+            }
+        });
+
+        // --- 🌟 ระบบรับข้อมูลวาร์ปจาก PPO (ใหม่) 🌟 ---
+        const urlParams = new URLSearchParams(window.location.search);
+        const itemsDataRaw = urlParams.get('items_data');
+
+        if (itemsDataRaw) {
+            try {
+                const items = JSON.parse(decodeURIComponent(itemsDataRaw));
+                
+                // เคลียร์แถวว่างเดิมออกก่อน (ถ้ามี)
+                // หรือวนลูปเติมตามจำนวนที่มีมาให้
+                items.forEach((item, index) => {
+                    // ถ้าจำนวนรายการจาก PPO มากกว่าแถวที่มี ให้กดปุ่มเพิ่มแถวให้อัตโนมัติ
+                    if (index >= parseInt(totalFormsInput.value)) {
+                        addButton.click();
+                    }
+
+                    const productSelect = document.querySelector(`#id_items-${index}-product`);
+                    const qtyInput = document.querySelector(`#id_items-${index}-quantity`);
+                    const costInput = document.querySelector(`#id_items-${index}-unit_cost`);
+
+                    if (productSelect && qtyInput && costInput) {
+                        productSelect.value = item.id;
+                        qtyInput.value = item.qty;
+                        costInput.value = item.cost;
+                    }
+                });
+                
+                // คำนวณยอดรวมทันทีหลังเติมข้อมูล
+                calculateGrandTotal();
+                console.log("✅ วาร์ปข้อมูลจาก PPO ลงตารางเรียบร้อย");
+            } catch (e) {
+                console.error("❌ เกิดข้อผิดพลาดในการโหลดข้อมูล PPO:", e);
+            }
+        } else {
+            calculateGrandTotal();
+        }
+    });
+</script>
+{% endblock %}

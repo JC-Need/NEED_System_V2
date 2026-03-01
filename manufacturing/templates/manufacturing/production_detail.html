@@ -1,0 +1,93 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-industry text-primary me-2"></i>แผนการผลิต: {{ order.code }}</h4>
+            <p class="text-muted mb-0">คำนวณวัตถุดิบอ้างอิงตามสูตร (BOM)</p>
+        </div>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับ</a>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4 bg-white">
+        <div class="card-body p-4 row">
+            <div class="col-md-4 border-end">
+                <div class="text-muted small mb-1">สินค้าที่ต้องการผลิต</div>
+                <h5 class="fw-bold text-primary">{{ order.product.name }}</h5>
+                <span class="badge bg-light text-dark border">{{ order.product.code }}</span>
+            </div>
+            <div class="col-md-3 border-end ps-4">
+                <div class="text-muted small mb-1">จำนวนที่สั่งผลิต</div>
+                <h3 class="fw-bold text-dark mb-0">{{ order.quantity }} <span class="fs-6 text-muted fw-normal">หน่วย</span></h3>
+            </div>
+            <div class="col-md-5 ps-4 d-flex flex-column justify-content-center">
+                {% if not bom %}
+                    <div class="alert alert-danger mb-0 py-2"><i class="fas fa-exclamation-triangle me-2"></i> สินค้านี้ยังไม่ได้ตั้งค่าสูตรผลิต (BOM)</div>
+                {% elif order.is_materials_ordered %}
+                    <div class="alert alert-success mb-0 py-2"><i class="fas fa-check-circle me-2"></i> ออกใบสั่งซื้อวัตถุดิบสำหรับงานนี้เรียบร้อยแล้ว</div>
+                {% else %}
+                    <form action="{% url 'generate_pos_from_production' order.pk %}" method="POST">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-warning fw-bold w-100 shadow-sm py-3 rounded-3" onclick="return confirm('ระบบจะสร้างใบสั่งซื้อแยกตามร้านค้าอัตโนมัติ ยืนยันหรือไม่?');">
+                            <i class="fas fa-magic me-2"></i> สร้างใบสั่งซื้ออัตโนมัติ (Auto-PO)
+                        </button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <h5 class="fw-bold text-dark mb-3"><i class="fas fa-cubes text-secondary me-2"></i>รายการวัตถุดิบที่ต้องใช้</h5>
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
+                    <tr>
+                        <th class="ps-4 py-3 border-0">วัตถุดิบ (Raw Material)</th>
+                        <th class="py-3 border-0 text-center">ต้องใช้ทั้งหมด</th>
+                        <th class="py-3 border-0 text-center text-primary">มีในสต็อก</th>
+                        <th class="py-3 border-0 text-center text-danger">ขาด (ต้องซื้อเพิ่ม)</th>
+                        <th class="pe-4 py-3 border-0 text-end">สั่งซื้อจากร้านค้า</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in materials_needed %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark">{{ item.raw_material.name }}</div>
+                            <div class="text-muted small">{{ item.raw_material.code }}</div>
+                        </td>
+                        <td class="text-center fw-bold">{{ item.total_required|floatformat:0 }}</td>
+                        <td class="text-center fw-bold text-primary">{{ item.stock_qty }}</td>
+                        
+                        <td class="text-center fw-bold {% if item.to_buy > 0 %}text-danger fs-5{% else %}text-success{% endif %}">
+                            {% if item.to_buy > 0 %}
+                                {{ item.to_buy|floatformat:0 }}
+                            {% else %}
+                                <i class="fas fa-check"></i> พอดีแล้ว
+                            {% endif %}
+                        </td>
+                        
+                        <td class="pe-4 text-end">
+                            {% if item.to_buy > 0 %}
+                                {% if item.supplier %}
+                                    <span class="badge bg-secondary bg-opacity-10 text-dark border"><i class="fas fa-store text-muted me-1"></i> {{ item.supplier.name }}</span>
+                                {% else %}
+                                    <span class="badge bg-danger"><i class="fas fa-exclamation"></i> ยังไม่ผูกร้านค้า</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="text-center py-5 text-muted">ไม่พบข้อมูลส่วนผสม</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

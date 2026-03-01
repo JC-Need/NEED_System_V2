@@ -4,8 +4,9 @@ from django.contrib import messages
 from django.db.models import Q
 from django.http import JsonResponse
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from .models import Customer, Province, Amphure, Tambon
-from .forms import CustomerForm
+
+from .models import Customer, Province, Amphure, Tambon, Supplier
+from .forms import CustomerForm, SupplierForm
 
 # --- Customer Management ---
 
@@ -80,6 +81,7 @@ def customer_delete(request, pk):
     messages.success(request, "ลบข้อมูลเรียบร้อย")
     return redirect('customer_list')
 
+
 # --- Address API ---
 
 @login_required
@@ -102,3 +104,65 @@ def get_tambons(request):
     if amphure_id:
         tambons = list(Tambon.objects.filter(amphure_id=amphure_id).values('id', 'name_th', 'zip_code').order_by('name_th'))
     return JsonResponse(tambons, safe=False)
+
+
+# --- Supplier Management ---
+
+@login_required
+def supplier_list(request):
+    search = request.GET.get('search', '')
+    if search:
+        supplier_qs = Supplier.objects.filter(
+            Q(name__icontains=search) |
+            Q(code__icontains=search) |
+            Q(phone__icontains=search) | 
+            Q(tax_id__icontains=search)
+        ).order_by('-id')  # ★ แก้ไขตรงนี้: เปลี่ยนจาก -created_at เป็น -id
+    else:
+        supplier_qs = Supplier.objects.all().order_by('-id')  # ★ แก้ไขตรงนี้: เปลี่ยนจาก -created_at เป็น -id
+
+    paginator = Paginator(supplier_qs, 20)
+    page = request.GET.get('page')
+
+    try: 
+        suppliers = paginator.page(page)
+    except PageNotAnInteger: 
+        suppliers = paginator.page(1)
+    except EmptyPage: 
+        suppliers = paginator.page(paginator.num_pages)
+
+    return render(request, 'master_data/supplier/supplier_list.html', {
+        'suppliers': suppliers, 'search': search
+    })
+
+@login_required
+def supplier_create(request):
+    if request.method == 'POST':
+        form = SupplierForm(request.POST)
+        if form.is_valid():
+            sup = form.save()
+            messages.success(request, f"เพิ่มร้านค้า {sup.name} เรียบร้อย")
+            return redirect('supplier_list')
+    else:
+        form = SupplierForm()
+    return render(request, 'master_data/supplier/supplier_form.html', {'form': form, 'title': 'เพิ่มร้านค้าใหม่ (Supplier)'})
+
+@login_required
+def supplier_edit(request, pk):
+    supplier = get_object_or_404(Supplier, pk=pk)
+    if request.method == 'POST':
+        form = SupplierForm(request.POST, instance=supplier)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "บันทึกข้อมูลเรียบร้อย")
+            return redirect('supplier_list')
+    else:
+        form = SupplierForm(instance=supplier)
+    return render(request, 'master_data/supplier/supplier_form.html', {'form': form, 'title': 'แก้ไขข้อมูลร้านค้า'})
+
+@login_required
+def supplier_delete(request, pk):
+    supplier = get_object_or_404(Supplier, pk=pk)
+    supplier.delete()
+    messages.success(request, "ลบข้อมูลร้านค้าเรียบร้อย")
+    return redirect('supplier_list')
