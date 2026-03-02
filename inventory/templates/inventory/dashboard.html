@@ -9,6 +9,10 @@
             <p class="text-muted mb-0">บริหารจัดการสินค้าสำเร็จรูป (FG) และวัตถุดิบ (RM)</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'po_receive_list' %}" class="btn btn-success shadow-sm rounded-pill px-3 fw-bold">
+                <i class="fas fa-truck-loading me-1"></i> รับสินค้าจาก PO (GR)
+            </a>
+
             <a href="{% url 'bom_list' %}" class="btn shadow-sm rounded-pill px-3 fw-bold text-dark" style="background-color: #e0f7fa; border: 1px solid #b2ebf2;">
                 <i class="fas fa-clipboard-list me-1 text-info"></i> จัดการสูตรผลิต (BOM)
             </a>
@@ -16,9 +20,11 @@
             <a href="{% url 'product_create' %}" class="btn btn-primary shadow-sm rounded-pill px-3 fw-bold">
                 <i class="fas fa-plus me-1"></i> เพิ่มสินค้า/วัตถุดิบ
             </a>
-            <a href="{% url 'document_list_in' %}" class="btn btn-success shadow-sm rounded-pill px-3 fw-bold">
+            
+            <a href="{% url 'document_list_in' %}" class="btn btn-outline-success shadow-sm rounded-pill px-3 fw-bold bg-white">
                 <i class="fas fa-file-import me-1"></i> ใบรับสินค้า/วัตถุดิบ
             </a>
+            
             <a href="{% url 'document_list_out' %}" class="btn btn-warning text-dark shadow-sm rounded-pill px-3 fw-bold">
                 <i class="fas fa-file-export me-1"></i> ใบเบิกสินค้า/วัตถุดิบ
             </a>

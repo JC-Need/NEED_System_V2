@@ -37,7 +37,6 @@ class Product(models.Model):
     stock_qty = models.IntegerField(default=0, verbose_name="จำนวนคงเหลือ")
     min_level = models.IntegerField(default=5, verbose_name="จุดสั่งซื้อ (Low Stock)")
 
-    # ✅ ผูกกับ Supplier เรียบร้อย
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ซัพพลายเออร์หลัก")
     
     image = models.ImageField(upload_to='products/', blank=True, null=True, verbose_name="รูปสินค้า")
@@ -78,7 +77,11 @@ class InventoryDoc(models.Model):
     ]
     doc_no = models.CharField(max_length=50, unique=True, blank=True, verbose_name="เลขที่เอกสาร")
     doc_type = models.CharField(max_length=2, choices=DOC_TYPES, verbose_name="ประเภทเอกสาร")
-    reference = models.CharField(max_length=100, blank=True, verbose_name="อ้างอิง (PO/Job No.)")
+    
+    # 🌟 ฟิลด์ใหม่: สะพานเชื่อมกลับไปหาใบสั่งซื้อ (PO) 🌟
+    po_reference = models.ForeignKey('purchasing.PurchaseOrder', on_delete=models.SET_NULL, null=True, blank=True, related_name='receipt_docs', verbose_name="อ้างอิงใบสั่งซื้อ (PO)")
+    
+    reference = models.CharField(max_length=100, blank=True, verbose_name="อ้างอิงอื่นๆ (เช่น ทะเบียนรถ, ใบส่งของ)")
     description = models.TextField(blank=True, verbose_name="หมายเหตุ")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ทำรายการ")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="วันที่เอกสาร")

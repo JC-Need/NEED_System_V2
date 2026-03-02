@@ -4,14 +4,19 @@
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
-    /* ปรับแต่งปฏิทินให้เข้ากับธีม */
     .flatpickr-calendar { font-family: 'Sarabun', sans-serif; }
 </style>
 
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
-            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-plus-circle text-primary me-2"></i>สร้างใบสั่งซื้อใหม่ (New PO)</h4>
+            <h4 class="fw-bold mb-1 text-dark">
+                {% if po %}
+                    <i class="fas fa-edit text-warning me-2"></i>แก้ไขใบสั่งซื้อ (Edit PO): <span class="text-primary">{{ po.code }}</span>
+                {% else %}
+                    <i class="fas fa-plus-circle text-primary me-2"></i>สร้างใบสั่งซื้อใหม่ (New PO)
+                {% endif %}
+            </h4>
             <p class="text-muted small mb-0">ตรวจสอบรายการสินค้าและบันทึกเอกสาร</p>
         </div>
         <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับ</a>
@@ -129,16 +134,14 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         
-        // 🌟 เปิดใช้งานปฏิทิน Flatpickr 🌟
         flatpickr(".datepicker", {
             altInput: true,
-            altFormat: "d/m/Y",   // รูปแบบที่แสดงให้เราเห็น (วัน/เดือน/ปี)
-            dateFormat: "Y-m-d",  // รูปแบบที่แอบส่งให้ Database บันทึก (ปี-เดือน-วัน)
-            locale: "th",         // ใช้ภาษาไทย
+            altFormat: "d/m/Y",   
+            dateFormat: "Y-m-d",  
+            locale: "th",         
             allowInput: true
         });
 
-        // --- ระบบเพิ่มแถว ---
         const addButton = document.getElementById('add-item-btn');
         const container = document.getElementById('formset-container');
         const emptyFormTemplate = document.getElementById('empty-form').innerHTML;
@@ -151,7 +154,6 @@
             totalFormsInput.value = formIdx + 1;
         });
 
-        // --- ระบบลบบรรทัดด้วยปุ่มถังขยะ ---
         document.getElementById('items-table').addEventListener('click', function(e) {
             const removeBtn = e.target.closest('.btn-remove-row');
             if (removeBtn) {
@@ -169,7 +171,6 @@
             }
         });
 
-        // --- ระบบคำนวณเงิน และใส่ลูกน้ำ (,) ---
         function calculateGrandTotal() {
             let grandTotal = 0;
             document.querySelectorAll('.item-row').forEach(row => {
@@ -210,7 +211,6 @@
             });
         });
 
-        // --- ระบบรับข้อมูลวาร์ปจาก PPO ---
         const urlParams = new URLSearchParams(window.location.search);
         const itemsDataRaw = urlParams.get('items_data');
 

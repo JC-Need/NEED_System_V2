@@ -2,7 +2,7 @@
 {% load humanize %}
 
 {% block content %}
-<div class="container py-5">
+<div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-shopping-cart text-primary me-2"></i>ระบบจัดซื้อ (Purchasing)</h4>
@@ -12,20 +12,50 @@
     </div>
 
     <div class="card border-0 shadow-sm rounded-4 mb-4" style="background-color: #fffdf5; border-left: 5px solid #ffc107 !important;">
-        <div class="card-body p-3 d-flex flex-wrap align-items-center gap-3">
-            <span class="text-muted fw-bold small me-2"><i class="fas fa-bolt text-warning me-1"></i> เครื่องมือด่วน (Quick Actions):</span>
-            
-            <a href="{% url 'ppo_prepare' %}" class="btn btn-warning rounded-pill px-4 shadow-sm fw-bold">
-                <i class="fas fa-magic me-2"></i> เตรียมการสั่งซื้อ (PPO)
-            </a>
-            
-            <a href="{% url 'bom_list' %}" class="btn btn-info rounded-pill px-4 shadow-sm fw-bold text-dark" style="background-color: #e0f7fa; border-color: #b2ebf2;">
-                <i class="fas fa-clipboard-list me-2"></i> จัดการสูตรผลิต (BOM)
-            </a>
+        <div class="card-body p-3">
+            <div class="d-flex align-items-center mb-3">
+                <span class="text-muted fw-bold small"><i class="fas fa-route text-warning me-1"></i> แถบเครื่องมือจัดการเอกสาร (Action Bar):</span>
+            </div>
+
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <a href="{% url 'production_list' %}" class="btn btn-success rounded-pill px-4 shadow-sm fw-bold">
+                    <i class="fas fa-industry me-1"></i> เปิดใบสั่งผลิต (JOB)
+                </a>
+
+                <i class="fas fa-chevron-right text-muted mx-1 d-none d-md-inline opacity-50"></i>
+
+                <a href="{% url 'ppo_prepare' %}" class="btn btn-warning rounded-pill px-4 shadow-sm fw-bold text-dark">
+                    <i class="fas fa-magic me-1"></i> สร้างใบเตรียม (PPO)
+                </a>
+
+                <i class="fas fa-chevron-right text-muted mx-1 d-none d-md-inline opacity-50"></i>
+
+                <a href="{% url 'ppo_list' %}" class="btn btn-info text-dark rounded-pill px-4 shadow-sm fw-bold" style="background-color: #aed6f1; border-color: #aed6f1;">
+                    <i class="fas fa-folder-open me-1"></i> ประวัติ PPO
+                </a>
+
+                <i class="fas fa-chevron-right text-muted mx-1 d-none d-md-inline opacity-50"></i>
+
+                <a href="{% url 'po_list' %}" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
+                    <i class="fas fa-list me-1"></i> ดูใบสั่งซื้อทั้งหมด
+                </a>
+
+                <div class="vr mx-3 d-none d-xl-block" style="opacity: 0.1; height: 35px;"></div>
+
+                <div class="d-flex gap-2 ms-auto mt-2 mt-xl-0">
+                    <a href="{% url 'bom_list' %}" class="btn btn-outline-secondary rounded-pill px-3 shadow-sm fw-bold bg-white">
+                        <i class="fas fa-clipboard-list me-1"></i> สูตรผลิต (BOM)
+                    </a>
+                    <a href="{% url 'product_create' %}" class="btn btn-outline-primary rounded-pill px-3 shadow-sm fw-bold bg-white">
+                        <i class="fas fa-plus me-1"></i> เพิ่มสินค้า
+                    </a>
+                </div>
+            </div>
         </div>
     </div>
+
     <div class="row g-4 mb-4">
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card border-0 shadow-sm rounded-4 h-100 bg-white position-relative overflow-hidden">
                 <div class="card-body p-4">
                     <div class="text-muted small fw-bold mb-2">PO รออนุมัติ / ร่าง</div>
@@ -35,7 +65,7 @@
             </div>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card border-0 shadow-sm rounded-4 h-100 bg-white position-relative overflow-hidden">
                 <div class="card-body p-4">
                     <div class="text-muted small fw-bold mb-2">ยอดหนี้รอชำระ</div>
@@ -46,25 +76,12 @@
             </div>
         </div>
 
-        <div class="col-md-3">
+        <div class="col-md-4">
             <div class="card border-0 shadow-sm rounded-4 h-100 bg-white position-relative overflow-hidden">
                 <div class="card-body p-4">
                     <div class="text-muted small fw-bold mb-2">รอรับของเข้าคลัง</div>
                     <h2 class="fw-bold text-warning mb-0">{{ pending_receipt_count }} <span class="fs-6 fw-normal text-muted">รายการ</span></h2>
-                    <i class="fas fa-boxes position-absolute text-warning opacity-10" style="font-size: 5rem; bottom: -10px; right: -10px;"></i>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-3">
-            <div class="card border-0 shadow-sm rounded-4 h-100 bg-primary text-white position-relative overflow-hidden" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-                <div class="card-body p-4 d-flex flex-column justify-content-center">
-                    <a href="{% url 'po_create' %}" class="btn btn-light rounded-pill fw-bold text-primary mb-2 shadow-sm">
-                        <i class="fas fa-plus-circle me-1"></i> สร้าง PO ใหม่
-                    </a>
-                    <a href="/admin/purchasing/purchaseorder/" class="btn btn-outline-light rounded-pill fw-bold">
-                        <i class="fas fa-list me-1"></i> ดูใบสั่งซื้อทั้งหมด
-                    </a>
+                    <i class="fas fa-boxes position-absolute text-warning opacity-10" style="font-size: 5rem; bottom: -10px; right: -10px; z-index: 1;"></i>
                 </div>
             </div>
         </div>
@@ -72,7 +89,7 @@
 
     <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
         <div class="card-header bg-white border-bottom py-3">
-            <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-history text-muted me-2"></i>รายการสั่งซื้อล่าสุด</h5>
+            <h5 class="fw-bold mb-0 text-dark"><i class="fas fa-history text-muted me-2"></i>รายการสั่งซื้อ 10 รายการล่าสุด</h5>
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -85,7 +102,7 @@
                         <th class="py-3 border-0 text-center">การชำระเงิน</th>
                         <th class="py-3 border-0 text-center">การจัดส่ง</th>
                         <th class="py-3 border-0 text-center">รับเข้าคลัง</th>
-                        <th class="pe-4 py-3 border-0 text-center">พิมพ์</th>
+                        <th class="pe-4 py-3 border-0 text-center" style="width: 180px;">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -137,9 +154,25 @@
                         </td>
 
                         <td class="pe-4 text-center">
-                            <a href="{% url 'po_print' po.id %}" target="_blank" class="btn btn-sm btn-light border text-secondary shadow-sm" title="พิมพ์ใบสั่งซื้อ">
-                                <i class="fas fa-print"></i>
-                            </a>
+                            <div class="d-flex justify-content-center gap-2">
+                                <a href="{% url 'po_edit' po.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="ดูรายละเอียด / แก้ไข / อนุมัติ">
+                                    <i class="fas fa-search"></i>
+                                </a>
+
+                                <a href="{% url 'po_payment' po.id %}" class="btn btn-sm btn-outline-success shadow-sm" title="บันทึกชำระเงิน">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </a>
+
+                                {% if po.status == 'APPROVED' and po.receipt_status != 'COMPLETED' %}
+                                <a href="{% url 'po_receive_process' po.id %}" class="btn btn-sm btn-outline-warning text-dark shadow-sm" title="ตรวจรับสินค้าเข้าคลัง">
+                                    <i class="fas fa-truck-loading"></i>
+                                </a>
+                                {% endif %}
+
+                                <a href="{% url 'po_print' po.id %}" target="_blank" class="btn btn-sm btn-outline-secondary shadow-sm" title="พิมพ์ใบสั่งซื้อ">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     {% empty %}

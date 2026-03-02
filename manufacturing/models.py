@@ -2,6 +2,38 @@ from django.db import models
 from django.utils import timezone
 from inventory.models import Product
 from hr.models import Employee
+import datetime
+
+# ==========================================
+# 🌟 ตารางสำหรับเก็บข้อมูลลูกค้าและทีมงาน 🌟
+# ==========================================
+class Branch(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อสาขา")
+    def __str__(self): return self.name
+
+class Salesperson(models.Model):
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='salespersons', verbose_name="สาขา")
+    name = models.CharField(max_length=100, verbose_name="ชื่อพนักงานขาย")
+    def __str__(self): return f"{self.name} ({self.branch.name})"
+
+# ==========================================
+# 🌟 ตารางใหม่: สำหรับระบบกระดานติดตามงาน 🌟
+# ==========================================
+class ProductionStatus(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="สถานะการผลิตหน้างาน")
+    def __str__(self): return self.name
+
+class ProductionTeam(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อทีมช่าง")
+    def __str__(self): return self.name
+
+class DeliveryStatus(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="สถานะการจัดส่ง")
+    def __str__(self): return self.name
+
+class Transporter(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="ทีมขนส่ง / บริษัทขนส่ง")
+    def __str__(self): return self.name
 
 # ==========================================
 # 1. สูตรการผลิต (Bill of Materials - BOM)
@@ -11,8 +43,7 @@ class BOM(models.Model):
     name = models.CharField(max_length=200, verbose_name="ชื่อสูตร (เช่น สูตรมาตรฐาน)")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
 
-    def __str__(self):
-        return f"สูตรผลิต: {self.product.name}"
+    def __str__(self): return f"สูตรผลิต: {self.product.name}"
 
     class Meta:
         verbose_name = "1. สูตรการผลิต (BOM)"
@@ -23,11 +54,10 @@ class BOMItem(models.Model):
     raw_material = models.ForeignKey(Product, related_name='used_in_boms', on_delete=models.CASCADE, verbose_name="วัตถุดิบ (Raw Mat)")
     quantity = models.DecimalField(max_digits=10, decimal_places=4, verbose_name="จำนวนที่ใช้ (ต่อ 1 หน่วยผลิต)")
     
-    def __str__(self):
-        return f"{self.raw_material.name} ({self.quantity})"
+    def __str__(self): return f"{self.raw_material.name} ({self.quantity})"
 
 # ==========================================
-# 2. ใบสั่งผลิต (Production Order)
+# 2. ใบสั่งผลิต (Production Order - JOB)
 # ==========================================
 class ProductionOrder(models.Model):
     STATUS_CHOICES = [
@@ -37,20 +67,32 @@ class ProductionOrder(models.Model):
         ('CANCELLED', 'ยกเลิก')
     ]
 
-    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบสั่งผลิต")
+    code = models.CharField(max_length=20, unique=True, blank=True, verbose_name="เลขที่ใบสั่งผลิต (JOB)")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้าที่จะผลิต")
-    quantity = models.IntegerField(default=1, verbose_name="จำนวนที่ผลิต")
+    quantity = models.IntegerField(default=1, verbose_name="จำนวนที่ผลิต (ล็อกที่ 1 เสมอ)")
     
-    start_date = models.DateField(default=timezone.now, verbose_name="วันที่เริ่ม")
-    finish_date = models.DateField(null=True, blank=True, verbose_name="วันที่เสร็จ")
+    # --- ข้อมูลวันที่และการขาย ---
+    start_date = models.DateField(default=timezone.now, verbose_name="วันที่เริ่มผลิต")
+    finish_date = models.DateField(null=True, blank=True, verbose_name="วันที่เสร็จ (เข้าคลัง)")
+    delivery_date = models.DateField(null=True, blank=True, verbose_name="กำหนดจัดส่งสินค้า")
+    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สาขาที่ขาย")
+    salesperson = models.ForeignKey(Salesperson, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="พนักงานขาย")
+    customer_name = models.CharField(max_length=200, blank=True, verbose_name="ชื่อลูกค้า / สถานที่ส่ง")
     
+    # --- ข้อมูลควบคุมการผลิต ---
+    production_status = models.ForeignKey(ProductionStatus, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สถานะหน้างาน")
+    production_team = models.ForeignKey(ProductionTeam, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมช่างผลิต")
+    delivery_status = models.ForeignKey(DeliveryStatus, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สถานะจัดส่ง")
+    transporter = models.ForeignKey(Transporter, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมขนส่ง")
+    
+    # --- ข้อมูลระบบ ---
     responsible_person = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ควบคุมการผลิต")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PLANNED', verbose_name="สถานะ")
-    
-    # 🌟 ฟิลด์ใหม่: เพื่อเช็คว่าออเดอร์นี้ถูกนำไปคำนวณและออก PO จัดซื้อหรือยัง ป้องกันกดซ้ำ 🌟
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PLANNED', verbose_name="สถานะระบบ")
     is_materials_ordered = models.BooleanField(default=False, verbose_name="สั่งซื้อวัตถุดิบแล้ว")
-    
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
+    
+    # 🌟 เพิ่มข้อมูลสำหรับฟีเจอร์ ปิดจ๊อบ (Archived) 🌟
+    is_closed = models.BooleanField(default=False, verbose_name="ปิดจ๊อบแล้ว (งานเสร็จสมบูรณ์)")
 
     class Meta:
         verbose_name = "2. ใบสั่งผลิต"
@@ -58,3 +100,19 @@ class ProductionOrder(models.Model):
 
     def __str__(self):
         return f"{self.code} - {self.product.name}"
+
+    def save(self, *args, **kwargs):
+        self.quantity = 1 
+        if not self.code:
+            today = datetime.date.today()
+            thai_year = (today.year + 543) % 100
+            prefix = f"JOB{thai_year:02d}{today.strftime('%m')}"
+            
+            last_order = ProductionOrder.objects.filter(code__startswith=prefix).order_by('code').last()
+            if last_order:
+                try: seq = int(last_order.code.replace(prefix, '')) + 1
+                except: seq = 1
+            else:
+                seq = 1
+            self.code = f"{prefix}{seq:03d}"
+        super().save(*args, **kwargs)

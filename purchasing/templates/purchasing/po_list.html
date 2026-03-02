@@ -1,0 +1,109 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-list text-primary me-2"></i>รายการใบสั่งซื้อทั้งหมด (All POs)</h4>
+            <p class="text-muted small mb-0">ดูประวัติใบสั่งซื้อทั้งหมดในระบบ</p>
+        </div>
+        
+        <div class="d-flex gap-2">
+            <a href="{% url 'po_create' %}" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
+                <i class="fas fa-plus-circle me-1"></i> สร้าง PO ใหม่
+            </a>
+            <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4">
+                <i class="fas fa-arrow-left me-2"></i> กลับหน้าจัดซื้อ
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light text-secondary" style="font-size: 0.8rem; text-transform: uppercase;">
+                    <tr>
+                        <th class="ps-4 py-3 border-0">เลขที่ PO / วันที่</th>
+                        <th class="py-3 border-0">ร้านค้า (Supplier)</th>
+                        <th class="py-3 border-0 text-end">ยอดรวม</th>
+                        <th class="py-3 border-0 text-center">สถานะเอกสาร</th>
+                        <th class="py-3 border-0 text-center">การชำระเงิน</th>
+                        <th class="py-3 border-0 text-center">การจัดส่ง</th>
+                        <th class="py-3 border-0 text-center">รับเข้าคลัง</th>
+                        <th class="pe-4 py-3 border-0 text-center" style="width: 150px;">จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for po in pos %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark font-monospace">{{ po.code }}</div>
+                            <div class="text-muted small"><i class="far fa-calendar-alt me-1"></i> {{ po.date|date:"d/m/Y" }}</div>
+                        </td>
+                        <td>
+                            <div class="fw-bold text-dark text-truncate" style="max-width: 200px;">{{ po.supplier.name|default:"-" }}</div>
+                        </td>
+                        <td class="text-end fw-bold text-primary">{{ po.total_amount|intcomma }}</td>
+
+                        <td class="text-center">
+                            {% if po.status == 'DRAFT' %}
+                                <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-3">ร่าง / รออนุมัติ</span>
+                            {% elif po.status == 'APPROVED' %}
+                                <span class="badge bg-success bg-opacity-10 text-success border rounded-pill px-3">อนุมัติแล้ว</span>
+                            {% else %}
+                                <span class="badge bg-danger bg-opacity-10 text-danger border rounded-pill px-3">ยกเลิก</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="text-center">
+                            {% if po.payment_status == 'PAID' %}
+                                <span class="badge bg-success rounded-pill px-3"><i class="fas fa-check me-1"></i> จ่ายครบ</span>
+                            {% elif po.payment_status == 'DEPOSIT' %}
+                                <span class="badge bg-info text-dark rounded-pill px-3">มัดจำแล้ว</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3">รอชำระ</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if po.delivery_status == 'SHIPPED' %}
+                                <span class="badge bg-success rounded-pill px-3"><i class="fas fa-truck me-1"></i> ส่งแล้ว</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3">รอจัดส่ง</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-center">
+                            {% if po.receipt_status == 'COMPLETED' %}
+                                <span class="badge bg-success rounded-pill px-3"><i class="fas fa-box-open me-1"></i> รับครบ</span>
+                            {% elif po.receipt_status == 'PARTIAL' %}
+                                <span class="badge bg-info text-dark rounded-pill px-3">รับบางส่วน</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3">รอรับของ</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="pe-4 text-center">
+                            <div class="d-flex justify-content-center gap-2">
+                                <a href="{% url 'po_edit' po.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="ดูรายละเอียด / แก้ไข / อนุมัติ">
+                                    <i class="fas fa-search"></i>
+                                </a>
+                                
+                                <a href="{% url 'po_payment' po.id %}" class="btn btn-sm btn-outline-success shadow-sm" title="บันทึกชำระเงิน">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </a>
+
+                                <a href="{% url 'po_print' po.id %}" target="_blank" class="btn btn-sm btn-outline-secondary shadow-sm" title="พิมพ์ใบสั่งซื้อ">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3 opacity-25"></i><br>ยังไม่มีรายการใบสั่งซื้อ</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

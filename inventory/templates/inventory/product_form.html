@@ -67,8 +67,96 @@
     </div>
 </div>
 
+<div class="modal fade" id="categoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold text-primary"><i class="fas fa-tags me-2"></i>เพิ่มหมวดหมู่ใหม่</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body py-0">
+                <input type="text" id="newCategoryName" class="form-control form-control-lg shadow-sm" placeholder="กรอกชื่อหมวดหมู่ที่นี่...">
+            </div>
+            <div class="modal-footer border-top-0 mt-3">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="button" id="btnSaveCategory" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">บันทึก</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener("DOMContentLoaded", function() {
+        
+        // 🌟 ฟังก์ชันสร้างปุ่ม + สำหรับเปิด Popup (ใช้กับหมวดหมู่) 🌟
+        function addPlusButtonModal(selectId, modalId) {
+            const selectEl = document.getElementById(selectId);
+            if (selectEl) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'input-group shadow-sm rounded';
+                selectEl.parentNode.insertBefore(wrapper, selectEl);
+                wrapper.appendChild(selectEl);
+                
+                const btnHTML = `<button class="btn btn-outline-primary fw-bold" type="button" data-bs-toggle="modal" data-bs-target="${modalId}" title="เพิ่มหมวดหมู่แบบด่วน" style="border-left: 0;"><i class="fas fa-plus"></i></button>`;
+                wrapper.insertAdjacentHTML('beforeend', btnHTML);
+                
+                selectEl.style.borderTopRightRadius = '0';
+                selectEl.style.borderBottomRightRadius = '0';
+            }
+        }
+
+        // 🌟 ฟังก์ชันสร้างปุ่ม + สำหรับเด้งไปหน้าจอใหม่ (ใช้กับร้านค้า) 🌟
+        function addPlusButtonLink(selectId, targetUrl) {
+            const selectEl = document.getElementById(selectId);
+            if (selectEl) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'input-group shadow-sm rounded';
+                selectEl.parentNode.insertBefore(wrapper, selectEl);
+                wrapper.appendChild(selectEl);
+                
+                // เปิดแท็บใหม่ไปหน้าจัดการร้านค้า
+                const btnHTML = `<a href="${targetUrl}" target="_blank" class="btn btn-outline-primary fw-bold d-flex align-items-center" title="ไปหน้าจัดการร้านค้า" style="border-left: 0;"><i class="fas fa-plus"></i></a>`;
+                wrapper.insertAdjacentHTML('beforeend', btnHTML);
+                
+                selectEl.style.borderTopRightRadius = '0';
+                selectEl.style.borderBottomRightRadius = '0';
+            }
+        }
+
+        // เสกปุ่มให้ช่อง Category (ใช้แบบ Popup ด่วน)
+        addPlusButtonModal('id_category', '#categoryModal');
+        
+        // เสกปุ่มให้ช่อง Supplier (ใช้แบบลิงก์เปิดหน้าใหม่)
+        addPlusButtonLink('id_supplier', '/master_data/suppliers/');
+
+        // 🌟 ฟังก์ชัน AJAX บันทึกหมวดหมู่แบบด่วน 🌟
+        const btnSaveCat = document.getElementById('btnSaveCategory');
+        if(btnSaveCat) {
+            btnSaveCat.addEventListener('click', function() {
+                const name = document.getElementById('newCategoryName').value.trim();
+                if(!name) return;
+                
+                fetch('{% url "ajax_add_category" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({name: name})
+                }).then(res => res.json()).then(data => {
+                    if(data.success) {
+                        const select = document.getElementById('id_category');
+                        select.add(new Option(data.name, data.id, true, true));
+                        bootstrap.Modal.getInstance(document.getElementById('categoryModal')).hide();
+                        document.getElementById('newCategoryName').value = ''; 
+                    } else {
+                        alert('เกิดข้อผิดพลาด: ' + data.error);
+                    }
+                });
+            });
+        }
+
+        // โค้ดจัดการตัวเลข (ลูกน้ำ) เดิมของคุณลูกค้า
         const numberInputs = document.querySelectorAll('.number-input');
         numberInputs.forEach(input => {
             input.addEventListener('focus', function() {

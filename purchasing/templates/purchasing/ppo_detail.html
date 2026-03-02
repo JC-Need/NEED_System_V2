@@ -1,0 +1,77 @@
+{% extends 'core/base.html' %}
+{% load humanize %} 
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-clipboard-list text-primary me-2"></i>รายละเอียดใบเตรียมสั่งซื้อ: <span class="text-success">{{ ppo.code }}</span></h4>
+            <p class="text-muted small mb-0">รายการวัตถุดิบที่ถูกยุบรวม แยกตามร้านค้า</p>
+        </div>
+        <a href="{% url 'ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ</a>
+    </div>
+
+    <div class="alert alert-info border-0 rounded-4 mb-4 shadow-sm">
+        <h6 class="fw-bold mb-2"><i class="fas fa-info-circle me-2"></i>อ้างอิงจากใบสั่งผลิต (JOB):</h6>
+        <div class="d-flex flex-wrap gap-2">
+            {% for job in ppo.production_orders.all %}
+                <span class="badge bg-white text-dark border shadow-sm px-3 py-2"><i class="fas fa-home text-muted me-1"></i> {{ job.code }} ({{ job.product.name }})</span>
+            {% endfor %}
+        </div>
+    </div>
+
+    {% for sup_id, data in materials_by_supplier.items %}
+    <div class="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+            <h6 class="fw-bold mb-0 text-dark">
+                <i class="fas fa-store text-warning me-2"></i>ร้านค้า: <span class="text-primary">{{ data.name }}</span>
+            </h6>
+            <button type="button" class="btn btn-sm btn-success rounded-pill px-4 shadow-sm fw-bold" 
+                    onclick="transferToPO('{{ sup_id }}', '{{ ppo.code }}', '{{ data.items|escapejs }}')">
+                <i class="fas fa-paper-plane me-2"></i> ส่งไปทำใบสั่งซื้อ (PO) ร้านนี้
+            </button>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light small text-secondary">
+                    <tr>
+                        <th class="ps-4">วัตถุดิบ</th>
+                        <th class="text-center">จำนวนรวมที่ต้องใช้</th>
+                        <th class="text-end">ราคา/หน่วย</th>
+                        <th class="text-end pe-4">รวมเป็นเงิน</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in data.items %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark">{{ item.product_name }}</div>
+                            <small class="text-muted">{{ item.product_code }}</small>
+                        </td>
+                        <td class="text-center fw-bold">{{ item.qty|floatformat:"-2"|intcomma }}</td>
+                        <td class="text-end">{{ item.cost|floatformat:"2"|intcomma }}</td>
+                        <td class="text-end pe-4 fw-bold text-primary">{{ item.total|floatformat:"2"|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script>
+function transferToPO(supplierId, ppoRef, itemsData) {
+    const rawData = JSON.parse(itemsData.replace(/'/g, '"'));
+    const cleanItems = rawData.map(item => ({
+        id: item.product_id,
+        qty: item.qty,
+        cost: item.cost,
+        total: item.total
+    }));
+    const itemsJson = encodeURIComponent(JSON.stringify(cleanItems));
+    
+    window.location.href = `/purchasing/po/create/?ppo_ref=${ppoRef}&supplier_id=${supplierId}&items_data=${itemsJson}`;
+}
+</script>
+{% endblock %}

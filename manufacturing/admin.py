@@ -1,10 +1,27 @@
 from django.contrib import admin
 from django.contrib import messages
-from django.utils.html import format_html # ✅
-from django.urls import reverse # ✅
-from .models import BOM, BOMItem, ProductionOrder
+from django.utils.html import format_html
+from django.urls import reverse
+# 🌟 เพิ่ม Branch และ Salesperson เข้ามาใน Import
+from .models import BOM, BOMItem, ProductionOrder, Branch, Salesperson
 
-# ... (ส่วน BOMAdmin ด้านบน ปล่อยไว้เหมือนเดิม) ...
+# ==========================================
+# 🌟 เพิ่มเมนูจัดการ สาขา และ พนักงานขาย (ใหม่) 🌟
+# ==========================================
+@admin.register(Branch)
+class BranchAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name')
+    search_fields = ('name',)
+
+@admin.register(Salesperson)
+class SalespersonAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'branch')
+    list_filter = ('branch',)
+    search_fields = ('name',)
+
+# ==========================================
+# ส่วน BOMAdmin เดิม
+# ==========================================
 class BOMItemInline(admin.TabularInline):
     model = BOMItem
     extra = 1
@@ -16,10 +33,11 @@ class BOMAdmin(admin.ModelAdmin):
     inlines = [BOMItemInline]
     search_fields = ('product__name',)
 
-# ... (ส่วน Action เดิม ปล่อยไว้เหมือนเดิม) ...
+# ==========================================
+# ส่วน Action และ ProductionOrder เดิมของคุณลูกค้า
+# ==========================================
 @admin.action(description='✅ ยืนยันผลิตเสร็จ (ตัดวัตถุดิบ + เพิ่มสินค้า)')
 def action_complete_production(modeladmin, request, queryset):
-    # (โค้ดเดิมซ่อนไว้เพื่อความสั้น... แต่ในไฟล์จริงต้องมีนะครับ)
     for po in queryset:
         if po.status == 'COMPLETED': continue
         try:
@@ -51,9 +69,10 @@ def action_complete_production(modeladmin, request, queryset):
 
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(admin.ModelAdmin):
-    # ✅ เพิ่ม 'print_button'
-    list_display = ('code', 'product', 'quantity', 'status', 'start_date', 'print_button')
-    list_filter = ('status', 'start_date')
+    # 🌟 เพิ่มสาขาและเซลส์ เข้ามาโชว์ในตารางด้วย
+    list_display = ('code', 'product', 'quantity', 'status', 'start_date', 'branch', 'salesperson', 'print_button')
+    list_filter = ('status', 'start_date', 'branch')
+    search_fields = ('code', 'product__name', 'customer_name')
     actions = [action_complete_production]
 
     # ✅ ฟังก์ชันสร้างปุ่มพิมพ์ (สีม่วง)
