@@ -173,6 +173,7 @@
 
         function calculateGrandTotal() {
             let grandTotal = 0;
+
             document.querySelectorAll('.item-row').forEach(row => {
                 if (row.style.display === 'none') return;
 
@@ -194,6 +195,7 @@
                     grandTotal += total;
                 }
             });
+
             document.getElementById('grand-total').textContent = grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2});
         }
 
@@ -203,12 +205,36 @@
             }
         });
 
+        // ใส่ลูกน้ำและทศนิยมเมื่อผู้ใช้พิมพ์แก้ไขเองและคลิกออกนอกช่อง
+        document.getElementById('items-table').addEventListener('change', function(e) {
+            if (e.target.classList.contains('cost-input')) {
+                let val = parseFloat(e.target.value.replace(/,/g, ''));
+                if (!isNaN(val)) {
+                    e.target.setAttribute('type', 'text'); 
+                    e.target.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+            }
+        });
+
         document.getElementById('po-form').addEventListener('submit', function() {
-            document.querySelectorAll('.total-input').forEach(input => {
+            // เอาลูกน้ำออกจากช่อง 'รวมเป็นเงิน' และ 'ต้นทุนต่อหน่วย' ก่อนบันทึก
+            document.querySelectorAll('.total-input, .cost-input').forEach(input => {
                 if (input.value) {
                     input.value = input.value.replace(/,/g, '');
                 }
             });
+        });
+
+        // 🌟 เพิ่มใหม่: จัดรูปแบบตัวเลขสำหรับหน้า Edit (ตอนโหลดหน้าเว็บครั้งแรก) 🌟
+        document.querySelectorAll('.item-row').forEach(row => {
+            let costInput = row.querySelector('.cost-input');
+            if (costInput && costInput.value) {
+                let val = parseFloat(costInput.value.replace(/,/g, ''));
+                if (!isNaN(val)) {
+                    costInput.setAttribute('type', 'text');
+                    costInput.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                }
+            }
         });
 
         const urlParams = new URLSearchParams(window.location.search);
@@ -217,7 +243,7 @@
         if (itemsDataRaw) {
             try {
                 const items = JSON.parse(decodeURIComponent(itemsDataRaw));
-                
+
                 items.forEach((item, index) => {
                     if (index >= parseInt(totalFormsInput.value)) {
                         addButton.click();
@@ -230,10 +256,13 @@
                     if (productSelect && qtyInput && costInput) {
                         productSelect.value = item.id;
                         qtyInput.value = item.qty;
-                        costInput.value = item.cost;
+                        
+                        // แปลงช่องต้นทุนเป็น Text และใส่ลูกน้ำพร้อมทศนิยมตอนดึงข้อมูลมาแสดง
+                        costInput.setAttribute('type', 'text');
+                        costInput.value = parseFloat(item.cost).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                     }
                 });
-                
+
                 calculateGrandTotal();
             } catch (e) {
                 console.error("เกิดข้อผิดพลาด:", e);

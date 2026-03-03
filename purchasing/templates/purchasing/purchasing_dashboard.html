@@ -69,7 +69,7 @@
             <div class="card border-0 shadow-sm rounded-4 h-100 bg-white position-relative overflow-hidden">
                 <div class="card-body p-4">
                     <div class="text-muted small fw-bold mb-2">ยอดหนี้รอชำระ</div>
-                    <h2 class="fw-bold text-danger mb-0">{{ pending_payment_amount|intcomma }} <span class="fs-6 fw-normal text-muted">บาท</span></h2>
+                    <h2 class="fw-bold text-danger mb-0">{{ pending_payment_amount|floatformat:2|intcomma }} <span class="fs-6 fw-normal text-muted">บาท</span></h2>
                     <div class="mt-2"><span class="badge bg-danger bg-opacity-10 text-danger rounded-pill">{{ pending_payment_count }} บิลรอจ่าย</span></div>
                     <i class="fas fa-file-invoice-dollar position-absolute text-danger opacity-10" style="font-size: 5rem; bottom: -10px; right: -10px;"></i>
                 </div>
@@ -115,7 +115,7 @@
                         <td>
                             <div class="fw-bold text-dark text-truncate" style="max-width: 200px;">{{ po.supplier.name|default:"-" }}</div>
                         </td>
-                        <td class="text-end fw-bold text-primary">{{ po.total_amount|intcomma }}</td>
+                        <td class="text-end fw-bold text-primary">{{ po.total_amount|floatformat:2|intcomma }}</td>
 
                         <td class="text-center">
                             {% if po.status == 'DRAFT' %}

@@ -27,8 +27,9 @@ class PurchaseOrderItemForm(forms.ModelForm):
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select product-select'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control text-center qty-input', 'min': '0', 'step': '0.01'}),
-            'unit_cost': forms.NumberInput(attrs={'class': 'form-control text-end cost-input', 'min': '0', 'step': '0.01'}),
-            'total_cost': forms.NumberInput(attrs={'class': 'form-control text-end text-primary fw-bold total-input', 'readonly': 'readonly'}),
+            # 🌟 แก้ไข: เปลี่ยน NumberInput เป็น TextInput เพื่อให้รองรับเครื่องหมายลูกน้ำได้ 🌟
+            'unit_cost': forms.TextInput(attrs={'class': 'form-control text-end cost-input'}),
+            'total_cost': forms.TextInput(attrs={'class': 'form-control text-end text-primary fw-bold total-input', 'readonly': 'readonly'}),
         }
 
 # Formset สำหรับเพิ่มรายการสินค้าได้หลายบรรทัด

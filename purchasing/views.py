@@ -25,7 +25,7 @@ def purchasing_dashboard(request):
     actual_pending_amount = float(pending_payment_amount) - float(deposit_paid)
 
     pending_receipt_count = pos.filter(receipt_status__in=['PENDING', 'PARTIAL'], status='APPROVED').count()
-    recent_pos = pos.order_by('-created_at')[:10] # โชว์แค่ 10 ใบในหน้าแรก
+    recent_pos = pos.order_by('-created_at')[:10]
 
     context = {
         'draft_count': draft_count,
@@ -36,13 +36,8 @@ def purchasing_dashboard(request):
     }
     return render(request, 'purchasing/purchasing_dashboard.html', context)
 
-# ==========================================
-# 🌟 ระบบดูใบสั่งซื้อทั้งหมด (PO List) 🌟
-# ==========================================
 @login_required
 def po_list(request):
-    """ หน้าดูรายการใบสั่งซื้อทั้งหมด """
-    # ดึงข้อมูลใบสั่งซื้อทั้งหมด เรียงจากใหม่ไปเก่า
     pos = PurchaseOrder.objects.all().order_by('-created_at')
     return render(request, 'purchasing/po_list.html', {'pos': pos})
 
@@ -216,12 +211,25 @@ def po_payment(request, po_id):
 @login_required
 def ppo_list(request):
     ppos = PurchasePreparation.objects.all().order_by('-id')
+    
+    for ppo in ppos:
+        total_amount = 0
+        for job in ppo.production_orders.all():
+            bom = BOM.objects.filter(product=job.product).first()
+            if bom:
+                for item in bom.items.all():
+                    qty = float(item.quantity)
+                    cost = float(item.raw_material.cost_price)
+                    total_amount += (qty * cost)
+        ppo.total_estimated_cost = total_amount
+        
     return render(request, 'purchasing/ppo_list.html', {'ppos': ppos})
 
 @login_required
 def ppo_detail(request, pk):
     ppo = get_object_or_404(PurchasePreparation, pk=pk)
     materials_by_supplier = {}
+    grand_total = 0  # 🌟 ตัวแปรเก็บยอดรวมทั้งหมด 🌟
     
     for job in ppo.production_orders.all():
         bom = BOM.objects.filter(product=job.product).first()
@@ -249,10 +257,23 @@ def ppo_detail(request, pk):
                 materials_by_supplier[sup_id]['items'][mat_id]['qty'] += total_needed
                 materials_by_supplier[sup_id]['items'][mat_id]['total'] = materials_by_supplier[sup_id]['items'][mat_id]['qty'] * materials_by_supplier[sup_id]['items'][mat_id]['cost']
 
+    # 🌟 คำนวณยอดรวมแต่ละร้านค้า และยอดรวมทั้งหมด 🌟
     for sup_id in materials_by_supplier:
+        sup_total = sum(item['total'] for item in materials_by_supplier[sup_id]['items'].values())
+        materials_by_supplier[sup_id]['supplier_total'] = sup_total
+        grand_total += sup_total
+        
+        # แปลง dict เป็น list เพื่อใช้ในหน้าเว็บ
         materials_by_supplier[sup_id]['items'] = list(materials_by_supplier[sup_id]['items'].values())
+
+    created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code)
+    created_supplier_ids = [str(po.supplier_id) if po.supplier_id else "none" for po in created_pos]
+
+    for sup_id in materials_by_supplier:
+        materials_by_supplier[sup_id]['is_po_created'] = str(sup_id) in created_supplier_ids
 
     return render(request, 'purchasing/ppo_detail.html', {
         'ppo': ppo,
-        'materials_by_supplier': materials_by_supplier
+        'materials_by_supplier': materials_by_supplier,
+        'grand_total': grand_total  # 🌟 ส่งค่าไปหน้าเว็บ 🌟
     })

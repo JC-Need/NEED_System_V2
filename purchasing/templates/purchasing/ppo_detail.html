@@ -8,7 +8,10 @@
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-clipboard-list text-primary me-2"></i>รายละเอียดใบเตรียมสั่งซื้อ: <span class="text-success">{{ ppo.code }}</span></h4>
             <p class="text-muted small mb-0">รายการวัตถุดิบที่ถูกยุบรวม แยกตามร้านค้า</p>
         </div>
-        <a href="{% url 'ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ</a>
+        <div class="text-end">
+            <div class="fw-bold text-dark mb-2">ยอดประเมินรวมทั้งหมด: <span class="text-danger fs-4 ms-2">{{ grand_total|floatformat:2|intcomma }}</span> บาท</div>
+            <a href="{% url 'ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ</a>
+        </div>
     </div>
 
     <div class="alert alert-info border-0 rounded-4 mb-4 shadow-sm">
@@ -26,10 +29,18 @@
             <h6 class="fw-bold mb-0 text-dark">
                 <i class="fas fa-store text-warning me-2"></i>ร้านค้า: <span class="text-primary">{{ data.name }}</span>
             </h6>
-            <button type="button" class="btn btn-sm btn-success rounded-pill px-4 shadow-sm fw-bold" 
-                    onclick="transferToPO('{{ sup_id }}', '{{ ppo.code }}', '{{ data.items|escapejs }}')">
-                <i class="fas fa-paper-plane me-2"></i> ส่งไปทำใบสั่งซื้อ (PO) ร้านนี้
-            </button>
+            
+            {% if data.is_po_created %}
+                <button type="button" class="btn btn-sm btn-secondary rounded-pill px-4 shadow-sm fw-bold" disabled>
+                    <i class="fas fa-check-circle me-2"></i> สร้าง PO เรียบร้อยแล้ว
+                </button>
+            {% else %}
+                <button type="button" class="btn btn-sm btn-success rounded-pill px-4 shadow-sm fw-bold" 
+                        onclick="transferToPO(this, '{{ sup_id }}', '{{ ppo.code }}', '{{ data.items|escapejs }}')">
+                    <i class="fas fa-paper-plane me-2"></i> ส่งไปทำใบสั่งซื้อ (PO) ร้านนี้
+                </button>
+            {% endif %}
+
         </div>
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -54,6 +65,12 @@
                     </tr>
                     {% endfor %}
                 </tbody>
+                <tfoot class="bg-light">
+                    <tr>
+                        <td colspan="3" class="text-end fw-bold text-dark py-3">ยอดรวมสำหรับร้านค้านี้:</td>
+                        <td class="text-end pe-4 fw-bold text-danger fs-6 py-3">{{ data.supplier_total|floatformat:2|intcomma }}</td>
+                    </tr>
+                </tfoot>
             </table>
         </div>
     </div>
@@ -61,7 +78,15 @@
 </div>
 
 <script>
-function transferToPO(supplierId, ppoRef, itemsData) {
+// ฟังก์ชันล็อกการคลิกซ้ำ (Double-click Prevention)
+function transferToPO(btnElement, supplierId, ppoRef, itemsData) {
+    // 1. เปลี่ยนหน้าตาปุ่มและปิดการคลิกทันที (Disable)
+    btnElement.disabled = true;
+    btnElement.classList.remove('btn-success');
+    btnElement.classList.add('btn-secondary');
+    btnElement.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังประมวลผล...';
+
+    // 2. ส่งข้อมูลไปประมวลผล
     const rawData = JSON.parse(itemsData.replace(/'/g, '"'));
     const cleanItems = rawData.map(item => ({
         id: item.product_id,
@@ -71,6 +96,7 @@ function transferToPO(supplierId, ppoRef, itemsData) {
     }));
     const itemsJson = encodeURIComponent(JSON.stringify(cleanItems));
     
+    // เปลี่ยนหน้าไปสร้าง PO
     window.location.href = `/purchasing/po/create/?ppo_ref=${ppoRef}&supplier_id=${supplierId}&items_data=${itemsJson}`;
 }
 </script>

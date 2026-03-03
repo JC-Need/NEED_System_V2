@@ -1,6 +1,5 @@
 {% extends 'core/base.html' %}
-
-{% block content %}
+{% load humanize %} {% block content %}
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
@@ -23,6 +22,7 @@
                         <th class="ps-4 py-3 border-0">เลขที่ใบเตรียม (PPO)</th>
                         <th class="py-3 border-0">วันที่สร้าง</th>
                         <th class="py-3 border-0">ใบสั่งผลิต (JOB) ที่ถูกรวม</th>
+                        <th class="py-3 border-0 text-end">จำนวนเงินรวม (ประเมิน)</th>
                         <th class="pe-4 py-3 border-0 text-end">จัดการ</th>
                     </tr>
                 </thead>
@@ -36,6 +36,7 @@
                                 <span class="badge bg-secondary bg-opacity-10 text-dark border me-1">{{ job.code }}</span>
                             {% endfor %}
                         </td>
+                        <td class="text-end fw-bold text-danger">{{ ppo.total_estimated_cost|floatformat:2|intcomma }} บาท</td>
                         <td class="pe-4 text-end">
                             <a href="{% url 'ppo_detail' ppo.id %}" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold">
                                 <i class="fas fa-search me-1"></i> ดูรายละเอียด
@@ -43,7 +44,7 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="4" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีประวัติใบเตรียมสั่งซื้อ</td></tr>
+                    <tr><td colspan="5" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีประวัติใบเตรียมสั่งซื้อ</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
