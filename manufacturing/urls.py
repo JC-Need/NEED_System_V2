@@ -27,4 +27,7 @@ urlpatterns = [
     path('ajax/add-prod-team/', views.ajax_add_prod_team, name='ajax_add_prod_team'),
     path('ajax/add-delivery-status/', views.ajax_add_delivery_status, name='ajax_add_delivery_status'),
     path('ajax/add-transporter/', views.ajax_add_transporter, name='ajax_add_transporter'),
+    
+    # 🌟 เส้นทางใหม่: ดึงข้อมูล FG ตามหมวดหมู่ 🌟
+    path('ajax/get-fg-by-category/', views.ajax_get_fg_by_category, name='ajax_get_fg_by_category'),
 ]

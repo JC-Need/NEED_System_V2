@@ -19,11 +19,15 @@
                 <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-home me-2 text-warning"></i>ข้อมูลสินค้าสำเร็จรูป (FG)</h6>
             </div>
             <div class="card-body p-4 row g-3">
-                <div class="col-md-6">
+                <div class="col-md-4">
+                    <label class="form-label text-muted small fw-bold">{{ form.category.label }}</label>
+                    {{ form.category }}
+                </div>
+                <div class="col-md-4">
                     <label class="form-label text-muted small fw-bold">{{ form.product.label }} <span class="text-danger">*</span></label>
                     {{ form.product }}
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label text-muted small fw-bold">{{ form.name.label }} <span class="text-danger">*</span></label>
                     {{ form.name }}
                 </div>
@@ -131,6 +135,32 @@
                 row.style.display = 'none';
             }
         });
+
+        // 🌟 --- ระบบ Cascading Dropdown กรองสินค้า FG ตามหมวดหมู่ --- 🌟
+        const categorySelect = document.getElementById('id_category');
+        const productSelect = document.getElementById('id_product');
+
+        if (categorySelect && productSelect) {
+            categorySelect.addEventListener('change', function() {
+                const categoryId = this.value;
+                // ดึงข้อมูลใหม่ด้วย AJAX
+                fetch(`/manufacturing/ajax/get-fg-by-category/?category_id=${categoryId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // ล้างตัวเลือกเก่าทิ้ง
+                        productSelect.innerHTML = '<option value="">---------</option>';
+                        // นำข้อมูลใหม่ที่กรองแล้วมาสร้างตัวเลือกใหม่
+                        data.products.forEach(p => {
+                            const option = document.createElement('option');
+                            option.value = p.id;
+                            const codeStr = p.code ? `${p.code} - ` : '';
+                            option.textContent = `${codeStr}${p.name}`;
+                            productSelect.appendChild(option);
+                        });
+                    })
+                    .catch(error => console.error('Error:', error));
+            });
+        }
     });
 </script>
 {% endblock %}

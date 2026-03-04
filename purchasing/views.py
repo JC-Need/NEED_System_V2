@@ -71,7 +71,11 @@ def po_create(request):
             po = form.save(commit=False)
 
             now = datetime.datetime.now()
-            prefix = f"PO-{now.strftime('%y%m')}"
+            
+            # 🌟 แก้ไข: เปลี่ยนการคำนวณปีเป็นปีพุทธศักราช (บวก 543) 🌟
+            thai_year = (now.year + 543) % 100
+            prefix = f"PO-{thai_year:02d}{now.strftime('%m')}"
+            
             last_po = PurchaseOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
             seq = 1
             if last_po:
@@ -229,7 +233,7 @@ def ppo_list(request):
 def ppo_detail(request, pk):
     ppo = get_object_or_404(PurchasePreparation, pk=pk)
     materials_by_supplier = {}
-    grand_total = 0  # 🌟 ตัวแปรเก็บยอดรวมทั้งหมด 🌟
+    grand_total = 0 
     
     for job in ppo.production_orders.all():
         bom = BOM.objects.filter(product=job.product).first()
@@ -257,13 +261,11 @@ def ppo_detail(request, pk):
                 materials_by_supplier[sup_id]['items'][mat_id]['qty'] += total_needed
                 materials_by_supplier[sup_id]['items'][mat_id]['total'] = materials_by_supplier[sup_id]['items'][mat_id]['qty'] * materials_by_supplier[sup_id]['items'][mat_id]['cost']
 
-    # 🌟 คำนวณยอดรวมแต่ละร้านค้า และยอดรวมทั้งหมด 🌟
     for sup_id in materials_by_supplier:
         sup_total = sum(item['total'] for item in materials_by_supplier[sup_id]['items'].values())
         materials_by_supplier[sup_id]['supplier_total'] = sup_total
         grand_total += sup_total
         
-        # แปลง dict เป็น list เพื่อใช้ในหน้าเว็บ
         materials_by_supplier[sup_id]['items'] = list(materials_by_supplier[sup_id]['items'].values())
 
     created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code)
@@ -275,5 +277,5 @@ def ppo_detail(request, pk):
     return render(request, 'purchasing/ppo_detail.html', {
         'ppo': ppo,
         'materials_by_supplier': materials_by_supplier,
-        'grand_total': grand_total  # 🌟 ส่งค่าไปหน้าเว็บ 🌟
+        'grand_total': grand_total 
     })

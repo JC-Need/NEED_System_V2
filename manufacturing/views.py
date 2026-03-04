@@ -3,17 +3,17 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 from django.db.models import Max, Count, Q
-from django.db import transaction 
+from django.db import transaction
 from django.http import JsonResponse
 from django.core.paginator import Paginator # 🌟 Import ระบบแบ่งหน้า
 import datetime
 import calendar # 🌟 Import สำหรับคำนวณวันสิ้นเดือน
 import json
 
-from .models import ProductionOrder, BOM, Branch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter 
+from .models import ProductionOrder, BOM, Branch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
 from master_data.models import CompanyInfo
-from inventory.models import Product, InventoryDoc, StockMovement 
-from purchasing.models import PurchaseOrder, PurchaseOrderItem, PurchasePreparation 
+from inventory.models import Product, InventoryDoc, StockMovement
+from purchasing.models import PurchaseOrder, PurchaseOrderItem, PurchasePreparation
 from .forms import BOMForm, BOMItemFormSet
 
 # ==========================================
@@ -39,7 +39,7 @@ def production_list(request):
     # 🌟 2. กรองข้อมูลตามช่วงวันที่ และ คำค้นหา 🌟
     if start_date and end_date:
         orders = orders.filter(start_date__gte=start_date, start_date__lte=end_date)
-        
+
     if search_q:
         orders = orders.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q))
     if search_salesperson:
@@ -73,7 +73,7 @@ def production_list(request):
     deliv_statuses = DeliveryStatus.objects.all().order_by('name')
     transporters = Transporter.objects.all().order_by('name')
     salespersons = Salesperson.objects.all().order_by('name')
-    
+
     return render(request, 'manufacturing/production_list.html', {
         'active_orders': active_orders,
         'closed_orders': closed_orders,
@@ -96,14 +96,14 @@ def production_list(request):
 def production_create(request):
     boms = BOM.objects.select_related('product').all()
     fg_with_bom = [bom.product for bom in boms]
-    
+
     branches = Branch.objects.all().order_by('name')
     salespersons = Salesperson.objects.select_related('branch').all().order_by('name')
 
     if request.method == 'POST':
         product_id = request.POST.get('product')
         note = request.POST.get('note', '')
-        
+
         start_date = request.POST.get('start_date')
         delivery_date = request.POST.get('delivery_date')
         branch_id = request.POST.get('branch')
@@ -112,21 +112,21 @@ def production_create(request):
 
         if product_id:
             product = get_object_or_404(Product, id=product_id)
-            
+
             order = ProductionOrder(
                 product=product,
-                quantity=1, 
+                quantity=1,
                 status='PLANNED',
                 note=note,
                 customer_name=customer_name,
                 responsible_person=getattr(request.user, 'employee', None)
             )
-            
+
             if start_date: order.start_date = start_date
             if delivery_date: order.delivery_date = delivery_date
             if branch_id: order.branch_id = branch_id
             if salesperson_id: order.salesperson_id = salesperson_id
-            
+
             order.save()
 
             messages.success(request, f"✅ สร้างใบสั่งผลิต {order.code} สำเร็จ! (สำหรับบ้าน 1 หลัง)")
@@ -141,7 +141,7 @@ def production_create(request):
     })
 
 @login_required
-@transaction.atomic 
+@transaction.atomic
 def production_process(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
     if order.status == 'COMPLETED':
@@ -271,13 +271,13 @@ def bom_edit(request, pk):
 def update_production_board(request, pk):
     if request.method == 'POST':
         order = get_object_or_404(ProductionOrder, pk=pk)
-        
+
         # รับค่าจาก Popup Modal มาอัปเดตบิล
         order.production_status_id = request.POST.get('production_status') or None
         order.production_team_id = request.POST.get('production_team') or None
         order.delivery_status_id = request.POST.get('delivery_status') or None
         order.transporter_id = request.POST.get('transporter') or None
-        
+
         # รับค่า สวิตช์ปิดจ๊อบ
         is_closed = request.POST.get('is_closed')
         if is_closed == 'on':
@@ -286,9 +286,9 @@ def update_production_board(request, pk):
         else:
             order.is_closed = False
             messages.success(request, f"✅ อัปเดตสถานะงาน {order.code} เรียบร้อยแล้ว!")
-            
+
         order.save()
-        
+
     return redirect('production_list')
 
 @login_required
@@ -351,3 +351,20 @@ def ajax_add_transporter(request):
             obj, _ = Transporter.objects.get_or_create(name=name)
             return JsonResponse({'success': True, 'id': obj.id, 'name': obj.name})
     return JsonResponse({'success': False})
+
+# ==========================================
+# 🌟 ดึงข้อมูลสินค้าสำเร็จรูป (FG) ตามหมวดหมู่ (AJAX) 🌟
+# ==========================================
+@login_required
+def ajax_get_fg_by_category(request):
+    category_id = request.GET.get('category_id')
+    # ดึงเฉพาะ FG ที่เปิดใช้งานอยู่
+    products = Product.objects.filter(product_type='FG', is_active=True)
+
+    # ถ้ามีการส่ง ID หมวดหมู่มา ให้กรองเพิ่ม
+    if category_id:
+        products = products.filter(category_id=category_id)
+
+    # แปลงเป็น List เพื่อส่งกลับไปให้หน้าเว็บ
+    product_list = list(products.values('id', 'name', 'code'))
+    return JsonResponse({'products': product_list})

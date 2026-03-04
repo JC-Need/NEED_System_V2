@@ -9,8 +9,10 @@
             <p class="text-muted small mb-0">รายการวัตถุดิบที่ถูกยุบรวม แยกตามร้านค้า</p>
         </div>
         <div class="text-end">
-            <div class="fw-bold text-dark mb-2">ยอดประเมินรวมทั้งหมด: <span class="text-danger fs-4 ms-2">{{ grand_total|floatformat:2|intcomma }}</span> บาท</div>
-            <a href="{% url 'ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ</a>
+            <a href="{% url 'ppo_list' %}" class="btn btn-outline-secondary rounded-pill px-4 mb-2">
+                <i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ
+            </a>
+            <div class="fw-bold text-dark">ยอดประเมินรวมทั้งหมด: <span class="text-danger fs-4 ms-2">{{ grand_total|floatformat:2|intcomma }}</span> บาท</div>
         </div>
     </div>
 
