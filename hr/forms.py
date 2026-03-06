@@ -32,7 +32,7 @@ class EmployeeForm(forms.ModelForm):
 
     # ✅ เปลี่ยนเงินเดือนเป็น CharField (รับข้อความ) เพื่อให้โชว์ลูกน้ำได้
     salary = forms.CharField(required=False, widget=forms.TextInput(attrs={
-        'class': 'form-control', 
+        'class': 'form-control',
         'id': 'input_salary',      # ID สำหรับ JS
         'autocomplete': 'off'
     }))
@@ -40,16 +40,21 @@ class EmployeeForm(forms.ModelForm):
     class Meta:
         model = Employee
         fields = '__all__'
-        exclude = ['user', 'emp_id', 'resign_date'] 
-        
+        # 🌟 เอา emp_id ออกจาก exclude เพื่อให้โชว์ในฟอร์ม 🌟
+        exclude = ['user', 'resign_date']
+
         widgets = {
+            # 🌟 เพิ่ม widget สำหรับ emp_id 🌟
+            'emp_id': forms.TextInput(attrs={'class': 'form-control font-monospace text-primary fw-bold bg-light', 'readonly': 'readonly', 'placeholder': 'คลิกปุ่มเพื่อดึงรหัส ->', 'id': 'id_emp_id'}),
+
             'photo': forms.FileInput(attrs={'class': 'form-control'}),
             'signature': forms.FileInput(attrs={'class': 'form-control'}),
             'prefix': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+            # ... (ส่วนที่เหลือคงเดิมเหมือนในไฟล์เก่าเลยค่ะ) ...
             'first_name': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'nickname': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
-            'id_card': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}), 
+            'id_card': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'gender': forms.Select(attrs={'class': 'form-select'}),
             'birth_date': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}),
             'phone': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),

@@ -14,7 +14,8 @@
         body { font-family: 'Sarabun', sans-serif; background-color: #f8f9fa; }
 
         .navbar-custom {
-            background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             padding-top: 15px; padding-bottom: 15px;
         }
         .navbar-brand {
@@ -34,6 +35,11 @@
             border: 1px solid #eee; color: #777; background: #f8f9fa;
         }
         .btn-logout:hover { background: #fee; color: #d9534f; border-color: #f5c6cb; }
+
+        /* สไตล์เพิ่มเติมสำหรับ Dropdown Menu */
+        .dropdown-menu { border-radius: 12px; border: 1px solid #eee; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .dropdown-item { font-weight: 500; padding: 10px 20px; color: #555; transition: 0.2s; }
+        .dropdown-item:hover { background-color: #f8f9fa; color: #c5a059; }
     </style>
 </head>
 <body>
@@ -69,6 +75,37 @@
                         <a class="nav-link" href="{% url 'purchasing_dashboard' %}"><i class="fas fa-shopping-cart me-1"></i> จัดซื้อ (PO)</a>
                     </li>
                     {% endif %}
+
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="hrDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-users me-1"></i> ระบบบุคลากร
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item" href="{% url 'employee_dashboard' %}">
+                                    <i class="fas fa-id-card me-2 text-primary"></i> แดชบอร์ดพนักงาน (ฉัน)
+                                </a>
+                            </li>
+
+                            {% if request.user.is_superuser or request.user.groups.all.0.name == "Manager_Team" or request.user.groups.all.0.name == "HR_Team" %}
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'manager_dashboard' %}">
+                                    <i class="fas fa-user-tie me-2 text-warning"></i> อนุมัติการลา (หัวหน้างาน)
+                                </a>
+                            </li>
+                            {% endif %}
+
+                            {% if request.user.is_superuser or request.user.groups.all.0.name == "HR_Team" %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'hr_executive_dashboard' %}">
+                                    <i class="fas fa-chart-line me-2 text-danger"></i> ข้อมูลองค์กร (HR)
+                                </a>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </li>
+
                 </ul>
 
                 <div class="d-flex align-items-center">

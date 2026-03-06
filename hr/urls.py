@@ -1,36 +1,38 @@
 from django.urls import path
 from . import views
-from . import views_employee
-from . import views_network
-from . import views_payroll
 
 urlpatterns = [
-    # --- ระบบหลัก (Core HR) ---
+    # --- 🟢 โซนพนักงานหลัก (Core HR) ---
     path('dashboard/', views.employee_dashboard, name='employee_dashboard'),
     path('check-in/', views.check_in, name='check_in'),
     path('check-out/', views.check_out, name='check_out'),
     path('leave/create/', views.leave_create, name='leave_create'),
+    path('payslips/', views.payslip_list, name='payslip_list'),
+    path('payslip/<int:payslip_id>/', views.payslip_detail, name='payslip_detail'),
 
-    # --- ระบบผู้จัดการ (Manager) ---
+    # --- 🟡 โซนหัวหน้างาน (Manager) ---
     path('manager/', views.manager_dashboard, name='manager_dashboard'),
     path('manager/approve/<int:leave_id>/', views.approve_leave, name='approve_leave'),
     path('manager/reject/<int:leave_id>/', views.reject_leave, name='reject_leave'),
 
-    # --- ระบบผู้บริหาร (Executive Analytics) ---
+    # --- 🔴 โซนฝ่ายบุคคล/ผู้บริหาร (HR/Admin) ---
     path('analytics/', views.hr_executive_dashboard, name='hr_executive_dashboard'),
-
-    # --- ระบบพนักงาน & โครงสร้างทีม (Modular Views) ---
-    
-    # ✅ แก้ไขตรงนี้: เปลี่ยนจาก views_employee เป็น views (เพื่อให้ใช้ฟอร์มใหม่ที่มีลายเซ็นต์)
     path('employee/add/', views.employee_add, name='employee_create'),
-    
-    path('network/tree/', views_network.network_tree, name='network_tree'),
+    path('employee/edit/<str:emp_id>/', views.employee_edit, name='employee_edit'),
+    path('network/tree/', views.network_tree, name='network_tree'),
 
     # --- API สำหรับปุ่ม Quick Add (+) ---
-    path('api/create-position/', views_employee.api_create_position, name='api_create_position'),
-    path('api/create-department/', views_employee.api_create_department, name='api_create_department'),
+    path('api/create-position/', views.api_create_position, name='api_create_position'),
+    path('api/create-department/', views.api_create_department, name='api_create_department'),
 
-    # --- ระบบเงินเดือน (Payroll) ---
-    path('payslips/', views_payroll.payslip_list, name='payslip_list'),
-    path('payslip/<int:payslip_id>/', views_payroll.payslip_detail, name='payslip_detail'),
+    # 🌟 เส้นทางใหม่: สร้างรหัสพนักงาน และ สร้างกลุ่ม 🌟
+    path('api/generate-emp-id/', views.api_generate_emp_id, name='api_generate_emp_id'),
+    path('api/create-group/', views.api_create_group, name='api_create_group'),
+
+    # 🌟 เส้นทางสำหรับระบบจัดการสิทธิ์ และ Profile การเข้าถึง 🌟
+    path('roles/', views.role_management, name='role_management'),
+    path('api/update-role/', views.api_update_user_role, name='api_update_user_role'),
+    path('access-profile/<str:emp_id>/', views.employee_access_profile, name='employee_access_profile'),
+    path('api/reset-password/', views.api_reset_password, name='api_reset_password'),
+    path('api/toggle-user-group/', views.api_toggle_user_group, name='api_toggle_user_group'),
 ]

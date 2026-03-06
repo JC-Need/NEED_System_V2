@@ -85,6 +85,16 @@
                     </div>
                     <div class="card-body p-4">
                         <div class="row g-3">
+                            <div class="col-12 mb-2 pb-3 border-bottom">
+                                <label class="form-label fw-bold text-primary">ดึงรหัสพนักงานอัตโนมัติ</label>
+                                <div class="input-group">
+                                    {{ form.emp_id }}
+                                    <button class="btn btn-outline-primary fw-bold px-4" type="button" onclick="generateEmpId()">
+                                        <i class="fas fa-magic me-1"></i> ดึงรหัส
+                                    </button>
+                                </div>
+                            </div>
+
                             <div class="col-md-2">
                                 <label class="form-label fw-bold">คำนำหน้า</label>
                                 {{ form.prefix }}
@@ -196,6 +206,7 @@
                             </div>
                             
                             <div class="col-12"><hr class="text-muted"></div>
+                            
                             <div class="col-md-4">
                                 <label class="form-label fw-bold">ธนาคาร (รับค่าคอมฯ)</label>
                                 {{ form.bank_name }}
@@ -207,7 +218,7 @@
                         </div>
 
                         <div class="d-grid mt-4">
-                            <button type="submit" class="btn btn-primary btn-lg rounded-pill shadow fw-bold">
+                             <button type="submit" class="btn btn-primary btn-lg rounded-pill shadow fw-bold">
                                 <i class="fas fa-save me-2"></i>บันทึกข้อมูล
                             </button>
                         </div>
@@ -246,7 +257,6 @@
 
         // ✅ 3. จัดการเงินเดือน (UX: 50,000.00)
         const salaryInput = document.getElementById('input_salary');
-
         // ฟังก์ชันจัดรูปแบบตัวเลข (ใส่ลูกน้ำ)
         function formatMoney(amount) {
             if (!amount || amount === '') return '0.00';
@@ -259,7 +269,6 @@
         
         // 3.1 โหลดหน้าเว็บมาปุ๊บ จัด Format ทันที
         salaryInput.value = formatMoney(salaryInput.value);
-
         // 3.2 เมื่อคลิก (Focus) -> ลบลูกน้ำออกให้แก้ตัวเลขง่ายๆ
         salaryInput.addEventListener('focus', function() {
             let val = this.value.replace(/,/g, ''); // ลบลูกน้ำ
@@ -269,7 +278,6 @@
                 this.value = val; // ถ้ามีเลขอื่น ให้โชว์เลขดิบๆ
             }
         });
-
         // 3.3 เมื่อกดออก (Blur) -> ใส่ลูกน้ำกลับเข้าไป
         salaryInput.addEventListener('blur', function() {
             if (this.value === '') {
@@ -279,6 +287,23 @@
             }
         });
     });
+
+    // 🌟 ฟังก์ชันดึงรหัสพนักงาน 🌟
+    function generateEmpId() {
+        fetch("{% url 'api_generate_emp_id' %}", { 
+            method: "POST", 
+            headers: { 
+                "X-CSRFToken": document.querySelector('[name=csrfmiddlewaretoken]').value, 
+                "Content-Type": "application/x-www-form-urlencoded" 
+            } 
+        })
+        .then(r => r.json())
+        .then(d => { 
+            if(d.status === 'success') { 
+                document.getElementById('id_emp_id').value = d.emp_id; 
+            } 
+        });
+    }
 
     // AJAX Functions (คงเดิม)
     function savePosition() {
