@@ -8,7 +8,7 @@
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-list text-primary me-2"></i>รายการใบสั่งซื้อทั้งหมด (All POs)</h4>
             <p class="text-muted small mb-0">ดูประวัติใบสั่งซื้อทั้งหมดในระบบ</p>
         </div>
-        
+
         <div class="d-flex gap-2">
             <a href="{% url 'po_create' %}" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
                 <i class="fas fa-plus-circle me-1"></i> สร้าง PO ใหม่
@@ -87,10 +87,12 @@
                                 <a href="{% url 'po_edit' po.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="ดูรายละเอียด / แก้ไข / อนุมัติ">
                                     <i class="fas fa-search"></i>
                                 </a>
-                                
+
+                                {% if po.status == 'APPROVED' %}
                                 <a href="{% url 'po_payment' po.id %}" class="btn btn-sm btn-outline-success shadow-sm" title="บันทึกชำระเงิน">
                                     <i class="fas fa-money-bill-wave"></i>
                                 </a>
+                                {% endif %}
 
                                 <a href="{% url 'po_print' po.id %}" target="_blank" class="btn btn-sm btn-outline-secondary shadow-sm" title="พิมพ์ใบสั่งซื้อ">
                                     <i class="fas fa-print"></i>

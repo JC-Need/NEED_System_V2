@@ -69,17 +69,21 @@ def po_create(request):
 
         if form.is_valid() and formset.is_valid():
             po = form.save(commit=False)
+            
+            # 🌟 ล็อกสถานะให้เป็น DRAFT เสมอ 🌟
+            po.status = 'DRAFT'
 
             now = datetime.datetime.now()
             
-            # 🌟 แก้ไข: เปลี่ยนการคำนวณปีเป็นปีพุทธศักราช (บวก 543) 🌟
+            # 🌟 ปีพุทธศักราช (บวก 543) 🌟
             thai_year = (now.year + 543) % 100
             prefix = f"PO-{thai_year:02d}{now.strftime('%m')}"
             
             last_po = PurchaseOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
             seq = 1
             if last_po:
-                try: seq = int(last_po.split('-')[-1]) + 1
+                try: 
+                    seq = int(last_po.split('-')[-1]) + 1
                 except: seq = 1
             po.code = f"{prefix}-{seq:03d}"
             
@@ -96,7 +100,7 @@ def po_create(request):
             po.total_amount = total
             po.save()
 
-            messages.success(request, f"✅ สร้างใบสั่งซื้อ {po.code} เรียบร้อยแล้ว!")
+            messages.success(request, f"✅ สร้างใบสั่งซื้อ {po.code} เรียบร้อยแล้ว (รอดำเนินการอนุมัติ)!")
             return redirect('purchasing_dashboard')
         else:
             messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ครบถ้วน")
@@ -135,6 +139,9 @@ def po_edit(request, po_id):
     po = get_object_or_404(PurchaseOrder, id=po_id)
     fg_products = Product.objects.filter(product_type='FG', is_active=True)
 
+    # 🌟 เช็กสิทธิ์ว่าเป็น Superuser หรือ Manager/Executive หรือไม่ 🌟
+    is_approver = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists() or request.user.groups.filter(name__icontains='Executive').exists()
+
     PurchaseOrderItemFormSetEdit = inlineformset_factory(
         PurchaseOrder, PurchaseOrderItem, 
         form=PurchaseOrderItemForm, 
@@ -166,7 +173,8 @@ def po_edit(request, po_id):
         'form': form,
         'formset': formset,
         'po': po, 
-        'fg_products': fg_products
+        'fg_products': fg_products,
+        'is_approver': is_approver # 🌟 แก้ไข: ใส่ลูกน้ำบรรทัดบน และส่งค่าสิทธิ์ไปให้ HTML อย่างถูกต้อง 🌟
     })
 
 @login_required
@@ -279,3 +287,32 @@ def ppo_detail(request, pk):
         'materials_by_supplier': materials_by_supplier,
         'grand_total': grand_total 
     })
+
+# ==========================================
+# 🟢 ระบบอนุมัติ / ยกเลิก ใบสั่งซื้อ (สำหรับ Manager)
+# ==========================================
+@login_required
+def po_approve(request, po_id):
+    po = get_object_or_404(PurchaseOrder, id=po_id)
+    is_approver = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists() or request.user.groups.filter(name__icontains='Executive').exists()
+    
+    if is_approver and po.status == 'DRAFT':
+        po.status = 'APPROVED'
+        po.save()
+        messages.success(request, f"✅ อนุมัติใบสั่งซื้อ {po.code} เรียบร้อยแล้ว")
+    else:
+        messages.error(request, "❌ คุณไม่มีสิทธิ์อนุมัติ หรือสถานะเอกสารไม่ถูกต้อง")
+    return redirect('po_list')
+
+@login_required
+def po_cancel(request, po_id):
+    po = get_object_or_404(PurchaseOrder, id=po_id)
+    is_approver = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists() or request.user.groups.filter(name__icontains='Executive').exists()
+    
+    if is_approver and po.status == 'DRAFT':
+        po.status = 'CANCELLED'
+        po.save()
+        messages.warning(request, f"⚠️ ยกเลิกใบสั่งซื้อ {po.code} เรียบร้อยแล้ว")
+    else:
+        messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิก หรือสถานะเอกสารไม่ถูกต้อง")
+    return redirect('po_list')

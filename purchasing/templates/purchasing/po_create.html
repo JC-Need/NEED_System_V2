@@ -24,7 +24,7 @@
 
     <form method="POST" id="po-form">
         {% csrf_token %}
-        
+
         <div class="card shadow-sm border-0 rounded-4 mb-4">
             <div class="card-header bg-white border-bottom py-3">
                 <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-file-invoice me-2"></i>ข้อมูลใบสั่งซื้อ</h6>
@@ -41,10 +41,23 @@
                         {{ form.expected_date }}
                     </div>
                 </div>
+
                 <div class="col-md-4">
-                    <label class="form-label text-muted small fw-bold">{{ form.status.label }}</label>
-                    {{ form.status }}
+                    <label class="form-label text-muted small fw-bold">สถานะเอกสาร</label>
+                    <div class="d-none">
+                        {{ form.status }}
+                    </div>
+                    {% if po and po.status != 'DRAFT' %}
+                        <div class="form-control bg-light fw-bold {% if po.status == 'APPROVED' %}text-success{% elif po.status == 'CANCELLED' %}text-danger{% else %}text-warning{% endif %}">
+                            {{ po.get_status_display }}
+                        </div>
+                    {% else %}
+                        <div class="form-control bg-warning bg-opacity-10 text-warning fw-bold border-warning">
+                            <i class="fas fa-hourglass-half me-1"></i> ร่าง (รออนุมัติ)
+                        </div>
+                    {% endif %}
                 </div>
+
                 <div class="col-md-12">
                     <label class="form-label text-muted small fw-bold">{{ form.note.label }}</label>
                     {{ form.note }}
@@ -100,10 +113,31 @@
             </div>
         </div>
 
-        <div class="text-end mb-5">
-            <button type="submit" class="btn btn-success btn-lg rounded-pill px-5 shadow fw-bold">
-                <i class="fas fa-save me-2"></i> บันทึกใบสั่งซื้อ
-            </button>
+        <div class="d-flex justify-content-between align-items-center mb-5 mt-4 pt-3 border-top">
+
+            <div>
+                {% if po and po.status == 'DRAFT' %}
+                    {% if is_approver %}
+                        <a href="{% url 'po_approve' po.id %}" class="btn btn-success btn-lg rounded-pill px-4 shadow-sm fw-bold me-2" onclick="return confirm('ยืนยันการ 🟢 อนุมัติ ใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
+                            <i class="fas fa-check-circle me-2"></i>อนุมัติ (Approve)
+                        </a>
+                        <a href="{% url 'po_cancel' po.id %}" class="btn btn-outline-danger btn-lg rounded-pill px-4 shadow-sm fw-bold" onclick="return confirm('คำเตือน: ยืนยันการ ❌ ยกเลิก ใบสั่งซื้อ {{ po.code }} ใช่หรือไม่? (เมื่อยกเลิกแล้วจะไม่สามารถนำกลับมาใช้ได้อีก)');">
+                            <i class="fas fa-times-circle me-2"></i>ยกเลิก (Cancel)
+                        </a>
+                    {% else %}
+                        <span class="badge bg-warning bg-opacity-10 text-dark px-4 py-2 rounded-pill shadow-sm border border-warning fw-bold">
+                            <i class="fas fa-lock text-warning me-2"></i> รอผู้จัดการตรวจสอบและอนุมัติ
+                        </span>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            <div>
+                <button type="submit" class="btn btn-primary btn-lg rounded-pill px-5 shadow fw-bold">
+                    <i class="fas fa-save me-2"></i> {% if po %}บันทึกการแก้ไข{% else %}บันทึกใบสั่งซื้อ{% endif %}
+                </button>
+            </div>
+
         </div>
     </form>
 </div>
@@ -133,12 +167,12 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        
+
         flatpickr(".datepicker", {
             altInput: true,
-            altFormat: "d/m/Y",   
-            dateFormat: "Y-m-d",  
-            locale: "th",         
+            altFormat: "d/m/Y",
+            dateFormat: "Y-m-d",
+            locale: "th",
             allowInput: true
         });
 
@@ -180,18 +214,18 @@
                 let qtyInput = row.querySelector('.qty-input');
                 let costInput = row.querySelector('.cost-input');
                 let totalInput = row.querySelector('.total-input');
-                
+
                 if (qtyInput && costInput && totalInput) {
                     let qtyVal = qtyInput.value.replace(/,/g, '');
                     let costVal = costInput.value.replace(/,/g, '');
-                    
+
                     let qty = parseFloat(qtyVal) || 0;
                     let cost = parseFloat(costVal) || 0;
                     let total = qty * cost;
-                    
+
                     totalInput.setAttribute('type', 'text');
                     totalInput.value = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    
+
                     grandTotal += total;
                 }
             });
@@ -210,7 +244,7 @@
             if (e.target.classList.contains('cost-input')) {
                 let val = parseFloat(e.target.value.replace(/,/g, ''));
                 if (!isNaN(val)) {
-                    e.target.setAttribute('type', 'text'); 
+                    e.target.setAttribute('type', 'text');
                     e.target.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 }
             }
@@ -256,7 +290,7 @@
                     if (productSelect && qtyInput && costInput) {
                         productSelect.value = item.id;
                         qtyInput.value = item.qty;
-                        
+
                         // แปลงช่องต้นทุนเป็น Text และใส่ลูกน้ำพร้อมทศนิยมตอนดึงข้อมูลมาแสดง
                         costInput.setAttribute('type', 'text');
                         costInput.value = parseFloat(item.cost).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});

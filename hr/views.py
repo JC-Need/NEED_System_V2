@@ -181,8 +181,11 @@ def employee_add(request):
         form = EmployeeForm(request.POST, request.FILES)
         if form.is_valid():
             emp = form.save(commit=False)
+            
+            # 🌟 แปลงปี ค.ศ. เป็น พ.ศ. (บวก 543) แล้วดึง 2 ตัวท้าย 🌟
             now = datetime.now()
-            prefix = f"EMP-{now.strftime('%y%m')}"
+            thai_year = str(now.year + 543)[-2:]
+            prefix = f"EMP-{thai_year}{now.strftime('%m')}"
 
             last_emp = Employee.objects.filter(emp_id__startswith=prefix).order_by('emp_id').last()
             if last_emp:
@@ -218,16 +221,13 @@ def employee_add(request):
 # ==========================================
 @user_passes_test(is_hr_or_admin, login_url='/')
 def employee_edit(request, emp_id):
-    # ดึงข้อมูลพนักงานคนเดิมขึ้นมา
     employee = get_object_or_404(Employee, emp_id=emp_id)
     
     if request.method == 'POST':
-        # ใส่ instance=employee เพื่อบอก Django ว่าเป็นการ "แก้ไข" (Update) ไม่ใช่สร้างใหม่
         form = EmployeeForm(request.POST, request.FILES, instance=employee)
         if form.is_valid():
             emp = form.save(commit=False)
             
-            # ตรวจสอบการสร้าง User Login ใหม่ (กรณีที่ตอนแรกยังไม่มีบัญชี)
             create_user = form.cleaned_data.get('create_user_account')
             if create_user and not emp.user:
                 username = form.cleaned_data.get('username')
@@ -243,9 +243,8 @@ def employee_edit(request, emp_id):
             
             emp.save()
             messages.success(request, f"✅ บันทึกการแก้ไขข้อมูลของ {emp.first_name} เรียบร้อยแล้ว")
-            return redirect('role_management') # เซฟเสร็จให้เด้งกลับไปหน้าระบบสิทธิ์
+            return redirect('role_management')
     else:
-        # โหลดฟอร์มพร้อมข้อมูลเดิม
         form = EmployeeForm(instance=employee)
         
     return render(request, 'hr/employee_edit.html', {'form': form, 'employee': employee})
@@ -281,8 +280,11 @@ def api_create_department(request):
 @require_POST
 def api_generate_emp_id(request):
     """API สำหรับสร้างรหัสพนักงานล่วงหน้า (กดปุ่มแล้วเด้งมาโชว์)"""
+    # 🌟 แปลงปี ค.ศ. เป็น พ.ศ. (บวก 543) แล้วดึง 2 ตัวท้าย 🌟
     now = datetime.now()
-    prefix = f"EMP-{now.strftime('%y%m')}"
+    thai_year = str(now.year + 543)[-2:]
+    prefix = f"EMP-{thai_year}{now.strftime('%m')}"
+    
     last_emp = Employee.objects.filter(emp_id__startswith=prefix).order_by('emp_id').last()
     
     if last_emp:
@@ -300,13 +302,7 @@ def api_generate_emp_id(request):
 # ==========================================
 @user_passes_test(is_hr_or_admin, login_url='/')
 def role_management(request):
-    """
-    หน้าจอสำหรับจัดการสิทธิ์ของพนักงานทุกคน
-    """
-    # ดึงรายชื่อพนักงานทั้งหมด (รวมข้อมูล User และ Group ไว้เลย จะได้โหลดเร็วๆ)
     employees = Employee.objects.select_related('user').prefetch_related('user__groups').order_by('emp_id')
-
-    # ดึงรายชื่อ Group ทั้งหมดที่มีในระบบมาแสดงใน Dropdown
     all_groups = Group.objects.all().order_by('name')
 
     context = {
@@ -317,7 +313,6 @@ def role_management(request):
 
 @user_passes_test(is_hr_or_admin, login_url='/')
 def employee_access_profile(request, emp_id):
-    """หน้าจอจัดการสิทธิ์รายบุคคล (เปิดปิดเมนู & รีเซ็ตรหัส)"""
     employee = get_object_or_404(Employee, emp_id=emp_id)
     all_groups = Group.objects.all().order_by('name')
     
@@ -335,20 +330,13 @@ def employee_access_profile(request, emp_id):
 @user_passes_test(is_hr_or_admin, login_url='/')
 @require_POST
 def api_update_user_role(request):
-    """
-    API สำหรับรับค่าจากหน้าเว็บ แล้วไปแก้ไข Group ให้ User อัตโนมัติ (Primary Role Dropdown)
-    """
     try:
         user_id = request.POST.get('user_id')
         group_id = request.POST.get('group_id')
 
-        # 1. หา User คนนั้นให้เจอ
         target_user = get_object_or_404(User, id=user_id)
-
-        # 2. ล้างสิทธิ์เก่าออกให้หมดก่อน (รีเซ็ต)
         target_user.groups.clear()
 
-        # 3. ถ้ามีการเลือกสิทธิ์ใหม่ ให้เพิ่มเข้าไป
         if group_id:
             target_group = get_object_or_404(Group, id=group_id)
             target_user.groups.add(target_group)
@@ -364,7 +352,6 @@ def api_update_user_role(request):
 @user_passes_test(is_hr_or_admin, login_url='/')
 @require_POST
 def api_create_group(request):
-    """API สำหรับสร้างกลุ่มสิทธิ์ใหม่"""
     name = request.POST.get('name')
     if name:
         group, created = Group.objects.get_or_create(name=name)
@@ -374,7 +361,6 @@ def api_create_group(request):
 @user_passes_test(is_hr_or_admin, login_url='/')
 @require_POST
 def api_reset_password(request):
-    """API รีเซ็ตรหัสผ่าน"""
     user_id = request.POST.get('user_id')
     new_password = request.POST.get('new_password')
     try:
@@ -388,10 +374,9 @@ def api_reset_password(request):
 @user_passes_test(is_hr_or_admin, login_url='/')
 @require_POST
 def api_toggle_user_group(request):
-    """API สำหรับเปิด/ปิดสิทธิ์การเข้าถึงเมนู (Toggle Switches)"""
     user_id = request.POST.get('user_id')
     group_id = request.POST.get('group_id')
-    action = request.POST.get('action') # รับค่า 'add' หรือ 'remove'
+    action = request.POST.get('action') 
     
     try:
         user = get_object_or_404(User, id=user_id)
