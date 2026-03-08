@@ -19,7 +19,7 @@ from hr.models import Employee
 from .forms import QuotationForm
 
 # ==========================================
-# 🔧 Utility & Helper
+# 🔧 Utility & Helper (นายทวารตรวจสอบสิทธิ์)
 # ==========================================
 def get_next_document_number():
     now = timezone.now()
@@ -61,11 +61,38 @@ def get_sales_queryset(model_class, user, target_employees):
     else:
         return model_class.objects.filter(employee__in=target_employees)
 
+# 🌟 เพิ่มฟังก์ชันนายทวาร: เช็กสิทธิ์การเข้าถึงระบบขาย 🌟
+def is_sales_authorized(user):
+    if user.is_superuser: 
+        return True
+    
+    user_groups = list(user.groups.values_list('name', flat=True))
+    if 'Sales' in user_groups:
+        return True
+        
+    if hasattr(user, 'employee') and user.employee:
+        dept = user.employee.department.name if user.employee.department else ''
+        rank = user.employee.business_rank if user.employee.business_rank else ''
+        
+        # แผนกขายเข้าได้ทุกคน
+        if 'ขาย' in dept or 'Sales' in dept:
+            return True
+        # แผนกบัญชี เข้าได้เฉพาะระดับ Manager ขึ้นไป (เพื่อตรวจสอบ)
+        if ('บัญชี' in dept or 'Accounting' in dept) and rank in ['Manager', 'Executive', 'Director', 'ผู้จัดการ']:
+            return True
+            
+    return False
+
 # ==========================================
 # 1. หน้า Dashboard
 # ==========================================
 @login_required
 def sales_dashboard(request):
+    # 🌟 เรียกล็อกประตู! ถ้าไม่มีสิทธิ์ เตะกลับหน้าหลัก 🌟
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงภาพรวมฝ่ายขาย")
+        return redirect('dashboard')
+
     today = timezone.now().date()
     target_employees, scope_title = get_target_employees(request.user)
 
@@ -110,6 +137,11 @@ def sales_dashboard(request):
 # ==========================================
 @login_required
 def sales_hub(request):
+    # 🌟 เรียกล็อกประตู! 🌟
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เปิดบิลขาย")
+        return redirect('dashboard')
+
     target_employees, _ = get_target_employees(request.user)
     qt_qs = get_sales_queryset(Quotation, request.user, target_employees)
     inv_qs = get_sales_queryset(Invoice, request.user, target_employees)
@@ -138,11 +170,7 @@ def convert_quote_to_invoice(request, qt_id):
         customer=qt.customer,
         employee=request.user.employee if hasattr(request.user, 'employee') else None,
         grand_total=qt.grand_total,
-        status='PENDING', 
-        customer_name=qt.customer_name,
-        customer_address=qt.customer_address,
-        customer_tax_id=qt.customer_tax_id,
-        customer_phone=qt.customer_phone
+        status='PENDING'
     )
     qt.status = 'CONVERTED'
     qt.save()
@@ -154,6 +182,11 @@ def convert_quote_to_invoice(request, qt_id):
 # ==========================================
 @login_required
 def pos_home(request):
+    # 🌟 เรียกล็อกประตู! 🌟
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ใช้งานระบบ POS")
+        return redirect('dashboard')
+
     products = Product.objects.filter(is_active=True, stock_qty__gt=0)
     categories = Category.objects.all()
     return render(request, 'sales/pos_home.html', {'products': products, 'categories': categories})
@@ -308,7 +341,7 @@ def quotation_create(request):
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             qt.code = f"{prefix}-{seq:03d}"
             qt.save()
-            messages.success(request, f"สร้างใบเสนอราคา {qt.code} เรียบร้อย")
+            messages.success(request, f"ร่างใบเสนอราคา {qt.code} เรียบร้อย กรุณาเพิ่มรายการสินค้า")
             return redirect('quotation_edit', qt_id=qt.id)
     else:
         form = QuotationForm(initial={'date': datetime.date.today(), 'valid_until': datetime.date.today() + datetime.timedelta(days=15)})
@@ -319,7 +352,12 @@ def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     products = Product.objects.filter(is_active=True)
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
+    
     if request.method == 'POST':
+        if qt.status == 'CONVERTED':
+            messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากใบเสนอราคานี้ถูกเปิดบิลไปแล้ว")
+            return redirect('quotation_edit', qt_id=qt.id)
+
         if 'add_item' in request.POST:
             item_name = request.POST.get('item_name')
             qty = int(request.POST.get('quantity', 1))
@@ -328,13 +366,20 @@ def quotation_edit(request, qt_id):
                 QuotationItem.objects.create(quotation=qt, item_name=item_name, quantity=qty, unit_price=price)
                 calculate_totals(qt)
             return redirect('quotation_edit', qt_id=qt.id)
-        elif 'update_info' in request.POST:
+            
+        elif 'update_info' in request.POST or 'finish_quote' in request.POST:
             qt.note = request.POST.get('note', '')
             qt.discount = Decimal(request.POST.get('discount', '0') or 0)
             qt.shipping_cost = Decimal(request.POST.get('shipping_cost', '0') or 0)
             calculate_totals(qt)
-            messages.success(request, "บันทึกข้อมูลเรียบร้อย")
-            return redirect('quotation_edit', qt_id=qt.id)
+            
+            if 'finish_quote' in request.POST:
+                messages.success(request, f"✅ สร้างใบเสนอราคา {qt.code} เสร็จสมบูรณ์แล้ว! (รอผู้จัดการอนุมัติ)")
+                return redirect('quotation_list')
+            else:
+                messages.success(request, "อัปเดตยอดเงินและหมายเหตุเรียบร้อย")
+                return redirect('quotation_edit', qt_id=qt.id)
+                
     return render(request, 'sales/quotation_edit.html', {'qt': qt, 'products': products, 'item_total': item_total})
 
 def calculate_totals(qt):
@@ -352,6 +397,11 @@ def calculate_totals(qt):
 def delete_item(request, item_id):
     item = get_object_or_404(QuotationItem, pk=item_id)
     qt = item.quotation
+    
+    if qt.status == 'CONVERTED':
+        messages.error(request, "❌ ไม่สามารถลบรายการได้ เนื่องจากใบเสนอราคานี้ถูกเปิดบิลไปแล้ว")
+        return redirect('quotation_edit', qt_id=qt.id)
+        
     item.delete()
     calculate_totals(qt)
     return redirect('quotation_edit', qt_id=qt.id)
@@ -376,7 +426,8 @@ def quotation_print(request, qt_id):
 
 @login_required
 def export_sales_excel(request):
-    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Sales Report"
+    wb = openpyxl.Workbook()
+    ws = wb.active; ws.title = "Sales Report"
     ws.append(["วันที่", "เลขที่เอกสาร", "ประเภท", "ยอดขาย"])
     for p in POSOrder.objects.all():
         ws.append([p.created_at.strftime('%Y-%m-%d'), p.code, "POS", p.total_amount])
@@ -447,6 +498,7 @@ def api_create_customer(request):
 # ==========================================
 @login_required
 def invoice_list(request):
+    # 🌟 หน้าตรวจเงินเข้า ฝ่ายบัญชีเข้าได้ 🌟
     target_employees, _ = get_target_employees(request.user)
     qs_invoice = get_sales_queryset(Invoice, request.user, target_employees)
     qs_pos = get_sales_queryset(POSOrder, request.user, target_employees)
@@ -456,22 +508,18 @@ def invoice_list(request):
         qs_invoice = qs_invoice.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
         qs_pos = qs_pos.filter(code__icontains=search_query)
 
-    # ★ แก้ไขตรงนี้: Logic การกรองสถานะ (รวม PENDING และ UNPAID)
     status_filter = request.GET.get('status')
     if status_filter:
         if status_filter == 'PENDING':
-            # ถ้าเลือก "รอตรวจสอบ" ให้เอาทั้ง PENDING (ใหม่) และ UNPAID (เก่า)
             qs_invoice = qs_invoice.filter(Q(status='PENDING') | Q(status='UNPAID'))
             qs_pos = qs_pos.filter(Q(status='PENDING') | Q(status='UNPAID'))
         else:
-            # ถ้าเลือกอื่นๆ (เช่น PAID) ก็กรองตามปกติ
             qs_invoice = qs_invoice.filter(status=status_filter)
             qs_pos = qs_pos.filter(status=status_filter)
 
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
-    # ★ แก้ไข Logic วันที่: ป้องกัน Error ถ้าค่าส่งมาเป็นสตริง "None"
     if start_date and start_date != 'None':
         qs_invoice = qs_invoice.filter(date__gte=start_date)
         qs_pos = qs_pos.filter(created_at__date__gte=start_date)

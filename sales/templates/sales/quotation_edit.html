@@ -4,10 +4,20 @@
 {% block content %}
 <div class="container-xxl py-4 px-4">
 
+    {% if qt.status == 'CONVERTED' %}
+    <div class="alert alert-danger shadow-sm border-0 rounded-4 mb-4 d-flex align-items-center p-3">
+        <i class="fas fa-lock fa-2x me-3 text-danger"></i>
+        <div>
+            <h6 class="mb-1 fw-bold text-danger">เอกสารถูกล็อก (Locked)</h6>
+            <small class="text-dark">ใบเสนอราคานี้ถูกนำไปเปิดบิลขายเรียบร้อยแล้ว ระบบไม่อนุญาตให้แก้ไขข้อมูลใดๆ เพื่อป้องกันผลกระทบต่อระบบบัญชี</small>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h4 class="fw-bold text-dark mb-1" style="font-size: 1.5rem;">
-                <i class="fas fa-edit text-primary me-2"></i>แก้ไขใบเสนอราคา
+                <i class="fas fa-edit text-primary me-2"></i>{% if qt.status == 'CONVERTED' %}รายละเอียดใบเสนอราคา{% else %}แก้ไขใบเสนอราคา{% endif %}
             </h4>
             <div class="text-muted" style="font-size: 0.9rem;">
                 เลขที่: <span class="text-danger fw-bold">{{ qt.code }}</span>
@@ -55,14 +65,16 @@
                         <textarea class="form-control custom-input bg-white" rows="3" readonly>{{ qt.customer_address }}</textarea>
                     </div>
 
-                    {% if qt.customer %}
-                        <a href="{% url 'customer_edit' qt.customer.id %}" target="_blank" class="btn btn-warning w-100 shadow-sm text-dark fw-bold rounded-pill btn-sm mt-2">
-                            <i class="fas fa-user-edit me-1"></i> แก้ไขข้อมูลลูกค้า ({{ qt.customer.code }})
-                        </a>
-                    {% else %}
-                        <a href="{% url 'customer_create' %}" target="_blank" class="btn btn-warning w-100 shadow-sm text-dark fw-bold rounded-pill btn-sm mt-2">
-                            <i class="fas fa-user-plus me-1"></i> ลงทะเบียนลูกค้าใหม่
-                        </a>
+                    {% if qt.status != 'CONVERTED' %}
+                        {% if qt.customer %}
+                            <a href="{% url 'customer_edit' qt.customer.id %}" target="_blank" class="btn btn-warning w-100 shadow-sm text-dark fw-bold rounded-pill btn-sm mt-2">
+                                <i class="fas fa-user-edit me-1"></i> แก้ไขข้อมูลลูกค้า ({{ qt.customer.code }})
+                            </a>
+                        {% else %}
+                            <a href="{% url 'customer_create' %}" target="_blank" class="btn btn-warning w-100 shadow-sm text-dark fw-bold rounded-pill btn-sm mt-2">
+                                <i class="fas fa-user-plus me-1"></i> ลงทะเบียนลูกค้าใหม่
+                            </a>
+                        {% endif %}
                     {% endif %}
 
                 </div>
@@ -70,7 +82,8 @@
         </div>
 
         <div class="col-lg-8">
-
+            
+            {% if qt.status != 'CONVERTED' %}
             <div class="card shadow-sm border-0 rounded-3 mb-3 border-bottom border-success border-3">
                 <div class="card-header py-2 bg-white">
                     <h6 class="m-0 fw-bold text-success" style="font-size: 1rem;"><i class="fas fa-cart-plus me-2"></i> เพิ่มรายการสินค้า</h6>
@@ -119,6 +132,7 @@
                     </form>
                 </div>
             </div>
+            {% endif %}
 
             <div class="card shadow-sm border-0 rounded-3">
                 <div class="card-header py-2 bg-white d-flex justify-content-between align-items-center">
@@ -134,7 +148,7 @@
                                 <th class="text-center" style="width: 15%;">จำนวน</th>
                                 <th class="text-end" style="width: 15%;">ราคา/หน่วย</th>
                                 <th class="text-end pe-4" style="width: 20%;">รวมเงิน</th>
-                                <th style="width: 5%;"></th>
+                                {% if qt.status != 'CONVERTED' %}<th style="width: 5%;"></th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -145,18 +159,21 @@
                                 <td class="text-center"><span class="badge bg-light text-dark border px-3">{{ item.quantity }}</span></td>
                                 <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
                                 <td class="text-end pe-4 fw-bold text-primary">{{ item.amount|floatformat:2|intcomma }}</td>
+                                
+                                {% if qt.status != 'CONVERTED' %}
                                 <td class="text-center">
                                     <a href="{% url 'delete_item' item.id %}" class="text-danger" onclick="return confirm('ลบรายการนี้?')">
                                         <i class="fas fa-trash-alt"></i>
                                     </a>
                                 </td>
+                                {% endif %}
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="6" class="text-center py-5 text-muted">
+                                <td colspan="{% if qt.status != 'CONVERTED' %}6{% else %}5{% endif %}" class="text-center py-5 text-muted">
                                     <i class="fas fa-shopping-basket fa-2x mb-3 opacity-25"></i>
                                     <p class="small mb-0">ยังไม่มีรายการสินค้า</p>
-                                    <small>กรุณาเพิ่มสินค้าจากกล่องด้านบน</small>
+                                    {% if qt.status != 'CONVERTED' %}<small>กรุณาเพิ่มสินค้าจากกล่องด้านบน</small>{% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -167,17 +184,19 @@
                 <div class="card-footer bg-white p-3">
                     <form method="post" autocomplete="off">
                         {% csrf_token %}
-                        <input type="hidden" name="update_info" value="true">
 
                         <div class="row">
                             <div class="col-lg-7 border-end pe-lg-4 pb-3 pb-lg-0">
                                 <label class="text-primary fw-bold custom-label mb-1">
                                     <i class="fas fa-pen me-1"></i> หมายเหตุ / เงื่อนไข (Note):
                                 </label>
-                                <textarea name="note" class="form-control custom-input" rows="4" placeholder="-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง">{{ qt.note }}</textarea>
-                                <button type="submit" class="btn btn-primary btn-sm mt-2 shadow-sm rounded-pill px-3">
-                                    <i class="fas fa-save me-1"></i> บันทึกหมายเหตุ
+                                <textarea name="note" class="form-control custom-input mb-2" rows="4" placeholder="-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง" {% if qt.status == 'CONVERTED' %}readonly{% endif %}>{{ qt.note }}</textarea>
+                                
+                                {% if qt.status != 'CONVERTED' %}
+                                <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3">
+                                    <i class="fas fa-sync-alt me-1"></i> คำนวณยอดใหม่ / บันทึกหมายเหตุ
                                 </button>
+                                {% endif %}
                             </div>
 
                             <div class="col-lg-5 ps-lg-4 d-flex flex-column justify-content-center">
@@ -192,7 +211,7 @@
                                             <input type="number" step="0.01" name="shipping_cost"
                                                    value="{% if qt.shipping_cost > 0 %}{{ qt.shipping_cost }}{% endif %}"
                                                    class="form-control form-control-sm text-end d-inline-block custom-input-number"
-                                                   placeholder="0.00" autocomplete="off">
+                                                   placeholder="0.00" autocomplete="off" {% if qt.status == 'CONVERTED' %}readonly{% endif %}>
                                         </td>
                                     </tr>
                                     <tr>
@@ -201,7 +220,7 @@
                                             <input type="number" step="0.01" name="discount"
                                                    value="{% if qt.discount > 0 %}{{ qt.discount }}{% endif %}"
                                                    class="form-control form-control-sm text-end d-inline-block text-danger custom-input-number"
-                                                   placeholder="0.00" autocomplete="off">
+                                                   placeholder="0.00" autocomplete="off" {% if qt.status == 'CONVERTED' %}readonly{% endif %}>
                                         </td>
                                     </tr>
                                     <tr class="border-top">
@@ -223,6 +242,15 @@
                                 </table>
                             </div>
                         </div>
+
+                        {% if qt.status != 'CONVERTED' %}
+                        <div class="mt-4 pt-3 border-top text-end">
+                            <button type="submit" name="finish_quote" class="btn btn-success btn-lg shadow rounded-pill px-5 fw-bold" onclick="return confirm('ยืนยันสร้างใบเสนอราคานี้ เสร็จสมบูรณ์ใช่หรือไม่?');">
+                                <i class="fas fa-check-circle me-2"></i> สร้างใบเสนอราคา (เสร็จสิ้น)
+                            </button>
+                        </div>
+                        {% endif %}
+
                     </form>
                 </div>
             </div>
@@ -240,24 +268,24 @@
         var $select = $('#product_selector').select2({
             theme: 'bootstrap4', placeholder: "-- พิมพ์ชื่อสินค้าเพื่อค้นหา --", allowClear: true, width: '100%'
         });
+
         // 2. เมื่อเลือกสินค้า -> ดึงราคามาใส่ลูกน้ำ (,)
         $select.on('select2:select', function (e) {
             var selectedOption = $(this).find(':selected');
             var name = selectedOption.data('name');
-            var price = parseFloat(selectedOption.data('price')); // แปลงเป็นตัวเลขก่อน
+            var price = parseFloat(selectedOption.data('price')); 
 
             if(name) {
                 $('#input_name').val(name);
-
-                // ✅ สูตรใส่ลูกน้ำและทศนิยม 2 ตำแหน่ง
                 var formattedPrice = price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 $('#input_price').val(formattedPrice);
-
                 $('input[name="quantity"]').select();
             }
         });
+
         // 3. เมื่อกดล้างค่า
         $select.on('select2:clear', function (e) { $('#input_name').val(''); $('#input_price').val(''); });
+
         // 4. (เสริม) ป้องกันการพิมพ์ตัวอักษรลงในช่องราคา (ให้พิมพ์ได้แค่ตัวเลข จุด และลูกน้ำ)
         $('#input_price').on('input', function() {
             this.value = this.value.replace(/[^0-9.,]/g, '');
@@ -266,7 +294,6 @@
 </script>
 
 <style>
-    /* ✨ ปรับฟอนต์และขนาดให้ดูเหมือนระบบเก่า (Compact Style) */
     .custom-label { font-size: 0.85rem; margin-bottom: 2px; }
     .custom-input { font-size: 0.9rem; padding: 4px 8px; height: auto; }
     .custom-input-number { width: 100px; font-size: 0.9rem; padding: 2px 5px; }

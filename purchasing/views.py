@@ -13,8 +13,52 @@ from master_data.models import CompanyInfo
 from inventory.models import Product
 from manufacturing.models import BOM
 
+# ==========================================
+# 🛡️ ระบบนายทวาร (Gatekeeper) แบ่งสิทธิ์เป็น 2 ระดับ
+# ==========================================
+def can_view_and_pay(user):
+    """สิทธิ์ในการดูข้อมูลและทำเรื่องจ่ายเงิน (จัดซื้อ + บัญชีทุกคนเข้าได้)"""
+    if user.is_superuser: 
+        return True
+    
+    user_groups = list(user.groups.values_list('name', flat=True))
+    if 'Purchasing' in user_groups or 'Accounting' in user_groups:
+        return True
+        
+    if hasattr(user, 'employee') and user.employee:
+        dept = user.employee.department.name if user.employee.department else ''
+        # 🌟 อนุญาตให้พนักงานบัญชี "ทุกคน" เข้าหน้านี้ได้เพื่อทำเรื่องจ่ายเงิน
+        if 'จัดซื้อ' in dept or 'Purchasing' in dept or 'บัญชี' in dept or 'Accounting' in dept:
+            return True
+            
+    return False
+
+def can_create_po(user):
+    """สิทธิ์ในการสร้าง/แก้ไขเอกสารจัดซื้อ (เฉพาะจัดซื้อเท่านั้น)"""
+    if user.is_superuser: 
+        return True
+    
+    user_groups = list(user.groups.values_list('name', flat=True))
+    if 'Purchasing' in user_groups:
+        return True
+        
+    if hasattr(user, 'employee') and user.employee:
+        dept = user.employee.department.name if user.employee.department else ''
+        # 🌟 บัญชีไม่มีสิทธิ์สร้างใบสั่งซื้อ 🌟
+        if 'จัดซื้อ' in dept or 'Purchasing' in dept:
+            return True
+            
+    return False
+
+# ==========================================
+# 🛒 ระบบจัดซื้อ (Purchasing)
+# ==========================================
 @login_required
 def purchasing_dashboard(request):
+    if not can_view_and_pay(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบจัดซื้อ")
+        return redirect('dashboard')
+
     pos = PurchaseOrder.objects.all()
     draft_count = pos.filter(status='DRAFT').count()
     pending_payment_pos = pos.filter(payment_status__in=['PENDING', 'DEPOSIT'], status='APPROVED')
@@ -38,12 +82,20 @@ def purchasing_dashboard(request):
 
 @login_required
 def po_list(request):
+    if not can_view_and_pay(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
     pos = PurchaseOrder.objects.all().order_by('-created_at')
     return render(request, 'purchasing/po_list.html', {'pos': pos})
 
 
 @login_required
 def po_create(request):
+    if not can_create_po(request.user):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์สร้างใบสั่งซื้อ (สงวนไว้สำหรับแผนกจัดซื้อ)")
+        return redirect('purchasing_dashboard')
+
     ppo_ref = request.GET.get('ppo_ref', '')
     supplier_id = request.GET.get('supplier_id')
     items_json = request.GET.get('items_data', '[]')
@@ -69,13 +121,8 @@ def po_create(request):
 
         if form.is_valid() and formset.is_valid():
             po = form.save(commit=False)
-            
-            # 🌟 ล็อกสถานะให้เป็น DRAFT เสมอ 🌟
             po.status = 'DRAFT'
-
             now = datetime.datetime.now()
-            
-            # 🌟 ปีพุทธศักราช (บวก 543) 🌟
             thai_year = (now.year + 543) % 100
             prefix = f"PO-{thai_year:02d}{now.strftime('%m')}"
             
@@ -130,16 +177,23 @@ def po_create(request):
 
 @login_required
 def po_print(request, po_id):
+    if not can_view_and_pay(request.user):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+        
     po = get_object_or_404(PurchaseOrder, id=po_id)
     company = CompanyInfo.objects.first()
     return render(request, 'purchasing/po_print.html', {'po': po, 'company': company})
 
 @login_required
 def po_edit(request, po_id):
+    if not can_create_po(request.user):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์แก้ไขใบสั่งซื้อ")
+        return redirect('purchasing_dashboard')
+
     po = get_object_or_404(PurchaseOrder, id=po_id)
     fg_products = Product.objects.filter(product_type='FG', is_active=True)
 
-    # 🌟 เช็กสิทธิ์ว่าเป็น Superuser หรือ Manager/Executive หรือไม่ 🌟
     is_approver = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists() or request.user.groups.filter(name__icontains='Executive').exists()
 
     PurchaseOrderItemFormSetEdit = inlineformset_factory(
@@ -174,11 +228,15 @@ def po_edit(request, po_id):
         'formset': formset,
         'po': po, 
         'fg_products': fg_products,
-        'is_approver': is_approver # 🌟 แก้ไข: ใส่ลูกน้ำบรรทัดบน และส่งค่าสิทธิ์ไปให้ HTML อย่างถูกต้อง 🌟
+        'is_approver': is_approver
     })
 
 @login_required
 def po_payment(request, po_id):
+    if not can_view_and_pay(request.user):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์เข้าถึงหน้าระบบจ่ายเงิน")
+        return redirect('dashboard')
+
     po = get_object_or_404(PurchaseOrder, id=po_id)
     payments = po.payments.all().order_by('-created_at')
     total_paid = payments.aggregate(Sum('amount'))['amount__sum'] or 0
@@ -222,6 +280,10 @@ def po_payment(request, po_id):
 
 @login_required
 def ppo_list(request):
+    if not can_view_and_pay(request.user):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
     ppos = PurchasePreparation.objects.all().order_by('-id')
     
     for ppo in ppos:
@@ -239,6 +301,10 @@ def ppo_list(request):
 
 @login_required
 def ppo_detail(request, pk):
+    if not can_view_and_pay(request.user):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์เข้าถึงหน้านี้")
+        return redirect('dashboard')
+
     ppo = get_object_or_404(PurchasePreparation, pk=pk)
     materials_by_supplier = {}
     grand_total = 0 

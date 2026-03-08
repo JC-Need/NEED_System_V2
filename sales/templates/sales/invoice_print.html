@@ -40,14 +40,18 @@
         .payment-box { font-size: 13px; line-height: 1.4; color: #333; }
         .note-box { font-size: 12px; color: #555; margin-top: 10px; line-height: 1.3; }
         
+        /* 🌟 โซนลายเซ็นต์ 3 ช่อง 🌟 */
         .signature-section { margin-top: 40px; }
-        .sig-box { text-align: center; position: relative; height: 140px; }
-        .sig-line { border-bottom: 1px dotted #000; width: 80%; margin: 0 auto 5px; position: absolute; bottom: 50px; left: 0; right: 0; }
-        .sig-role { font-size: 12px; font-weight: 700; position: absolute; bottom: 30px; left: 0; right: 0; }
+        .sig-box { text-align: center; position: relative; height: 140px; padding: 0 10px; }
+        .sig-line { border-bottom: 1px dotted #000; width: 90%; margin: 0 auto 5px; position: absolute; bottom: 50px; left: 0; right: 0; }
+        .sig-role { font-size: 11px; font-weight: 700; position: absolute; bottom: 30px; left: 0; right: 0; }
         .sig-name { font-size: 11px; position: absolute; bottom: 15px; left: 0; right: 0; }
         .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
-        .sig-img { position: absolute; bottom: 55px; left: 0; right: 0; margin: auto; height: 50px; width: auto; object-fit: contain; }
-        .seal-img { position: absolute; bottom: 40px; right: 20px; width: 100px; opacity: 0.8; transform: rotate(-10deg); pointer-events: none; z-index: 10; }
+        
+        .sig-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%); height: 60px; width: auto; object-fit: contain; z-index: 5; }
+        
+        /* 🌟 แก้ไข: ดันตราประทับขึ้นให้อยู่เหนือเส้นประ (ปรับ bottom จาก 35px เป็น 65px) 🌟 */
+        .seal-img { position: absolute; bottom: 65px; left: 50%; transform: translateX(-50%) rotate(-15deg); width: 85px; opacity: 0.8; pointer-events: none; z-index: 10; }
 
         @media print {
             body { background: white; margin: 0; }
@@ -76,8 +80,7 @@
                     </div>
                     <div class="company-details ps-1">
                         {{ company.address|default:"-" }}<br>
-                        <strong>โทร:</strong> {{ company.phone|default:"-" }} &nbsp;|&nbsp;
-                        <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"-" }}
+                        <strong>โทร:</strong> {{ company.phone|default:"-" }} &nbsp;|&nbsp; <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"-" }}
                     </div>
                 </div>
                 <div class="col-5">
@@ -89,24 +92,35 @@
                     </div>
                 </div>
             </div>
+            
             <div class="customer-divider"></div>
+            
             <div class="row">
                 <div class="col-7 pe-4 border-end border-secondary">
                     <div class="info-group-label"><i class="fas fa-address-book me-1"></i> ลูกค้า / CUSTOMER</div>
                     
-                    <div class="customer-name">
-                        {{ inv.quotation_ref.customer_name|default:inv.customer_name|default:inv.customer.name|default:"ลูกค้าทั่วไป (Walk-in)" }}
-                    </div>
-                    
-                    <div class="customer-addr">
-                        {{ inv.quotation_ref.customer_address|default:inv.customer_address|default:inv.customer.address|default:"-" }}
-                    </div>
-                    
-                    <div class="customer-meta mt-1">
-                        <strong>โทร:</strong> {{ inv.quotation_ref.customer_phone|default:inv.customer_phone|default:inv.customer.phone|default:"-" }} 
-                        &nbsp;&nbsp;
-                        <strong>เลขผู้เสียภาษี:</strong> {{ inv.quotation_ref.customer_tax_id|default:inv.customer_tax_id|default:inv.customer.tax_id|default:"-" }}
-                    </div>
+                    {% if inv.customer_name %}
+                        <div class="customer-name">{{ inv.customer_name }}</div>
+                        <div class="customer-addr">{{ inv.customer_address|default:"-" }}</div>
+                        <div class="customer-meta mt-1">
+                            <strong>โทร:</strong> {{ inv.customer_phone|default:"-" }} 
+                            &nbsp;&nbsp;<strong>เลขผู้เสียภาษี:</strong> {{ inv.customer_tax_id|default:"-" }}
+                        </div>
+                    {% elif inv.customer %}
+                        <div class="customer-name">{{ inv.customer.name }}</div>
+                        <div class="customer-addr">{{ inv.customer.address|default:"-" }}</div>
+                        <div class="customer-meta mt-1">
+                            <strong>โทร:</strong> {{ inv.customer.phone|default:"-" }} 
+                            &nbsp;&nbsp;<strong>เลขผู้เสียภาษี:</strong> {{ inv.customer.tax_id|default:"-" }}
+                        </div>
+                    {% else %}
+                        <div class="customer-name text-muted fst-italic">ลูกค้าทั่วไป (Walk-in)</div>
+                        <div class="customer-addr">-</div>
+                        <div class="customer-meta mt-1">
+                            <strong>โทร:</strong> - 
+                            &nbsp;&nbsp;<strong>เลขผู้เสียภาษี:</strong> -
+                        </div>
+                    {% endif %}
                 </div>
                 <div class="col-5 ps-4">
                     <div class="info-group-label">ข้อมูลอ้างอิง / REFERENCE</div>
@@ -128,10 +142,10 @@
                 <thead>
                     <tr>
                         <th style="width: 5%;">ลำดับ</th>
-                        <th style="width: 50%; text-align: left;">รายการสินค้า / DESCRIPTION</th>
+                        <th style="width: 45%; text-align: left;">รายการสินค้า / DESCRIPTION</th>
                         <th style="width: 10%;">จำนวน</th>
                         <th style="width: 15%; text-align: right;">ราคาต่อหน่วย</th>
-                        <th style="width: 20%; text-align: right;">จำนวนเงิน</th>
+                        <th style="width: 25%; text-align: right;">จำนวนเงิน</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -188,30 +202,46 @@
         </div>
 
         <div class="row signature-section">
-            <div class="col-6">
+            
+            <div class="col-4">
                 <div class="sig-box">
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้ชำระเงิน (Payer)</div>
-                    <div class="sig-name">................................................</div>
-                    <div class="sig-date">วันที่ ........./........./.............</div>
+                    <div class="sig-name">...........................................</div>
+                    <div class="sig-date">วันที่ ......./........./..........</div>
                 </div>
             </div>
-            <div class="col-6 position-relative">
+            
+            <div class="col-4 position-relative">
                 <div class="sig-box">
-                    {% if company.seal %}
-                         <img src="{{ company.seal.url }}" class="seal-img"> 
-                    {% endif %}
-                    
                     {% if inv.employee and inv.employee.signature %}
                         <img src="{{ inv.employee.signature.url }}" class="sig-img">
                     {% endif %}
-                    
                     <div class="sig-line"></div>
                     <div class="sig-role">ผู้รับเงิน (Collector)</div>
-                    <div class="sig-name">({{ inv.employee.first_name }} {{ inv.employee.last_name }})</div>
+                    <div class="sig-name">({{ inv.employee.first_name|default:"-" }} {{ inv.employee.last_name|default:"" }})</div>
                     <div class="sig-date">วันที่ {% if inv.date %} {{ inv.date|date:"d/m/Y" }} {% else %} {{ inv.created_at|date:"d/m/Y" }} {% endif %}</div>
                 </div>
             </div>
+            
+            <div class="col-4 position-relative">
+                <div class="sig-box">
+                    {% if inv.status == 'PAID' %}
+                        {% if company.seal %}
+                             <img src="{{ company.seal.url }}" class="seal-img"> 
+                        {% endif %}
+                        <div class="sig-line" style="border-color: #155724;"></div>
+                        <div class="sig-role text-success"><i class="fas fa-check-circle"></i> ผู้อนุมัติ (Authorized By)</div>
+                        <div class="sig-name">( ฝ่ายบัญชี/ผู้บริหาร )</div>
+                        <div class="sig-date">รับชำระยอดสำเร็จ</div>
+                    {% else %}
+                        <div class="mt-4 pt-2 text-muted small"><i class="fas fa-hourglass-half"></i> รอการตรวจสอบยอดเงิน</div>
+                        <div class="sig-line" style="border-style: dashed; border-color: #ccc;"></div>
+                        <div class="sig-role text-muted">ผู้อนุมัติ (Authorized By)</div>
+                    {% endif %}
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -243,8 +273,10 @@
             else {
                 if (fraction.length === 2) {
                     let d1 = parseInt(fraction.charAt(0)), d2 = parseInt(fraction.charAt(1));
-                    if (d1 !== 0) { if (d1 === 1) text += ""; else if (d1 === 2) text += "ยี่"; else text += bahtText[d1]; text += "สิบ"; }
-                    if (d2 !== 0) { if (d2 === 1 && d1 !== 0) text += "เอ็ด"; else text += bahtText[d2]; }
+                    if (d1 !== 0) { if (d1 === 1) text += ""; else if (d1 === 2) text += "ยี่";
+                    else text += bahtText[d1]; text += "สิบ"; }
+                    if (d2 !== 0) { if (d2 === 1 && d1 !== 0) text += "เอ็ด";
+                    else text += bahtText[d2]; }
                     text += "สตางค์";
                 }
             }

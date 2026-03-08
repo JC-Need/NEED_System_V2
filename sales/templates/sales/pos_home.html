@@ -133,7 +133,7 @@
                                 <label class="form-label fw-bold">รับเงินสดมา</label>
                                 <div class="input-group input-group-lg">
                                     <span class="input-group-text bg-white border-end-0">฿</span>
-                                    <input type="number" class="form-control border-start-0" name="received_amount" id="cashInput" placeholder="0.00">
+                                    <input type="text" class="form-control border-start-0" name="received_amount_display" id="cashInput" placeholder="0.00">
                                 </div>
                                 <div class="mt-2 text-end text-muted small" id="changeText">เงินทอน: 0.00</div>
                             </div>
@@ -159,7 +159,8 @@
 </div>
 
 <script>
-    let cart = []; let currentTotal = 0;
+    let cart = [];
+    let currentTotal = 0;
 
     // --- Cart Functions ---
     function addToCart(id, name, price) {
@@ -203,10 +204,15 @@
     // --- Payment UI ---
     function openPaymentModal() {
         if (cart.length === 0) { Swal.fire('ตะกร้าว่างเปล่า', 'กรุณาเลือกสินค้าก่อนครับ', 'error'); return; }
-        document.getElementById('modalTotalAmount').innerText = '฿' + currentTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
-        document.getElementById('cashInput').value = currentTotal;
-        selectPayment('CASH');
         
+        document.getElementById('modalTotalAmount').innerText = '฿' + currentTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
+        
+        // 🌟 ตั้งค่าให้แสดงยอดแบบมีลูกน้ำและทศนิยมทันทีที่เปิด Modal 🌟
+        document.getElementById('cashInput').value = currentTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        updateChangeText(currentTotal); // คำนวณเงินทอนเริ่มต้น
+        
+        selectPayment('CASH');
+
         // Reset customer form
         document.getElementById('customerIdInput').value = '';
         document.getElementById('custName').value = '';
@@ -218,6 +224,7 @@
         var myModal = new bootstrap.Modal(document.getElementById('paymentModal'));
         myModal.show();
     }
+    
     function selectPayment(method) {
         document.querySelectorAll('.payment-option-card').forEach(el => el.classList.remove('active'));
         document.getElementById('opt-' + method).classList.add('active');
@@ -227,12 +234,41 @@
         document.getElementById('zone-CHECK').classList.add('d-none');
         document.getElementById('zone-' + method).classList.remove('d-none');
     }
-    document.getElementById('cashInput').addEventListener('input', function() {
-        let received = parseFloat(this.value) || 0;
-        let change = received - currentTotal;
-        let text = change >= 0 ? `เงินทอน: <span class="text-success fw-bold">฿${change.toLocaleString()}</span>` : `ขาดอีก: <span class="text-danger fw-bold">฿${Math.abs(change).toLocaleString()}</span>`;
-        document.getElementById('changeText').innerHTML = text;
+
+    // 🌟 ระบบจัดการลูกน้ำ (Comma) สำหรับช่องกรอกเงินสด 🌟
+    const cashInput = document.getElementById('cashInput');
+    
+    // เมื่อผู้ใช้พิมพ์ตัวเลข ให้คำนวณเงินทอนแบบ Real-time
+    cashInput.addEventListener('input', function() {
+        let val = parseFloat(this.value.replace(/,/g, '')) || 0; // แอบลบลูกน้ำออกก่อนคำนวณ
+        updateChangeText(val);
     });
+
+    // เมื่อคลิกเข้าไปที่ช่อง (Focus) ให้โชว์ตัวเลขเพียวๆ จะได้ลบ/พิมพ์แก้ง่ายๆ
+    cashInput.addEventListener('focus', function() {
+        let val = this.value.replace(/,/g, '');
+        if (val === '0.00' || val === '0') {
+            this.value = '';
+        } else {
+            this.value = val;
+        }
+    });
+
+    // เมื่อคลิกออกนอกช่อง (Blur) ให้ใส่ลูกน้ำกลับเข้าไปสวยๆ
+    cashInput.addEventListener('blur', function() {
+        let val = parseFloat(this.value.replace(/,/g, '')) || 0;
+        this.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    });
+
+    // ฟังก์ชันคำนวณและแสดงเงินทอน
+    function updateChangeText(receivedAmount) {
+        let change = receivedAmount - currentTotal;
+        let text = change >= 0 
+            ? `เงินทอน: <span class="text-success fw-bold">฿${change.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>` 
+            : `ขาดอีก: <span class="text-danger fw-bold">฿${Math.abs(change).toLocaleString('en-US', {minimumFractionDigits: 2})}</span>`;
+        document.getElementById('changeText').innerHTML = text;
+    }
+
 
     // --- Customer Search ---
     function searchCustomer(query) {
@@ -255,6 +291,7 @@
                 } else { resultsDiv.style.display = 'none'; }
             });
     }
+    
     function selectCustomer(cust) {
         document.getElementById('customerIdInput').value = cust.id;
         document.getElementById('custName').value = cust.name;
@@ -268,13 +305,26 @@
     // --- Submit Payment ---
     function confirmPayment() {
         let method = document.getElementById('paymentMethodInput').value;
-        let received = parseFloat(document.getElementById('cashInput').value) || 0;
-        if (method === 'CASH' && received < currentTotal) { Swal.fire('ยอดเงินไม่พอ', 'กรุณารับเงินให้ครบครับ', 'warning'); return; }
+        
+        // 🌟 ดึงยอดเงินแบบลบลูกน้ำออก เพื่อให้พร้อมคำนวณและบันทึกเข้าหลังบ้าน 🌟
+        let rawReceived = document.getElementById('cashInput').value.replace(/,/g, '');
+        let received = parseFloat(rawReceived) || 0;
+        
+        if (method === 'CASH' && received < currentTotal) { 
+            Swal.fire('ยอดเงินไม่พอ', 'กรุณารับเงินให้ครบครับ', 'warning'); 
+            return; 
+        }
 
         let formData = new FormData(document.getElementById('paymentForm'));
         formData.append('total_amount', currentTotal);
         formData.append('cart', JSON.stringify(cart));
-        if (method !== 'CASH') formData.set('received_amount', currentTotal);
+        
+        // 🌟 สำคัญมาก: ส่งยอดรับเงิน (ที่ไม่มีลูกน้ำแล้ว) กลับไปให้หลังบ้าน 🌟
+        if (method === 'CASH') {
+            formData.set('received_amount', received);
+        } else {
+            formData.set('received_amount', currentTotal);
+        }
 
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
 
