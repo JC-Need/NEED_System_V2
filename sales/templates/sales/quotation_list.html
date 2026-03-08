@@ -51,6 +51,7 @@
                                     <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>อนุมัติแล้ว</option>
                                     <option value="CONVERTED" {% if status_filter == 'CONVERTED' %}selected{% endif %}>เปิดบิลแล้ว</option>
                                     <option value="REJECTED" {% if status_filter == 'REJECTED' %}selected{% endif %}>ไม่อนุมัติ</option>
+                                    <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>ยกเลิกแล้ว</option>
                                 </select>
                             </div>
                         </div>
@@ -106,7 +107,9 @@
                                         <span class="small text-dark">{{ qt.employee.first_name }}</span>
                                     </div>
                                 </td>
-                                <td class="text-end fw-bold text-success">{{ qt.grand_total|floatformat:2|intcomma }}</td>
+                                <td class="text-end fw-bold {% if qt.status == 'CANCELLED' %}text-muted text-decoration-line-through{% else %}text-success{% endif %}">
+                                    {{ qt.grand_total|floatformat:2|intcomma }}
+                                </td>
                                 <td class="text-center">
                                     {% if qt.status == 'APPROVED' %}
                                         <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3">อนุมัติแล้ว</span>
@@ -114,13 +117,14 @@
                                         <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill px-3">เปิดบิลแล้ว</span>
                                     {% elif qt.status == 'REJECTED' %}
                                         <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3">ไม่อนุมัติ</span>
+                                    {% elif qt.status == 'CANCELLED' %}
+                                        <span class="badge bg-danger text-white rounded-pill px-3 shadow-sm">ยกเลิก</span>
                                     {% else %}
                                         <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill px-3">รออนุมัติ</span>
                                     {% endif %}
                                 </td>
                                 <td class="text-end pe-4">
                                     <div class="d-flex justify-content-end gap-1">
-                                        
                                         {% if is_manager and qt.status == 'DRAFT' %}
                                             <a href="{% url 'quotation_approve' qt.id %}" class="btn btn-approve shadow-sm rounded-pill d-flex align-items-center gap-1" title="คลิกเพื่ออนุมัติ" onclick="return confirm('ยืนยันการอนุมัติเอกสารนี้?');">
                                                 <i class="fas fa-check-circle"></i> อนุมัติ
@@ -134,10 +138,17 @@
                                         {% endif %}
 
                                         <div class="btn-group shadow-sm rounded-3">
-                                            <a href="{% url 'quotation_edit' qt.id %}" class="btn btn-sm btn-white border text-primary" title="แก้ไข"><i class="fas fa-pen"></i></a>
-                                            <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-sm btn-white border text-secondary" title="พิมพ์"><i class="fas fa-print"></i></a>
+                                            <a href="{% url 'quotation_edit' qt.id %}" class="btn btn-sm btn-white border text-primary" title="{% if qt.status == 'CANCELLED' or qt.status == 'CONVERTED' %}ดูรายละเอียด{% else %}แก้ไข{% endif %}">
+                                                {% if qt.status == 'CANCELLED' or qt.status == 'CONVERTED' %}
+                                                    <i class="fas fa-eye text-secondary"></i>
+                                                {% else %}
+                                                    <i class="fas fa-pen"></i>
+                                                {% endif %}
+                                            </a>
+                                            {% if qt.status != 'CANCELLED' %}
+                                                <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-sm btn-white border text-secondary" title="พิมพ์"><i class="fas fa-print"></i></a>
+                                            {% endif %}
                                         </div>
-
                                     </div>
                                 </td>
                             </tr>

@@ -49,7 +49,10 @@ class Product(models.Model):
     def save(self, *args, **kwargs):
         if not self.code:
             today = datetime.date.today()
-            year_month = today.strftime('%y%m')
+            # 🌟 ปรับให้รหัสสินค้าใช้ปี พ.ศ. ด้วย เพื่อความเข้ากันได้ของระบบ 🌟
+            thai_year = (today.year + 543) % 100
+            year_month = f"{thai_year:02d}{today.strftime('%m')}"
+            
             prefix = f"RM-{year_month}-" if self.product_type == 'RM' else f"PD-{year_month}-"
             
             last_product = Product.objects.filter(code__startswith=prefix).order_by('code').last()
@@ -78,7 +81,7 @@ class InventoryDoc(models.Model):
     doc_no = models.CharField(max_length=50, unique=True, blank=True, verbose_name="เลขที่เอกสาร")
     doc_type = models.CharField(max_length=2, choices=DOC_TYPES, verbose_name="ประเภทเอกสาร")
     
-    # 🌟 ฟิลด์ใหม่: สะพานเชื่อมกลับไปหาใบสั่งซื้อ (PO) 🌟
+    # สะพานเชื่อมกลับไปหาใบสั่งซื้อ (PO)
     po_reference = models.ForeignKey('purchasing.PurchaseOrder', on_delete=models.SET_NULL, null=True, blank=True, related_name='receipt_docs', verbose_name="อ้างอิงใบสั่งซื้อ (PO)")
     
     reference = models.CharField(max_length=100, blank=True, verbose_name="อ้างอิงอื่นๆ (เช่น ทะเบียนรถ, ใบส่งของ)")
@@ -89,9 +92,13 @@ class InventoryDoc(models.Model):
     def save(self, *args, **kwargs):
         if not self.doc_no:
             today = datetime.date.today()
-            year_month = today.strftime('%y%m')
+            # 🌟 ปรับให้เลขใบรับสินค้า (GR/GI) ใช้ปี พ.ศ. และรัน 3 หลัก 🌟
+            thai_year = (today.year + 543) % 100
+            year_month = f"{thai_year:02d}{today.strftime('%m')}"
+            
             prefix = f"{self.doc_type}-{year_month}-"
             last_doc = InventoryDoc.objects.filter(doc_no__startswith=prefix).order_by('doc_no').last()
+            
             if last_doc:
                 try:
                     running_number = int(last_doc.doc_no.split('-')[-1]) + 1
@@ -99,6 +106,7 @@ class InventoryDoc(models.Model):
                     running_number = 1
             else:
                 running_number = 1
+                
             self.doc_no = f"{prefix}{running_number:03d}"
         super().save(*args, **kwargs)
 

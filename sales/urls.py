@@ -21,11 +21,11 @@ urlpatterns = [
     path('quotation/delete-item/<int:item_id>/', views.delete_item, name='delete_item'),
     path('quotation/print/<int:qt_id>/', views.quotation_print, name='quotation_print'),
     path('quotation/approve/<int:qt_id>/', views.quotation_approve, name='quotation_approve'),
+    path('quotation/cancel/<int:qt_id>/', views.quotation_cancel, name='quotation_cancel'), # 🌟 เพิ่มบรรทัดนี้
 
     # 5. Invoice & Payment
     path('invoice/', views.invoice_list, name='invoice_list'),
     path('invoice/print/<int:inv_id>/', views.invoice_print, name='invoice_print'),
-    # ★ เพิ่มบรรทัดนี้: เพื่อให้ปุ่ม "ยืนยันยอด" ทำงานได้ ★
     path('confirm-payment/<str:doc_type>/<int:doc_id>/', views.confirm_payment, name='confirm_payment'),
 
     # 6. Others / API

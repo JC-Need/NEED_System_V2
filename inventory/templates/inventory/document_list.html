@@ -102,7 +102,7 @@
                     <tr>
                         <th class="ps-4">เลขที่เอกสาร</th>
                         <th>วันที่</th>
-                        <th>อ้างอิง (Ref)</th>
+                        <th>อ้างอิง (PO / Ref)</th>
                         <th>รายการสำคัญ</th>
                         <th class="text-center">จำนวนรวม</th>
                         <th>ผู้ทำรายการ</th>
@@ -128,7 +128,16 @@
                             <div class="fw-bold text-dark">{{ doc.created_at|date:"d/m/Y" }}</div>
                             <small class="text-muted">{{ doc.created_at|date:"H:i" }} น.</small>
                         </td>
-                        <td>{{ doc.reference|default:"-" }}</td>
+                        <td>
+                            {% if doc.po_reference %}
+                                <div class="mb-1">
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill px-2 py-1">
+                                        <i class="fas fa-shopping-cart me-1"></i> {{ doc.po_reference.code }}
+                                    </span>
+                                </div>
+                            {% endif %}
+                            <span class="small text-muted">{{ doc.reference|default:"-" }}</span>
+                        </td>
                         <td>
                             {% for move in doc.movements.all|slice:":2" %}
                                 <div class="small text-dark">• {{ move.product.name }}</div>

@@ -18,17 +18,17 @@
         }
 
         body { 
-            font-family: 'Sarabun', sans-serif; 
+            font-family: 'Sarabun', sans-serif;
             background: #525659; 
             -webkit-print-color-adjust: exact; 
             print-color-adjust: exact;
         }
         
         .page {
-            background: white; 
+            background: white;
             width: 210mm; 
             min-height: 297mm; /* A4 */
-            margin: 30px auto; 
+            margin: 30px auto;
             padding: 40px 50px; /* เพิ่มขอบซ้ายขวาให้กว้างขึ้น */
             position: relative;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
@@ -38,7 +38,8 @@
 
         /* Header Stripe */
         .brand-stripe {
-            position: absolute; top: 0; left: 0; right: 0;
+            position: absolute;
+            top: 0; left: 0; right: 0;
             height: 6px;
             background: linear-gradient(90deg, var(--accent-color) 0%, #e6c884 50%, var(--accent-color) 100%);
         }
@@ -55,10 +56,7 @@
         .company-title { font-size: 22px; font-weight: 700; color: var(--primary-color); line-height: 1.2; margin-bottom: 5px; }
         .company-details { font-size: 13px; color: #636e72; line-height: 1.5; }
 
-        .doc-type-badge {
-            text-align: right;
-            margin-bottom: 10px;
-        }
+        .doc-type-badge { text-align: right; margin-bottom: 10px; }
         .badge-custom {
             font-size: 14px; font-weight: 700; 
             padding: 8px 20px; border-radius: 50px;
@@ -70,8 +68,7 @@
 
         /* Info Grid */
         .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+            display: grid; grid-template-columns: 1fr 1fr;
             gap: 20px;
             background-color: #fcfcfc;
             border: 1px solid var(--border-color);
@@ -90,30 +87,22 @@
         .table-container { flex-grow: 1; /* ดันตารางให้ขยายเต็มพื้นที่ว่าง */ }
         .table-custom { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
         .table-custom th {
-            background-color: var(--primary-color);
-            color: white;
-            font-weight: 500;
-            padding: 12px 10px;
-            font-size: 14px;
-            text-align: left;
+            background-color: var(--primary-color); color: white;
+            font-weight: 500; padding: 12px 10px; font-size: 14px; text-align: left;
         }
         .table-custom th:first-child { border-top-left-radius: 6px; }
         .table-custom th:last-child { border-top-right-radius: 6px; }
         
         .table-custom td {
-            padding: 12px 10px;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 14px;
-            color: #2d3436;
-            vertical-align: top;
+            padding: 12px 10px; border-bottom: 1px solid var(--border-color);
+            font-size: 14px; color: #2d3436; vertical-align: top;
         }
         .table-custom tr:last-child td { border-bottom: none; } /* ลบเส้นแถวสุดท้าย */
 
         /* Signature Section (Sticky Bottom) */
         .signature-wrapper {
             margin-top: auto; /* ดันลงล่างสุด */
-            padding-top: 20px;
-            page-break-inside: avoid;
+            padding-top: 20px; page-break-inside: avoid;
         }
         .sign-box { text-align: center; }
         .sign-title { font-size: 12px; font-weight: 600; color: #636e72; text-transform: uppercase; margin-bottom: 40px; }
@@ -123,8 +112,7 @@
 
         /* Footer */
         .page-footer {
-            border-top: 1px solid var(--border-color);
-            padding-top: 15px;
+            border-top: 1px solid var(--border-color); padding-top: 15px;
             margin-top: 30px;
             font-size: 11px; color: #b2bec3;
             display: flex; justify-content: space-between;
@@ -195,11 +183,23 @@
                 <div class="value">{{ doc.created_at|date:"d F Y" }}</div>
                 <div style="font-size: 13px; color: #636e72;">{{ doc.created_at|date:"H:i" }} น.</div>
             </div>
+            
             <div class="info-item border-top pt-3 mt-1">
                 <label>ผู้ออกเอกสาร (ISSUER)</label>
                 <div class="value" style="font-size: 14px;">{{ doc.created_by.first_name }} {{ doc.created_by.last_name }}</div>
-                <div style="font-size: 12px; color: #636e72;">อ้างอิง: {{ doc.reference|default:"-" }}</div>
+                
+                <div style="font-size: 12px; color: #636e72; margin-top: 4px;">
+                    {% if doc.po_reference %}
+                        <strong>อ้างอิง (PO Ref.):</strong> <span style="color: var(--primary-color); font-weight: 700;">{{ doc.po_reference.code }}</span>
+                        {% if doc.reference %} <br> <strong>อ้างอิงอื่นๆ:</strong> {{ doc.reference }} {% endif %}
+                    {% elif doc.reference %}
+                        <strong>อ้างอิง:</strong> {{ doc.reference }}
+                    {% else %}
+                        <strong>อ้างอิง:</strong> -
+                    {% endif %}
+                </div>
             </div>
+            
             <div class="info-item border-top pt-3 mt-1 text-end">
                 <label>หมายเหตุ (NOTE)</label>
                 <div class="value" style="font-size: 14px; font-weight: 400;">{{ doc.description|default:"-" }}</div>

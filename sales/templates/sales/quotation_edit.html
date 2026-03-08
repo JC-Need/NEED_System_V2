@@ -4,12 +4,20 @@
 {% block content %}
 <div class="container-xxl py-4 px-4">
 
-    {% if qt.status == 'CONVERTED' %}
-    <div class="alert alert-danger shadow-sm border-0 rounded-4 mb-4 d-flex align-items-center p-3">
-        <i class="fas fa-lock fa-2x me-3 text-danger"></i>
+    {% if qt.status == 'CONVERTED' or qt.status == 'CANCELLED' %}
+    <div class="alert {% if qt.status == 'CANCELLED' %}alert-secondary{% else %}alert-danger{% endif %} shadow-sm border-0 rounded-4 mb-4 d-flex align-items-center p-3">
+        <i class="fas {% if qt.status == 'CANCELLED' %}fa-ban text-secondary{% else %}fa-lock text-danger{% endif %} fa-2x me-3"></i>
         <div>
-            <h6 class="mb-1 fw-bold text-danger">เอกสารถูกล็อก (Locked)</h6>
-            <small class="text-dark">ใบเสนอราคานี้ถูกนำไปเปิดบิลขายเรียบร้อยแล้ว ระบบไม่อนุญาตให้แก้ไขข้อมูลใดๆ เพื่อป้องกันผลกระทบต่อระบบบัญชี</small>
+            <h6 class="mb-1 fw-bold {% if qt.status == 'CANCELLED' %}text-secondary{% else %}text-danger{% endif %}">
+                เอกสารถูกล็อก ({% if qt.status == 'CANCELLED' %}ยกเลิก{% else %}เปิดบิลแล้ว{% endif %})
+            </h6>
+            <small class="text-dark">
+                {% if qt.status == 'CANCELLED' %}
+                ใบเสนอราคานี้ถูกระบุให้เป็นโมฆะ (ยกเลิก) ระบบไม่อนุญาตให้แก้ไขข้อมูลใดๆ
+                {% else %}
+                ใบเสนอราคานี้ถูกนำไปเปิดบิลขายเรียบร้อยแล้ว ระบบไม่อนุญาตให้แก้ไขข้อมูลใดๆ เพื่อป้องกันผลกระทบต่อระบบบัญชี
+                {% endif %}
+            </small>
         </div>
     </div>
     {% endif %}
@@ -17,7 +25,7 @@
     <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
             <h4 class="fw-bold text-dark mb-1" style="font-size: 1.5rem;">
-                <i class="fas fa-edit text-primary me-2"></i>{% if qt.status == 'CONVERTED' %}รายละเอียดใบเสนอราคา{% else %}แก้ไขใบเสนอราคา{% endif %}
+                <i class="fas fa-edit text-primary me-2"></i>{% if qt.status == 'CONVERTED' or qt.status == 'CANCELLED' %}รายละเอียดใบเสนอราคา{% else %}แก้ไขใบเสนอราคา{% endif %}
             </h4>
             <div class="text-muted" style="font-size: 0.9rem;">
                 เลขที่: <span class="text-danger fw-bold">{{ qt.code }}</span>
@@ -29,9 +37,18 @@
             <a href="{% url 'quotation_list' %}" class="btn btn-light border shadow-sm rounded-pill px-3 btn-sm fw-bold">
                 <i class="fas fa-chevron-left me-1"></i> กลับ
             </a>
+            
+            {% if qt.status == 'DRAFT' or qt.status == 'APPROVED' %}
+            <a href="{% url 'quotation_cancel' qt.id %}" class="btn btn-outline-danger shadow-sm rounded-pill px-3 ms-2 btn-sm fw-bold" onclick="return confirm('คุณแน่ใจหรือไม่ว่าต้องการยกเลิกใบเสนอราคานี้?\n\n(การกระทำนี้จะทำให้เอกสารเป็นโมฆะทันที)');">
+                <i class="fas fa-ban me-1"></i> ยกเลิกเอกสาร
+            </a>
+            {% endif %}
+
+            {% if qt.status != 'CANCELLED' %}
             <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-primary shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold">
                 <i class="fas fa-print me-1"></i> พิมพ์ / ตัวอย่าง
             </a>
+            {% endif %}
         </div>
     </div>
 
@@ -65,7 +82,7 @@
                         <textarea class="form-control custom-input bg-white" rows="3" readonly>{{ qt.customer_address }}</textarea>
                     </div>
 
-                    {% if qt.status != 'CONVERTED' %}
+                    {% if qt.status != 'CONVERTED' and qt.status != 'CANCELLED' %}
                         {% if qt.customer %}
                             <a href="{% url 'customer_edit' qt.customer.id %}" target="_blank" class="btn btn-warning w-100 shadow-sm text-dark fw-bold rounded-pill btn-sm mt-2">
                                 <i class="fas fa-user-edit me-1"></i> แก้ไขข้อมูลลูกค้า ({{ qt.customer.code }})
@@ -83,7 +100,7 @@
 
         <div class="col-lg-8">
             
-            {% if qt.status != 'CONVERTED' %}
+            {% if qt.status != 'CONVERTED' and qt.status != 'CANCELLED' %}
             <div class="card shadow-sm border-0 rounded-3 mb-3 border-bottom border-success border-3">
                 <div class="card-header py-2 bg-white">
                     <h6 class="m-0 fw-bold text-success" style="font-size: 1rem;"><i class="fas fa-cart-plus me-2"></i> เพิ่มรายการสินค้า</h6>
@@ -148,7 +165,7 @@
                                 <th class="text-center" style="width: 15%;">จำนวน</th>
                                 <th class="text-end" style="width: 15%;">ราคา/หน่วย</th>
                                 <th class="text-end pe-4" style="width: 20%;">รวมเงิน</th>
-                                {% if qt.status != 'CONVERTED' %}<th style="width: 5%;"></th>{% endif %}
+                                {% if qt.status != 'CONVERTED' and qt.status != 'CANCELLED' %}<th style="width: 5%;"></th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -160,7 +177,7 @@
                                 <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
                                 <td class="text-end pe-4 fw-bold text-primary">{{ item.amount|floatformat:2|intcomma }}</td>
                                 
-                                {% if qt.status != 'CONVERTED' %}
+                                {% if qt.status != 'CONVERTED' and qt.status != 'CANCELLED' %}
                                 <td class="text-center">
                                     <a href="{% url 'delete_item' item.id %}" class="text-danger" onclick="return confirm('ลบรายการนี้?')">
                                         <i class="fas fa-trash-alt"></i>
@@ -170,10 +187,14 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if qt.status != 'CONVERTED' %}6{% else %}5{% endif %}" class="text-center py-5 text-muted">
-                                    <i class="fas fa-shopping-basket fa-2x mb-3 opacity-25"></i>
-                                    <p class="small mb-0">ยังไม่มีรายการสินค้า</p>
-                                    {% if qt.status != 'CONVERTED' %}<small>กรุณาเพิ่มสินค้าจากกล่องด้านบน</small>{% endif %}
+                                <td colspan="{% if qt.status != 'CONVERTED' and qt.status != 'CANCELLED' %}6{% else %}5{% endif %}" class="text-center py-5">
+                                    {% if qt.status == 'CANCELLED' %}
+                                        <h3 class="text-danger fw-bold mb-0 py-3"><i class="fas fa-ban me-2"></i> ยกเลิก (CANCELLED)</h3>
+                                    {% else %}
+                                        <i class="fas fa-shopping-basket fa-2x mb-3 text-muted opacity-25"></i>
+                                        <p class="small mb-0 text-muted">ยังไม่มีรายการสินค้า</p>
+                                        {% if qt.status != 'CONVERTED' %}<small class="text-muted">กรุณาเพิ่มสินค้าจากกล่องด้านบน</small>{% endif %}
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% endfor %}
@@ -190,9 +211,9 @@
                                 <label class="text-primary fw-bold custom-label mb-1">
                                     <i class="fas fa-pen me-1"></i> หมายเหตุ / เงื่อนไข (Note):
                                 </label>
-                                <textarea name="note" class="form-control custom-input mb-2" rows="4" placeholder="-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง" {% if qt.status == 'CONVERTED' %}readonly{% endif %}>{{ qt.note }}</textarea>
+                                <textarea name="note" class="form-control custom-input mb-2" rows="4" placeholder="-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง" {% if qt.status == 'CONVERTED' or qt.status == 'CANCELLED' %}readonly{% endif %}>{{ qt.note }}</textarea>
                                 
-                                {% if qt.status != 'CONVERTED' %}
+                                {% if qt.status != 'CONVERTED' and qt.status != 'CANCELLED' %}
                                 <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3">
                                     <i class="fas fa-sync-alt me-1"></i> คำนวณยอดใหม่ / บันทึกหมายเหตุ
                                 </button>
@@ -211,7 +232,7 @@
                                             <input type="number" step="0.01" name="shipping_cost"
                                                    value="{% if qt.shipping_cost > 0 %}{{ qt.shipping_cost }}{% endif %}"
                                                    class="form-control form-control-sm text-end d-inline-block custom-input-number"
-                                                   placeholder="0.00" autocomplete="off" {% if qt.status == 'CONVERTED' %}readonly{% endif %}>
+                                                   placeholder="0.00" autocomplete="off" {% if qt.status == 'CONVERTED' or qt.status == 'CANCELLED' %}readonly{% endif %}>
                                         </td>
                                     </tr>
                                     <tr>
@@ -220,7 +241,7 @@
                                             <input type="number" step="0.01" name="discount"
                                                    value="{% if qt.discount > 0 %}{{ qt.discount }}{% endif %}"
                                                    class="form-control form-control-sm text-end d-inline-block text-danger custom-input-number"
-                                                   placeholder="0.00" autocomplete="off" {% if qt.status == 'CONVERTED' %}readonly{% endif %}>
+                                                   placeholder="0.00" autocomplete="off" {% if qt.status == 'CONVERTED' or qt.status == 'CANCELLED' %}readonly{% endif %}>
                                         </td>
                                     </tr>
                                     <tr class="border-top">
@@ -243,7 +264,7 @@
                             </div>
                         </div>
 
-                        {% if qt.status != 'CONVERTED' %}
+                        {% if qt.status != 'CONVERTED' and qt.status != 'CANCELLED' %}
                         <div class="mt-4 pt-3 border-top text-end">
                             <button type="submit" name="finish_quote" class="btn btn-success btn-lg shadow rounded-pill px-5 fw-bold" onclick="return confirm('ยืนยันสร้างใบเสนอราคานี้ เสร็จสมบูรณ์ใช่หรือไม่?');">
                                 <i class="fas fa-check-circle me-2"></i> สร้างใบเสนอราคา (เสร็จสิ้น)
@@ -264,32 +285,19 @@
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
     $(document).ready(function() {
-        // 1. ตั้งค่า Select2
-        var $select = $('#product_selector').select2({
-            theme: 'bootstrap4', placeholder: "-- พิมพ์ชื่อสินค้าเพื่อค้นหา --", allowClear: true, width: '100%'
-        });
-
-        // 2. เมื่อเลือกสินค้า -> ดึงราคามาใส่ลูกน้ำ (,)
+        var $select = $('#product_selector').select2({ theme: 'bootstrap4', placeholder: "-- พิมพ์ชื่อสินค้าเพื่อค้นหา --", allowClear: true, width: '100%' });
         $select.on('select2:select', function (e) {
             var selectedOption = $(this).find(':selected');
             var name = selectedOption.data('name');
             var price = parseFloat(selectedOption.data('price')); 
-
             if(name) {
                 $('#input_name').val(name);
-                var formattedPrice = price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                $('#input_price').val(formattedPrice);
+                $('#input_price').val(price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                 $('input[name="quantity"]').select();
             }
         });
-
-        // 3. เมื่อกดล้างค่า
         $select.on('select2:clear', function (e) { $('#input_name').val(''); $('#input_price').val(''); });
-
-        // 4. (เสริม) ป้องกันการพิมพ์ตัวอักษรลงในช่องราคา (ให้พิมพ์ได้แค่ตัวเลข จุด และลูกน้ำ)
-        $('#input_price').on('input', function() {
-            this.value = this.value.replace(/[^0-9.,]/g, '');
-        });
+        $('#input_price').on('input', function() { this.value = this.value.replace(/[^0-9.,]/g, ''); });
     });
 </script>
 
@@ -300,14 +308,9 @@
     .custom-table th { font-size: 0.8rem; font-weight: bold; padding: 8px; background-color: #f1f3f5; }
     .custom-table td { font-size: 0.9rem; padding: 8px; }
     .custom-summary-table td { font-size: 0.9rem; padding: 2px 0; }
-
     .select2-container--bootstrap4 .select2-selection--single { height: 34px !important; border-color: #ced4da; }
     .select2-container--bootstrap4 .select2-selection--single .select2-selection__rendered { line-height: 32px; padding-left: 10px; font-size: 0.9rem; }
-
-    /* ซ่อนลูกศรในช่องตัวเลข */
-    input::-webkit-outer-spin-button,
-    input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
     input[type=number] { -moz-appearance: textfield; }
 </style>
-
 {% endblock %}

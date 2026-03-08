@@ -19,7 +19,7 @@ class POSOrder(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสร็จ")
     employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
     
-    # --- ข้อมูลลูกค้า (เพิ่มใหม่) ---
+    # --- ข้อมูลลูกค้า ---
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ลูกค้า (สมาชิก)")
     customer_name = models.CharField(max_length=200, blank=True, verbose_name="ชื่อลูกค้า (ระบุเอง)")
     customer_address = models.TextField(blank=True, verbose_name="ที่อยู่")
@@ -33,7 +33,7 @@ class POSOrder(models.Model):
     
     payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, default='CASH', verbose_name="วิธีชำระ")
     
-    # --- หลักฐานการโอน/เช็ค (เพิ่มใหม่) ---
+    # --- หลักฐานการโอน/เช็ค ---
     transfer_slip = models.ImageField(upload_to='pos_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
     check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
     check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
@@ -57,14 +57,15 @@ class POSOrderItem(models.Model):
         super().save(*args, **kwargs)
 
 # =========================
-# 2. ระบบ Quotation (ใบเสนอราคา) - คงเดิม
+# 2. ระบบ Quotation (ใบเสนอราคา)
 # =========================
 class Quotation(models.Model):
     STATUS_CHOICES = [
         ('DRAFT', 'รออนุมัติ'),     
         ('APPROVED', 'อนุมัติแล้ว'), 
         ('CONVERTED', 'เปิดบิลขายแล้ว'), 
-        ('REJECTED', 'ไม่อนุมัติ')
+        ('REJECTED', 'ไม่อนุมัติ'),
+        ('CANCELLED', 'ยกเลิกแล้ว')  # 🌟 เพิ่มสถานะใหม่ตรงนี้ 🌟
     ]
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสนอราคา")
@@ -109,7 +110,7 @@ class QuotationItem(models.Model):
         super().save(*args, **kwargs)
 
 # =========================
-# 3. ระบบ Invoice (ใบขายสินค้าเต็มรูปแบบ) - คงเดิม
+# 3. ระบบ Invoice (ใบขายสินค้าเต็มรูปแบบ)
 # =========================
 class Invoice(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบกำกับภาษี/ใบเสร็จ")

@@ -18,14 +18,14 @@ from master_data.models import Customer, CompanyInfo
 from hr.models import Employee
 from .forms import QuotationForm
 
-# ==========================================
-# 🔧 Utility & Helper (นายทวารตรวจสอบสิทธิ์)
-# ==========================================
 def get_next_document_number():
     now = timezone.now()
-    prefix = f"DLN-{now.strftime('%y%m')}"
+    thai_year = (now.year + 543) % 100
+    prefix = f"DLN-{thai_year:02d}{now.strftime('%m')}"
+    
     last_inv = Invoice.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
     last_pos = POSOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
+    
     max_seq = 0
     if last_inv:
         try: max_seq = max(max_seq, int(last_inv.split('-')[-1]))
@@ -33,8 +33,9 @@ def get_next_document_number():
     if last_pos:
         try: max_seq = max(max_seq, int(last_pos.split('-')[-1]))
         except: pass
+        
     new_seq = max_seq + 1
-    return f"{prefix}-{new_seq:04d}"
+    return f"{prefix}-{new_seq:03d}"
 
 def get_target_employees(user):
     current_emp = getattr(user, 'employee', None)
@@ -61,7 +62,6 @@ def get_sales_queryset(model_class, user, target_employees):
     else:
         return model_class.objects.filter(employee__in=target_employees)
 
-# 🌟 เพิ่มฟังก์ชันนายทวาร: เช็กสิทธิ์การเข้าถึงระบบขาย 🌟
 def is_sales_authorized(user):
     if user.is_superuser: 
         return True
@@ -74,21 +74,15 @@ def is_sales_authorized(user):
         dept = user.employee.department.name if user.employee.department else ''
         rank = user.employee.business_rank if user.employee.business_rank else ''
         
-        # แผนกขายเข้าได้ทุกคน
         if 'ขาย' in dept or 'Sales' in dept:
             return True
-        # แผนกบัญชี เข้าได้เฉพาะระดับ Manager ขึ้นไป (เพื่อตรวจสอบ)
         if ('บัญชี' in dept or 'Accounting' in dept) and rank in ['Manager', 'Executive', 'Director', 'ผู้จัดการ']:
             return True
             
     return False
 
-# ==========================================
-# 1. หน้า Dashboard
-# ==========================================
 @login_required
 def sales_dashboard(request):
-    # 🌟 เรียกล็อกประตู! ถ้าไม่มีสิทธิ์ เตะกลับหน้าหลัก 🌟
     if not is_sales_authorized(request.user):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงภาพรวมฝ่ายขาย")
         return redirect('dashboard')
@@ -132,12 +126,8 @@ def sales_dashboard(request):
     }
     return render(request, 'sales/dashboard.html', context)
 
-# ==========================================
-# 2. Sales Hub & Convert
-# ==========================================
 @login_required
 def sales_hub(request):
-    # 🌟 เรียกล็อกประตู! 🌟
     if not is_sales_authorized(request.user):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เปิดบิลขาย")
         return redirect('dashboard')
@@ -177,12 +167,8 @@ def convert_quote_to_invoice(request, qt_id):
     messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย (รอตรวจสอบยอดเงิน)")
     return redirect('invoice_list')
 
-# ==========================================
-# 3. ระบบ POS
-# ==========================================
 @login_required
 def pos_home(request):
-    # 🌟 เรียกล็อกประตู! 🌟
     if not is_sales_authorized(request.user):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ใช้งานระบบ POS")
         return redirect('dashboard')
@@ -289,9 +275,6 @@ def pos_print_slip(request, order_code):
     }
     return render(request, 'sales/invoice_print.html', context)
 
-# ==========================================
-# 4. Quotation
-# ==========================================
 @login_required
 def quotation_list(request):
     target_employees, _ = get_target_employees(request.user)
@@ -336,7 +319,8 @@ def quotation_create(request):
                 try: qt.customer = Customer.objects.get(pk=cust_id)
                 except Customer.DoesNotExist: pass
             now = datetime.datetime.now()
-            prefix = f"QT-{now.strftime('%y%m')}"
+            thai_year = (now.year + 543) % 100
+            prefix = f"QT-{thai_year:02d}{now.strftime('%m')}"
             last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             qt.code = f"{prefix}-{seq:03d}"
@@ -354,8 +338,9 @@ def quotation_edit(request, qt_id):
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
     
     if request.method == 'POST':
-        if qt.status == 'CONVERTED':
-            messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากใบเสนอราคานี้ถูกเปิดบิลไปแล้ว")
+        # 🌟 เพิ่มการล็อกหน้าจอ ถ้าสถานะเป็น CONVERTED หรือ CANCELLED 🌟
+        if qt.status in ['CONVERTED', 'CANCELLED']:
+            messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากใบเสนอราคานี้ถูกล็อกหรือยกเลิกไปแล้ว")
             return redirect('quotation_edit', qt_id=qt.id)
 
         if 'add_item' in request.POST:
@@ -398,8 +383,9 @@ def delete_item(request, item_id):
     item = get_object_or_404(QuotationItem, pk=item_id)
     qt = item.quotation
     
-    if qt.status == 'CONVERTED':
-        messages.error(request, "❌ ไม่สามารถลบรายการได้ เนื่องจากใบเสนอราคานี้ถูกเปิดบิลไปแล้ว")
+    # 🌟 ห้ามลบสินค้าถ้ายกเลิกหรือเปิดบิลไปแล้ว 🌟
+    if qt.status in ['CONVERTED', 'CANCELLED']:
+        messages.error(request, "❌ ไม่สามารถลบรายการได้ เนื่องจากใบเสนอราคานี้ถูกล็อกหรือยกเลิกไปแล้ว")
         return redirect('quotation_edit', qt_id=qt.id)
         
     item.delete()
@@ -415,6 +401,28 @@ def quotation_approve(request, qt_id):
     qt.approved_at = timezone.now()
     qt.save()
     messages.success(request, f"✅ อนุมัติใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
+    return redirect('quotation_list')
+
+# 🌟 ฟังก์ชันใหม่: ยกเลิกใบเสนอราคา 🌟
+@login_required
+def quotation_cancel(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    
+    current_emp = getattr(request.user, 'employee', None)
+    is_manager = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists()
+    is_owner = (qt.employee == current_emp) if current_emp else False
+    
+    # ให้สิทธิ์คนสร้างบิล หรือ ผู้จัดการ เป็นคนกดยกเลิก
+    if is_manager or is_owner:
+        if qt.status in ['DRAFT', 'APPROVED']:
+            qt.status = 'CANCELLED'
+            qt.save()
+            messages.warning(request, f"⚠️ ยกเลิกใบเสนอราคา {qt.code} เรียบร้อยแล้ว (เอกสารนี้ถือเป็นโมฆะ)")
+        else:
+            messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากเอกสารถูกนำไปเปิดบิลแล้ว")
+    else:
+        messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกใบเสนอราคานี้")
+        
     return redirect('quotation_list')
 
 @login_required
@@ -493,12 +501,8 @@ def api_create_customer(request):
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid Method'})
 
-# ==========================================
-# 5. Invoice List & Print & Confirm
-# ==========================================
 @login_required
 def invoice_list(request):
-    # 🌟 หน้าตรวจเงินเข้า ฝ่ายบัญชีเข้าได้ 🌟
     target_employees, _ = get_target_employees(request.user)
     qs_invoice = get_sales_queryset(Invoice, request.user, target_employees)
     qs_pos = get_sales_queryset(POSOrder, request.user, target_employees)
