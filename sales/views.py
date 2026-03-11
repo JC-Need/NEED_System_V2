@@ -173,7 +173,8 @@ def pos_home(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ใช้งานระบบ POS")
         return redirect('dashboard')
 
-    products = Product.objects.filter(is_active=True, stock_qty__gt=0)
+    # 🌟 แก้ไข: เพิ่มฟิลเตอร์ product_type='FG' เพื่อดึงเฉพาะสินค้าสำเร็จรูป 🌟
+    products = Product.objects.filter(is_active=True, stock_qty__gt=0, product_type='FG')
     categories = Category.objects.all()
     return render(request, 'sales/pos_home.html', {'products': products, 'categories': categories})
 
@@ -334,11 +335,11 @@ def quotation_create(request):
 @login_required
 def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
-    products = Product.objects.filter(is_active=True)
+    # 🌟 แก้ไข: หน้าใบเสนอราคาก็ควรดึงเฉพาะสินค้าสำเร็จรูป (FG) มาขายเหมือนกันค่ะ 🌟
+    products = Product.objects.filter(is_active=True, product_type='FG')
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
     
     if request.method == 'POST':
-        # 🌟 เพิ่มการล็อกหน้าจอ ถ้าสถานะเป็น CONVERTED หรือ CANCELLED 🌟
         if qt.status in ['CONVERTED', 'CANCELLED']:
             messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากใบเสนอราคานี้ถูกล็อกหรือยกเลิกไปแล้ว")
             return redirect('quotation_edit', qt_id=qt.id)
@@ -383,7 +384,6 @@ def delete_item(request, item_id):
     item = get_object_or_404(QuotationItem, pk=item_id)
     qt = item.quotation
     
-    # 🌟 ห้ามลบสินค้าถ้ายกเลิกหรือเปิดบิลไปแล้ว 🌟
     if qt.status in ['CONVERTED', 'CANCELLED']:
         messages.error(request, "❌ ไม่สามารถลบรายการได้ เนื่องจากใบเสนอราคานี้ถูกล็อกหรือยกเลิกไปแล้ว")
         return redirect('quotation_edit', qt_id=qt.id)
@@ -403,7 +403,6 @@ def quotation_approve(request, qt_id):
     messages.success(request, f"✅ อนุมัติใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
     return redirect('quotation_list')
 
-# 🌟 ฟังก์ชันใหม่: ยกเลิกใบเสนอราคา 🌟
 @login_required
 def quotation_cancel(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
@@ -412,7 +411,6 @@ def quotation_cancel(request, qt_id):
     is_manager = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists()
     is_owner = (qt.employee == current_emp) if current_emp else False
     
-    # ให้สิทธิ์คนสร้างบิล หรือ ผู้จัดการ เป็นคนกดยกเลิก
     if is_manager or is_owner:
         if qt.status in ['DRAFT', 'APPROVED']:
             qt.status = 'CANCELLED'
