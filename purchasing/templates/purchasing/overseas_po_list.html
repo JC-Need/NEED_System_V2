@@ -1,0 +1,249 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .table-tracker th { font-size: 0.75rem; vertical-align: middle; background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; }
+    .table-tracker td { font-size: 0.85rem; vertical-align: middle; }
+    .doc-badge { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; font-size: 0.7rem; transition: all 0.2s;}
+    .doc-active { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; box-shadow: 0 2px 4px rgba(15, 81, 50, 0.1); }
+    .doc-inactive { background-color: #f8f9fa; color: #adb5bd; border: 1px dashed #ced4da; }
+    .flatpickr-input { background-color: #fff !important; cursor: pointer; }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-globe-asia text-primary me-2"></i>ตารางติดตามสั่งซื้อต่างประเทศ (Import Tracker)</h4>
+            <p class="text-muted small mb-0">ติดตามการชำระเงินและเอกสารนำเข้า (FE, BL, PL, CI)</p>
+        </div>
+        <div>
+            <button type="button" class="btn btn-success rounded-pill px-4 shadow-sm fw-bold" onclick="openNewModal()">
+                <i class="fas fa-plus me-1"></i> เพิ่มรายการนำเข้า
+            </button>
+            <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-3 ms-2">กลับ Dashboard</a>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+            <form method="GET" class="d-flex gap-2">
+                <input type="text" name="q" class="form-control form-control-sm rounded-pill px-3" placeholder="ค้นหาชื่อร้าน, เลข PI..." value="{{ query }}">
+                <button type="submit" class="btn btn-sm btn-primary rounded-pill px-3">ค้นหา</button>
+                {% if query %}<a href="{% url 'overseas_po_list' %}" class="btn btn-sm btn-light rounded-pill px-3 border">ล้างค่า</a>{% endif %}
+            </form>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover table-bordered table-tracker text-center mb-0">
+                <thead>
+                    <tr>
+                        <th rowspan="2" class="ps-3" width="5%">ลำดับ</th>
+                        <th rowspan="2" width="15%" class="text-center">ชื่อร้านค้า</th>
+                        <th rowspan="2" width="10%">เลขที่ PI</th>
+                        <th rowspan="2" width="10%" class="text-center">ยอดสั่งซื้อรวม</th>
+                        <th colspan="2" width="18%">ชำระมัดจำ</th>
+                        <th colspan="2" width="18%">ชำระส่วนที่เหลือ</th>
+                        <th rowspan="2" width="8%">ชำระครบ</th>
+                        <th colspan="4" width="12%">ได้รับเอกสาร</th>
+                        <th rowspan="2" width="6%" class="pe-3">จัดการ</th>
+                    </tr>
+                    <tr>
+                        <th>วันที่</th>
+                        <th class="text-center">จำนวนเงิน</th>
+                        <th>วันที่</th>
+                        <th class="text-center">จำนวนเงิน</th>
+                        <th>FE</th>
+                        <th>BL</th>
+                        <th>PL</th>
+                        <th>CI</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for po in overseas_pos %}
+                    <tr>
+                        <td class="ps-3 text-muted">{{ forloop.counter }}</td>
+                        <td class="text-start fw-bold text-dark">{{ po.supplier_name }}</td>
+                        <td class="text-primary fw-bold">{{ po.pi_number }}</td>
+                        <td class="text-end fw-bold">{{ po.total_amount|floatformat:2|intcomma }}</td>
+                        
+                        <td class="text-muted small">{{ po.deposit_date|date:"d/m/Y"|default:"-" }}</td>
+                        <td class="text-end text-warning text-dark">{{ po.deposit_amount|floatformat:2|intcomma }}</td>
+                        
+                        <td class="text-muted small">{{ po.balance_date|date:"d/m/Y"|default:"-" }}</td>
+                        <td class="text-end text-info text-dark">{{ po.balance_amount|floatformat:2|intcomma }}</td>
+                        
+                        <td>
+                            {% if po.is_fully_paid %}
+                                <i class="fas fa-check-circle text-success fs-5"></i>
+                            {% else %}
+                                <i class="fas fa-minus-circle text-muted opacity-25 fs-5"></i>
+                            {% endif %}
+                        </td>
+                        
+                        <td><div class="doc-badge {% if po.doc_fe %}doc-active{% else %}doc-inactive{% endif %}">FE</div></td>
+                        <td><div class="doc-badge {% if po.doc_bl %}doc-active{% else %}doc-inactive{% endif %}">BL</div></td>
+                        <td><div class="doc-badge {% if po.doc_pl %}doc-active{% else %}doc-inactive{% endif %}">PL</div></td>
+                        <td><div class="doc-badge {% if po.doc_ci %}doc-active{% else %}doc-inactive{% endif %}">CI</div></td>
+                        
+                        <td class="pe-3">
+                            <button type="button" class="btn btn-sm btn-light text-primary border rounded-circle shadow-sm" onclick='editModal({{ po.id }}, "{{ po.supplier_name|escapejs }}", "{{ po.pi_number|escapejs }}", "{{ po.total_amount }}", "{{ po.deposit_date|date:"Y-m-d" }}", "{{ po.deposit_amount }}", "{{ po.balance_date|date:"Y-m-d" }}", "{{ po.balance_amount }}", "{{ po.is_fully_paid }}", "{{ po.doc_fe }}", "{{ po.doc_bl }}", "{{ po.doc_pl }}", "{{ po.doc_ci }}")'><i class="fas fa-pen"></i></button>
+                            <a href="{% url 'overseas_po_delete' po.id %}" class="btn btn-sm btn-light text-danger border rounded-circle shadow-sm" onclick="return confirm('ลบรายการนี้ใช่หรือไม่?')"><i class="fas fa-trash"></i></a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="15" class="py-5 text-muted">-- ยังไม่มีรายการสั่งซื้อต่างประเทศ --</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="poModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <form method="post" action="{% url 'overseas_po_save' %}" id="overseasForm">
+            {% csrf_token %}
+            <input type="hidden" name="po_id" id="modal_po_id">
+            <div class="modal-content rounded-4 border-0 shadow">
+                <div class="modal-header bg-dark text-white border-0 py-3">
+                    <h5 class="modal-title fw-bold" id="modalTitle"><i class="fas fa-edit me-2"></i> บันทึกรายการสั่งซื้อ</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4 bg-light">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted">ชื่อร้านค้า *</label>
+                            <input type="text" name="supplier_name" id="modal_supplier" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted">เลขที่ PI *</label>
+                            <input type="text" name="pi_number" id="modal_pi" class="form-control" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted">ยอดสั่งซื้อรวม</label>
+                            <input type="text" name="total_amount" id="modal_total" class="form-control text-end number-format">
+                        </div>
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-header bg-white py-2"><h6 class="mb-0 fw-bold text-warning text-dark"><i class="fas fa-money-check-alt me-2"></i>ชำระมัดจำ</h6></div>
+                                <div class="card-body py-2">
+                                    <label class="small text-muted">วันที่มัดจำ</label>
+                                    <input type="text" name="deposit_date" id="modal_dep_date" class="form-control form-control-sm mb-2 datepicker" placeholder="เลือกวันที่">
+                                    <label class="small text-muted">จำนวนเงิน</label>
+                                    <input type="text" name="deposit_amount" id="modal_dep_amt" class="form-control form-control-sm text-end number-format">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card border-0 shadow-sm h-100">
+                                <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0 fw-bold text-info text-dark"><i class="fas fa-money-check me-2"></i>ชำระส่วนที่เหลือ</h6>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" name="is_fully_paid" id="modal_paid">
+                                        <label class="form-check-label small fw-bold text-success" for="modal_paid">ชำระครบแล้ว</label>
+                                    </div>
+                                </div>
+                                <div class="card-body py-2">
+                                    <label class="small text-muted">วันที่จ่าย</label>
+                                    <input type="text" name="balance_date" id="modal_bal_date" class="form-control form-control-sm mb-2 datepicker" placeholder="เลือกวันที่">
+                                    <label class="small text-muted">จำนวนเงิน</label>
+                                    <input type="text" name="balance_amount" id="modal_bal_amt" class="form-control form-control-sm text-end number-format">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card border-0 shadow-sm mt-3">
+                        <div class="card-header bg-white py-2"><h6 class="mb-0 fw-bold text-primary"><i class="fas fa-file-alt me-2"></i>เช็คลิสต์รับเอกสาร (Documents)</h6></div>
+                        <div class="card-body py-3 d-flex justify-content-around">
+                            <div class="form-check form-switch fs-5">
+                                <input class="form-check-input" type="checkbox" name="doc_fe" id="modal_fe"> <label class="form-check-label fw-bold" for="modal_fe">FE</label>
+                            </div>
+                            <div class="form-check form-switch fs-5">
+                                <input class="form-check-input" type="checkbox" name="doc_bl" id="modal_bl"> <label class="form-check-label fw-bold" for="modal_bl">BL</label>
+                            </div>
+                            <div class="form-check form-switch fs-5">
+                                <input class="form-check-input" type="checkbox" name="doc_pl" id="modal_pl"> <label class="form-check-label fw-bold" for="modal_pl">PL</label>
+                            </div>
+                            <div class="form-check form-switch fs-5">
+                                <input class="form-check-input" type="checkbox" name="doc_ci" id="modal_ci"> <label class="form-check-label fw-bold" for="modal_ci">CI</label>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+                <div class="modal-footer border-0 py-3 bg-white">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm">บันทึกข้อมูล</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+        
+        // รูปแบบตัวเลขใส่คอมม่า
+        const numberInputs = document.querySelectorAll('.number-format');
+        numberInputs.forEach(input => {
+            input.addEventListener('input', function(e) {
+                let val = this.value.replace(/[^0-9.]/g, '');
+                if(val) {
+                    let parts = val.split('.');
+                    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                    this.value = parts.join('.');
+                }
+            });
+        });
+    });
+
+    // 🌟 แก้ไข: ฟังก์ชันเปิด Modal แบบปลอดภัย 🌟
+    function openNewModal() {
+        // 1. เปลี่ยนหัวข้อ
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-plus-circle me-2"></i> เพิ่มรายการนำเข้าใหม่';
+        
+        // 2. เคลียร์ข้อมูลฟอร์ม
+        document.getElementById('overseasForm').reset();
+        document.getElementById('modal_po_id').value = '';
+        
+        // เคลียร์วันที่ใน flatpickr
+        document.getElementById('modal_dep_date')._flatpickr.clear();
+        document.getElementById('modal_bal_date')._flatpickr.clear();
+
+        // 3. สั่งเปิด Modal โดยสร้าง Instance ใหม่เพื่อป้องกัน Error
+        var poModal = new bootstrap.Modal(document.getElementById('poModal'));
+        poModal.show();
+    }
+
+    // 🌟 แก้ไข: ฟังก์ชันแก้ไข Modal แบบปลอดภัย 🌟
+    function editModal(id, name, pi, total, d_date, d_amt, b_date, b_amt, paid, fe, bl, pl, ci) {
+        document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit me-2"></i> แก้ไขรายการ: ' + pi;
+        document.getElementById('modal_po_id').value = id;
+        document.getElementById('modal_supplier').value = name;
+        document.getElementById('modal_pi').value = pi;
+        document.getElementById('modal_total').value = parseFloat(total).toLocaleString('en-US');
+        
+        document.getElementById('modal_dep_date')._flatpickr.setDate(d_date !== 'None' ? d_date : '');
+        document.getElementById('modal_dep_amt').value = parseFloat(d_amt).toLocaleString('en-US');
+        document.getElementById('modal_bal_date')._flatpickr.setDate(b_date !== 'None' ? b_date : '');
+        document.getElementById('modal_bal_amt').value = parseFloat(b_amt).toLocaleString('en-US');
+        
+        document.getElementById('modal_paid').checked = (paid === 'True');
+        document.getElementById('modal_fe').checked = (fe === 'True');
+        document.getElementById('modal_bl').checked = (bl === 'True');
+        document.getElementById('modal_pl').checked = (pl === 'True');
+        document.getElementById('modal_ci').checked = (ci === 'True');
+        
+        // สั่งเปิด Modal
+        var poModal = new bootstrap.Modal(document.getElementById('poModal'));
+        poModal.show();
+    }
+</script>
+{% endblock %}

@@ -1,13 +1,14 @@
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Max
+from django.db.models import Sum, Max, Q
 from django.contrib import messages
 from django.forms import inlineformset_factory
 from django.utils import timezone
 import datetime
 import json
 
-from .models import PurchaseOrder, PurchaseOrderItem, PurchaseOrderPayment, PurchasePreparation
+# 🌟 อย่าลืม import โมเดล OverseasPO เข้ามาด้วยนะคะ 🌟
+from .models import PurchaseOrder, PurchaseOrderItem, PurchaseOrderPayment, PurchasePreparation, OverseasPO
 from .forms import PurchaseOrderForm, PurchaseOrderItemFormSet, PurchaseOrderItemForm
 from master_data.models import CompanyInfo
 from inventory.models import Product
@@ -88,7 +89,6 @@ def po_list(request):
 
     pos = PurchaseOrder.objects.all().order_by('-created_at')
     return render(request, 'purchasing/po_list.html', {'pos': pos})
-
 
 @login_required
 def po_create(request):
@@ -354,9 +354,6 @@ def ppo_detail(request, pk):
         'grand_total': grand_total 
     })
 
-# ==========================================
-# 🟢 ระบบอนุมัติ / ยกเลิก ใบสั่งซื้อ (สำหรับ Manager)
-# ==========================================
 @login_required
 def po_approve(request, po_id):
     po = get_object_or_404(PurchaseOrder, id=po_id)
@@ -382,3 +379,80 @@ def po_cancel(request, po_id):
     else:
         messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิก หรือสถานะเอกสารไม่ถูกต้อง")
     return redirect('po_list')
+
+
+# ==========================================
+# ✈️ ระบบสั่งซื้อต่างประเทศ (Overseas PO Tracker)
+# ==========================================
+@login_required
+def overseas_po_list(request):
+    if not can_view_and_pay(request.user):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์เข้าถึงระบบจัดซื้อต่างประเทศ")
+        return redirect('purchasing_dashboard')
+        
+    query = request.GET.get('q', '')
+    if query:
+        overseas_pos = OverseasPO.objects.filter(Q(supplier_name__icontains=query) | Q(pi_number__icontains=query)).order_by('-id')
+    else:
+        overseas_pos = OverseasPO.objects.all().order_by('-id')
+        
+    return render(request, 'purchasing/overseas_po_list.html', {'overseas_pos': overseas_pos, 'query': query})
+
+@login_required
+def overseas_po_save(request):
+    if not can_create_po(request.user):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์จัดการข้อมูลจัดซื้อ")
+        return redirect('overseas_po_list')
+
+    if request.method == 'POST':
+        po_id = request.POST.get('po_id')
+        
+        # ดึงข้อมูลจากฟอร์ม
+        supplier_name = request.POST.get('supplier_name')
+        pi_number = request.POST.get('pi_number')
+        total_amount = request.POST.get('total_amount', '0').replace(',', '')
+        
+        deposit_date = request.POST.get('deposit_date') or None
+        deposit_amount = request.POST.get('deposit_amount', '0').replace(',', '')
+        balance_date = request.POST.get('balance_date') or None
+        balance_amount = request.POST.get('balance_amount', '0').replace(',', '')
+        
+        is_fully_paid = request.POST.get('is_fully_paid') == 'on'
+        doc_fe = request.POST.get('doc_fe') == 'on'
+        doc_bl = request.POST.get('doc_bl') == 'on'
+        doc_pl = request.POST.get('doc_pl') == 'on'
+        doc_ci = request.POST.get('doc_ci') == 'on'
+
+        # ถ้ามี ID แปลว่าเป็นการแก้ไข ถ้าไม่มีคือสร้างใหม่
+        if po_id: 
+            po = get_object_or_404(OverseasPO, id=po_id)
+        else: 
+            po = OverseasPO()
+            
+        po.supplier_name = supplier_name
+        po.pi_number = pi_number
+        po.total_amount = total_amount or 0
+        po.deposit_date = deposit_date
+        po.deposit_amount = deposit_amount or 0
+        po.balance_date = balance_date
+        po.balance_amount = balance_amount or 0
+        po.is_fully_paid = is_fully_paid
+        po.doc_fe = doc_fe
+        po.doc_bl = doc_bl
+        po.doc_pl = doc_pl
+        po.doc_ci = doc_ci
+        po.save()
+        
+        messages.success(request, f"✅ บันทึกรายการ PI: {pi_number} เรียบร้อยแล้ว")
+    return redirect('overseas_po_list')
+    
+@login_required
+def overseas_po_delete(request, pk):
+    if not can_create_po(request.user):
+        messages.error(request, "❌ คุณไม่มีสิทธิ์ลบข้อมูล")
+        return redirect('overseas_po_list')
+        
+    po = get_object_or_404(OverseasPO, pk=pk)
+    po.delete()
+    messages.success(request, "🗑️ ลบรายการสั่งซื้อต่างประเทศเรียบร้อยแล้ว")
+    return redirect('overseas_po_list')
