@@ -1,10 +1,18 @@
 {% extends 'core/base.html' %}
-{% load static %}
+{% load humanize %}
 
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
     .flatpickr-calendar { font-family: 'Sarabun', sans-serif; }
+    .row-total { font-weight: bold; color: #0d6efd; }
+    .btn-delete-row { 
+        color: #dc3545; background: #fff; border: 1px solid #dc3545; 
+        border-radius: 50%; width: 32px; height: 32px; 
+        display: inline-flex; align-items: center; justify-content: center; 
+        padding: 0; transition: 0.2s; 
+    }
+    .btn-delete-row:hover { background: #dc3545; color: #fff; }
 </style>
 
 <div class="container py-4">
@@ -26,251 +34,244 @@
         {% csrf_token %}
 
         <div class="card shadow-sm border-0 rounded-4 mb-4">
-            <div class="card-header bg-white border-bottom py-3">
+            <div class="card-header bg-white py-3 border-bottom">
                 <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-file-invoice me-2"></i>ข้อมูลใบสั่งซื้อ</h6>
             </div>
-            <div class="card-body p-4 row g-3">
-                <div class="col-md-4">
-                    <label class="form-label text-muted small fw-bold">{{ form.supplier.label }} <span class="text-danger">*</span></label>
-                    {{ form.supplier }}
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label text-muted small fw-bold">{{ form.expected_date.label }}</label>
-                    <div class="input-group">
-                        <span class="input-group-text bg-white text-muted border-end-0"><i class="far fa-calendar-alt"></i></span>
+            <div class="card-body p-4">
+                <div class="row g-3">
+                    <div class="col-md-5">
+                        <label class="form-label small fw-bold text-muted">ร้านค้า (Supplier) <span class="text-danger">*</span></label>
+                        {{ form.supplier }}
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold text-muted">กำหนดรับของ</label>
                         {{ form.expected_date }}
                     </div>
-                </div>
-
-                <div class="col-md-4">
-                    <label class="form-label text-muted small fw-bold">สถานะเอกสาร</label>
-                    <div class="d-none">
-                        {{ form.status }}
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">สถานะเอกสาร</label>
+                        <div>
+                            {% if po %}
+                                {% if po.status == 'DRAFT' %}
+                                    <span class="badge bg-warning text-dark border w-100 py-2 fs-6 rounded-2"><i class="fas fa-hourglass-half me-1"></i> ร่าง (รออนุมัติ)</span>
+                                {% elif po.status == 'APPROVED' %}
+                                    <span class="badge bg-success border w-100 py-2 fs-6 rounded-2"><i class="fas fa-check-circle me-1"></i> อนุมัติแล้ว</span>
+                                {% else %}
+                                    <span class="badge bg-danger border w-100 py-2 fs-6 rounded-2"><i class="fas fa-times-circle me-1"></i> ยกเลิก</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-warning text-dark border w-100 py-2 fs-6 rounded-2"><i class="fas fa-hourglass-half me-1"></i> ร่าง (รออนุมัติ)</span>
+                            {% endif %}
+                        </div>
                     </div>
-                    {% if po and po.status != 'DRAFT' %}
-                        <div class="form-control bg-light fw-bold {% if po.status == 'APPROVED' %}text-success{% elif po.status == 'CANCELLED' %}text-danger{% else %}text-warning{% endif %}">
-                            {{ po.get_status_display }}
-                        </div>
-                    {% else %}
-                        <div class="form-control bg-warning bg-opacity-10 text-warning fw-bold border-warning">
-                            <i class="fas fa-hourglass-half me-1"></i> ร่าง (รออนุมัติ)
-                        </div>
-                    {% endif %}
-                </div>
-
-                <div class="col-md-12">
-                    <label class="form-label text-muted small fw-bold">{{ form.note.label }}</label>
-                    {{ form.note }}
+                    <div class="col-12">
+                        <label class="form-label small fw-bold text-muted">หมายเหตุ</label>
+                        {{ form.note }}
+                    </div>
                 </div>
             </div>
         </div>
 
-        <div class="card shadow-sm border-0 rounded-4 mb-4 overflow-hidden">
-            <div class="card-header bg-light border-bottom py-3 d-flex justify-content-between align-items-center">
+        <div class="card shadow-sm border-0 rounded-4 mb-4">
+            <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                 <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-box-open me-2"></i>รายการวัตถุดิบ / สินค้า</h6>
-                <div class="fw-bold text-dark bg-white px-3 py-1 rounded border shadow-sm">
-                    ยอดรวมสุทธิ: <span id="grand-total" class="text-danger fs-5">0.00</span> บาท
+                <div class="bg-light border rounded-pill px-3 py-1">
+                    <span class="text-muted small fw-bold me-2">ยอดรวมสุทธิ:</span>
+                    <span class="text-danger fw-bold fs-5" id="grand-total">0.00</span> 
+                    <span class="text-muted small">บาท</span>
                 </div>
             </div>
-            <div class="table-responsive">
+            <div class="card-body p-4">
                 {{ formset.management_form }}
-                <table class="table table-hover align-middle mb-0" id="items-table">
-                    <thead class="text-secondary" style="font-size: 0.8rem; text-transform: uppercase;">
-                        <tr>
-                            <th class="ps-4 py-3 border-0" style="width: 40%;">สินค้า/วัตถุดิบ</th>
-                            <th class="py-3 border-0 text-center" style="width: 15%;">จำนวนที่สั่ง</th>
-                            <th class="py-3 border-0 text-end" style="width: 20%;">ต้นทุนต่อหน่วย</th>
-                            <th class="py-3 border-0 text-end" style="width: 20%;">รวมเป็นเงิน</th>
-                            <th class="pe-4 py-3 border-0 text-center" style="width: 5%;">ลบ</th>
-                        </tr>
-                    </thead>
-                    <tbody id="formset-container">
-                        {% for item_form in formset %}
-                        <tr class="item-row">
-                            <td class="ps-4">
-                                {{ item_form.id }}
-                                {{ item_form.product }}
-                            </td>
-                            <td>{{ item_form.quantity }}</td>
-                            <td>{{ item_form.unit_cost }}</td>
-                            <td>{{ item_form.total_cost }}</td>
-                            <td class="pe-4 text-center align-middle">
-                                <div class="d-none">{{ item_form.DELETE }}</div>
-                                <button type="button" class="btn btn-sm btn-outline-danger rounded-circle btn-remove-row shadow-sm" title="ลบรายการนี้">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-between align-items-center">
-                <button type="button" class="btn btn-sm btn-outline-primary fw-bold rounded-pill px-3" id="add-item-btn">
-                    <i class="fas fa-plus me-1"></i> เพิ่มรายการสินค้าเอง
-                </button>
-                <div class="text-muted small">** หากมีวัตถุดิบที่ไม่ได้สั่งจากร้านค้า (Supplier) ที่เลือก กรุณากดลบรายการออก</div>
+                <div class="table-responsive">
+                    <table class="table table-borderless align-middle mb-0">
+                        <thead class="text-muted small border-bottom">
+                            <tr>
+                                <th width="45%">สินค้า/วัตถุดิบ</th>
+                                <th width="15%" class="text-center">จำนวนที่สั่ง</th>
+                                <th width="20%" class="text-center">ต้นทุนต่อหน่วย</th>
+                                <th width="15%" class="text-end">รวมเป็นเงิน</th>
+                                <th width="5%" class="text-center">ลบ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="formset-container">
+                            {% for item_form in formset %}
+                            <tr class="formset-row border-bottom border-light">
+                                <td class="py-3">
+                                    {{ item_form.id }}
+                                    {{ item_form.product }}
+                                </td>
+                                <td class="py-3">{{ item_form.quantity }}</td>
+                                <td class="py-3">{{ item_form.unit_cost }}</td>
+                                <td class="py-3 text-end"><span class="row-total">0.00</span></td>
+                                <td class="py-3 text-center">
+                                    <div class="d-none">{{ item_form.DELETE }}</div>
+                                    <button type="button" class="btn-delete-row" onclick="deleteRow(this)" title="ลบรายการ"><i class="fas fa-trash-alt"></i></button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <button type="button" id="add-item-btn" class="btn btn-outline-primary rounded-pill btn-sm px-3 shadow-sm">
+                        <i class="fas fa-plus me-1"></i> เพิ่มรายการสินค้าเอง
+                    </button>
+                    <small class="text-muted">** หากมีวัตถุดิบที่ไม่ได้สั่งจากร้านค้า (Supplier) ที่เลือก กรุณากดลบรายการออก</small>
+                </div>
             </div>
         </div>
 
-        <div class="d-flex justify-content-between align-items-center mb-5 mt-4 pt-3 border-top">
-
+        <div class="d-flex justify-content-between align-items-center bg-white p-4 rounded-4 shadow-sm border mb-5">
             <div>
-                {% if po and po.status == 'DRAFT' %}
-                    {% if is_approver %}
-                        <a href="{% url 'po_approve' po.id %}" class="btn btn-success btn-lg rounded-pill px-4 shadow-sm fw-bold me-2" onclick="return confirm('ยืนยันการ 🟢 อนุมัติ ใบสั่งซื้อ {{ po.code }} ใช่หรือไม่?');">
-                            <i class="fas fa-check-circle me-2"></i>อนุมัติ (Approve)
+                {% if po %}
+                    {% if is_approver and po.status == 'DRAFT' %}
+                        <a href="{% url 'po_approve' po.id %}" class="btn btn-success rounded-pill px-4 shadow-sm fw-bold me-2" onclick="return confirm('ยืนยันการอนุมัติใบสั่งซื้อนี้?')">
+                            <i class="fas fa-check-circle me-1"></i> อนุมัติ (Approve)
                         </a>
-                        <a href="{% url 'po_cancel' po.id %}" class="btn btn-outline-danger btn-lg rounded-pill px-4 shadow-sm fw-bold" onclick="return confirm('คำเตือน: ยืนยันการ ❌ ยกเลิก ใบสั่งซื้อ {{ po.code }} ใช่หรือไม่? (เมื่อยกเลิกแล้วจะไม่สามารถนำกลับมาใช้ได้อีก)');">
-                            <i class="fas fa-times-circle me-2"></i>ยกเลิก (Cancel)
+                        <a href="{% url 'po_cancel' po.id %}" class="btn btn-outline-danger rounded-pill px-4 shadow-sm fw-bold bg-white" onclick="return confirm('ยืนยันการยกเลิกใบสั่งซื้อนี้?')">
+                            <i class="fas fa-times-circle me-1"></i> ยกเลิก (Cancel)
                         </a>
-                    {% else %}
-                        <span class="badge bg-warning bg-opacity-10 text-dark px-4 py-2 rounded-pill shadow-sm border border-warning fw-bold">
-                            <i class="fas fa-lock text-warning me-2"></i> รอผู้จัดการตรวจสอบและอนุมัติ
-                        </span>
+                    {% elif not is_approver and po.status == 'DRAFT' %}
+                        <span class="badge bg-warning text-dark border px-4 py-2 fs-6 rounded-pill shadow-sm"><i class="fas fa-lock me-1"></i> รอผู้จัดการตรวจสอบและอนุมัติ</span>
                     {% endif %}
                 {% endif %}
             </div>
 
             <div>
-                <button type="submit" class="btn btn-primary btn-lg rounded-pill px-5 shadow fw-bold">
-                    <i class="fas fa-save me-2"></i> {% if po %}บันทึกการแก้ไข{% else %}บันทึกใบสั่งซื้อ{% endif %}
+                <button type="submit" class="btn btn-primary rounded-pill px-5 shadow-sm fw-bold fs-5">
+                    <i class="fas fa-save me-2"></i> {% if po %}บันทึกการแก้ไข{% else %}บันทึกและสร้างใบสั่งซื้อ{% endif %}
                 </button>
             </div>
-
         </div>
     </form>
 </div>
 
-<table style="display: none;">
-    <tbody id="empty-form">
-        <tr class="item-row">
-            <td class="ps-4">
-                {{ formset.empty_form.id }}
-                {{ formset.empty_form.product }}
-            </td>
-            <td>{{ formset.empty_form.quantity }}</td>
-            <td>{{ formset.empty_form.unit_cost }}</td>
-            <td>{{ formset.empty_form.total_cost }}</td>
-            <td class="pe-4 text-center align-middle">
-                <div class="d-none">{{ formset.empty_form.DELETE }}</div>
-                <button type="button" class="btn btn-sm btn-outline-danger rounded-circle btn-remove-row shadow-sm" title="ลบรายการนี้">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </td>
-        </tr>
-    </tbody>
-</table>
-
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
-
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // 1. ตั้งค่าปฏิทิน
+        flatpickr("#id_expected_date", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
 
-        flatpickr(".datepicker", {
-            altInput: true,
-            altFormat: "d/m/Y",
-            dateFormat: "Y-m-d",
-            locale: "th",
-            allowInput: true
-        });
-
-        const addButton = document.getElementById('add-item-btn');
-        const container = document.getElementById('formset-container');
-        const emptyFormTemplate = document.getElementById('empty-form').innerHTML;
-        const totalFormsInput = document.getElementById('id_items-TOTAL_FORMS');
-
-        addButton.addEventListener('click', function() {
-            let formIdx = parseInt(totalFormsInput.value);
-            let newRowHtml = emptyFormTemplate.replace(/__prefix__/g, formIdx);
-            container.insertAdjacentHTML('beforeend', newRowHtml);
-            totalFormsInput.value = formIdx + 1;
-        });
-
-        document.getElementById('items-table').addEventListener('click', function(e) {
-            const removeBtn = e.target.closest('.btn-remove-row');
-            if (removeBtn) {
-                const row = removeBtn.closest('.item-row');
-                const deleteCheckbox = row.querySelector('input[type="checkbox"][name$="-DELETE"]');
-                if (deleteCheckbox) {
-                    deleteCheckbox.checked = true;
+        // 2. แต่ง CSS ให้ฟิลด์ที่ดึงมาจาก Django อัตโนมัติ
+        const textInputs = document.querySelectorAll('input[type="text"], input[type="number"], select, textarea');
+        textInputs.forEach(input => {
+            if (!input.classList.contains('form-control') && !input.classList.contains('form-select')) {
+                if (input.tagName === 'SELECT') {
+                    input.classList.add('form-select');
+                } else {
+                    input.classList.add('form-control');
                 }
-                const qtyInput = row.querySelector('.qty-input');
-                const costInput = row.querySelector('.cost-input');
-                if (qtyInput) qtyInput.value = 0;
-                if (costInput) costInput.value = 0;
-                row.style.display = 'none';
-                calculateGrandTotal();
             }
         });
+
+        // 3. ระบบ Formset (เพิ่ม/ลบ/คำนวณ)
+        const formsetContainer = document.getElementById('formset-container');
+        const addButton = document.getElementById('add-item-btn');
+        const totalFormsInput = document.querySelector('#id_items-TOTAL_FORMS');
+        const grandTotalEl = document.getElementById('grand-total');
+
+        function calculateRowTotal(row) {
+            const qtyInput = row.querySelector('[id$="-quantity"]');
+            const costInput = row.querySelector('[id$="-unit_cost"]');
+            const totalEl = row.querySelector('.row-total');
+
+            if (qtyInput && costInput && totalEl) {
+                const qty = parseFloat(qtyInput.value) || 0;
+                const cost = parseFloat(costInput.value.replace(/,/g, '')) || 0;
+                const total = qty * cost;
+                totalEl.textContent = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                return total;
+            }
+            return 0;
+        }
 
         function calculateGrandTotal() {
             let grandTotal = 0;
-
-            document.querySelectorAll('.item-row').forEach(row => {
-                if (row.style.display === 'none') return;
-
-                let qtyInput = row.querySelector('.qty-input');
-                let costInput = row.querySelector('.cost-input');
-                let totalInput = row.querySelector('.total-input');
-
-                if (qtyInput && costInput && totalInput) {
-                    let qtyVal = qtyInput.value.replace(/,/g, '');
-                    let costVal = costInput.value.replace(/,/g, '');
-
-                    let qty = parseFloat(qtyVal) || 0;
-                    let cost = parseFloat(costVal) || 0;
-                    let total = qty * cost;
-
-                    totalInput.setAttribute('type', 'text');
-                    totalInput.value = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
-                    grandTotal += total;
+            const rows = formsetContainer.querySelectorAll('.formset-row');
+            rows.forEach(row => {
+                const deleteInput = row.querySelector('[id$="-DELETE"]');
+                if (!deleteInput || !deleteInput.checked) {
+                    grandTotal += calculateRowTotal(row);
                 }
             });
-
-            document.getElementById('grand-total').textContent = grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2});
+            if (grandTotalEl) {
+                grandTotalEl.textContent = grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
         }
 
-        document.getElementById('items-table').addEventListener('input', function(e) {
-            if (e.target.classList.contains('qty-input') || e.target.classList.contains('cost-input')) {
+        // จับตาดูการพิมพ์ตัวเลข
+        formsetContainer.addEventListener('input', function(e) {
+            if (e.target.matches('[id$="-quantity"], [id$="-unit_cost"]')) {
                 calculateGrandTotal();
             }
         });
 
-        // ใส่ลูกน้ำและทศนิยมเมื่อผู้ใช้พิมพ์แก้ไขเองและคลิกออกนอกช่อง
-        document.getElementById('items-table').addEventListener('change', function(e) {
-            if (e.target.classList.contains('cost-input')) {
-                let val = parseFloat(e.target.value.replace(/,/g, ''));
-                if (!isNaN(val)) {
-                    e.target.setAttribute('type', 'text');
-                    e.target.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                }
+        // ฟังก์ชันลบแถว
+        window.deleteRow = function(btn) {
+            const row = btn.closest('tr');
+            const deleteInput = row.querySelector('[id$="-DELETE"]');
+            if (deleteInput) {
+                deleteInput.checked = true; // ซ่อนเพื่อรอลบในฐานข้อมูล
+                row.style.display = 'none'; 
+                calculateGrandTotal();
+            } else {
+                row.remove(); // ลบแถวที่เพิ่งเพิ่มสดๆ ออกไปเลย
+                let formCount = parseInt(totalFormsInput.value);
+                totalFormsInput.value = formCount - 1;
+                
+                // จัดเรียง Index ใหม่
+                const rows = formsetContainer.querySelectorAll('.formset-row');
+                rows.forEach((r, index) => {
+                    const inputs = r.querySelectorAll('input, select');
+                    inputs.forEach(input => {
+                        if (input.name) {
+                            input.name = input.name.replace(/items-\d+-/, `items-${index}-`);
+                            input.id = input.id.replace(/items-\d+-/, `items-${index}-`);
+                        }
+                    });
+                });
+                calculateGrandTotal();
             }
-        });
+        };
 
-        document.getElementById('po-form').addEventListener('submit', function() {
-            // เอาลูกน้ำออกจากช่อง 'รวมเป็นเงิน' และ 'ต้นทุนต่อหน่วย' ก่อนบันทึก
-            document.querySelectorAll('.total-input, .cost-input').forEach(input => {
-                if (input.value) {
-                    input.value = input.value.replace(/,/g, '');
-                }
+        // ฟังก์ชันเพิ่มแถวใหม่
+        if (addButton) {
+            addButton.addEventListener('click', function() {
+                const formCount = parseInt(totalFormsInput.value);
+                const firstRow = formsetContainer.querySelector('.formset-row');
+                if(!firstRow) return;
+
+                const rowTemplate = firstRow.cloneNode(true);
+                
+                // เปลี่ยน ID ให้เป็นแถวใหม่
+                const regex = new RegExp(`items-(\\d+)-`, 'g');
+                rowTemplate.innerHTML = rowTemplate.innerHTML.replace(regex, `items-${formCount}-`);
+                
+                // เคลียร์ค่าที่ก๊อปปี้มาทิ้ง
+                const inputs = rowTemplate.querySelectorAll('input, select');
+                inputs.forEach(input => {
+                    if (input.type !== 'hidden' && input.type !== 'checkbox') {
+                        input.value = '';
+                    }
+                    if (input.type === 'checkbox') {
+                        input.checked = false;
+                    }
+                    if (input.name.endsWith('-id')) {
+                        input.value = '';
+                    }
+                });
+                
+                const totalEl = rowTemplate.querySelector('.row-total');
+                if (totalEl) totalEl.textContent = '0.00';
+
+                rowTemplate.style.display = ''; 
+                formsetContainer.appendChild(rowTemplate);
+                totalFormsInput.value = formCount + 1;
             });
-        });
+        }
 
-        // 🌟 เพิ่มใหม่: จัดรูปแบบตัวเลขสำหรับหน้า Edit (ตอนโหลดหน้าเว็บครั้งแรก) 🌟
-        document.querySelectorAll('.item-row').forEach(row => {
-            let costInput = row.querySelector('.cost-input');
-            if (costInput && costInput.value) {
-                let val = parseFloat(costInput.value.replace(/,/g, ''));
-                if (!isNaN(val)) {
-                    costInput.setAttribute('type', 'text');
-                    costInput.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                }
-            }
-        });
-
+        // 4. ระบบรับข้อมูลข้ามหน้าจาก PPO
         const urlParams = new URLSearchParams(window.location.search);
         const itemsDataRaw = urlParams.get('items_data');
 
@@ -291,7 +292,6 @@
                         productSelect.value = item.id;
                         qtyInput.value = item.qty;
 
-                        // แปลงช่องต้นทุนเป็น Text และใส่ลูกน้ำพร้อมทศนิยมตอนดึงข้อมูลมาแสดง
                         costInput.setAttribute('type', 'text');
                         costInput.value = parseFloat(item.cost).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                     }
@@ -299,11 +299,19 @@
 
                 calculateGrandTotal();
             } catch (e) {
-                console.error("เกิดข้อผิดพลาด:", e);
+                console.error("Error parsing items_data:", e);
             }
         } else {
             calculateGrandTotal();
         }
+
+        // 5. ก่อน Submit เคลียร์ลูกน้ำ (Comma) ออกจากช่องจำนวนเงิน
+        document.getElementById('po-form').addEventListener('submit', function() {
+            const costInputs = formsetContainer.querySelectorAll('[id$="-unit_cost"]');
+            costInputs.forEach(input => {
+                input.value = input.value.replace(/,/g, '');
+            });
+        });
     });
 </script>
 {% endblock %}

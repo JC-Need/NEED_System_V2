@@ -42,8 +42,15 @@ def get_target_employees(user):
     if user.is_superuser:
         return Employee.objects.all(), "Admin View"
     elif current_emp:
-        rank = current_emp.business_rank.lower()
+        dept_name = current_emp.department.name if current_emp.department else ""
+        
+        # 🌟 บัญชียังคงมองเห็นบิลของเซลส์ทุกคน เพื่อกดยืนยันยอดได้ 🌟
+        if 'บัญชี' in dept_name or 'Accounting' in dept_name:
+            return Employee.objects.all(), "Accounting View"
+            
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
         job_title = current_emp.position.title.lower() if current_emp.position else ""
+        
         if rank in ['manager', 'director'] or 'manager' in job_title:
             return Employee.objects.all(), "Manager View"
         elif rank == 'supervisor':
@@ -59,9 +66,20 @@ def get_target_employees(user):
 def get_sales_queryset(model_class, user, target_employees):
     if user.is_superuser:
         return model_class.objects.all()
-    else:
-        return model_class.objects.filter(employee__in=target_employees)
+        
+    if hasattr(user, 'employee') and user.employee:
+        dept_name = user.employee.department.name if user.employee.department else ""
+        rank = user.employee.business_rank.lower() if user.employee.business_rank else ""
+        job_title = user.employee.position.title.lower() if user.employee.position else ""
+        
+        if 'บัญชี' in dept_name or 'Accounting' in dept_name:
+            return model_class.objects.all()
+        if rank in ['manager', 'director'] or 'manager' in job_title:
+            return model_class.objects.all()
 
+    return model_class.objects.filter(employee__in=target_employees)
+
+# 🌟 แก้ไข: ลบสิทธิ์ของบัญชีออก เพื่อปิดประตู Dashboard ฝ่ายขาย 🌟
 def is_sales_authorized(user):
     if user.is_superuser: 
         return True
@@ -72,11 +90,8 @@ def is_sales_authorized(user):
         
     if hasattr(user, 'employee') and user.employee:
         dept = user.employee.department.name if user.employee.department else ''
-        rank = user.employee.business_rank if user.employee.business_rank else ''
         
         if 'ขาย' in dept or 'Sales' in dept:
-            return True
-        if ('บัญชี' in dept or 'Accounting' in dept) and rank in ['Manager', 'Executive', 'Director', 'ผู้จัดการ']:
             return True
             
     return False
@@ -173,7 +188,6 @@ def pos_home(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ใช้งานระบบ POS")
         return redirect('dashboard')
 
-    # 🌟 แก้ไข: เพิ่มฟิลเตอร์ product_type='FG' เพื่อดึงเฉพาะสินค้าสำเร็จรูป 🌟
     products = Product.objects.filter(is_active=True, stock_qty__gt=0, product_type='FG')
     categories = Category.objects.all()
     return render(request, 'sales/pos_home.html', {'products': products, 'categories': categories})
@@ -335,7 +349,6 @@ def quotation_create(request):
 @login_required
 def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
-    # 🌟 แก้ไข: หน้าใบเสนอราคาก็ควรดึงเฉพาะสินค้าสำเร็จรูป (FG) มาขายเหมือนกันค่ะ 🌟
     products = Product.objects.filter(is_active=True, product_type='FG')
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
     

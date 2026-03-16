@@ -2,20 +2,90 @@
 {% load humanize %}
 
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .flatpickr-input { background-color: #fff !important; cursor: pointer; }
+</style>
+
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-list text-primary me-2"></i>รายการใบสั่งซื้อทั้งหมด (All POs)</h4>
-            <p class="text-muted small mb-0">ดูประวัติใบสั่งซื้อทั้งหมดในระบบ</p>
+            <p class="text-muted small mb-0">ดูประวัติใบสั่งซื้อทั้งหมดในระบบและสถานะการชำระเงิน</p>
         </div>
 
         <div class="d-flex gap-2">
-            <a href="{% url 'po_create' %}" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
-                <i class="fas fa-plus-circle me-1"></i> สร้าง PO ใหม่
-            </a>
-            <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4">
-                <i class="fas fa-arrow-left me-2"></i> กลับหน้าจัดซื้อ
-            </a>
+            {% if user.is_superuser or user.groups.all.0.name == 'Purchasing' or user.groups.all.0.name == 'Executive' %}
+                <a href="{% url 'po_create' %}" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">
+                    <i class="fas fa-plus-circle me-1"></i> สร้าง PO ใหม่
+                </a>
+                <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold">
+                     <i class="fas fa-arrow-left me-2"></i> กลับหน้าจัดซื้อ
+                </a>
+            {% else %}
+                <a href="/" class="btn btn-outline-secondary rounded-pill px-4 fw-bold text-uppercase">
+                    <i class="fas fa-arrow-left me-2"></i> DASHBOARD
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 rounded-4 mb-4">
+        <div class="card-body p-2">
+            <form method="GET" class="row g-1 align-items-center">
+                
+                 <div class="col-md-2">
+                    <div class="input-group border-0 bg-light rounded-3 px-2">
+                        <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-search"></i></span>
+                        <input type="text" name="q" class="form-control border-0 bg-transparent shadow-none" placeholder="เลขที่ PO, ชื่อร้าน..." value="{{ search_query|default:'' }}">
+                     </div>
+                </div>
+                
+                <div class="col-md-2">
+                    <div class="input-group border-0 bg-light rounded-3 px-2">
+                         <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-money-bill-wave"></i></span>
+                        <select name="payment_status" class="form-select border-0 bg-transparent shadow-none" style="cursor: pointer;">
+                            <option value="" {% if not payment_filter %}selected{% endif %}>การชำระเงินทั้งหมด</option>
+                             <option value="PENDING" {% if payment_filter == 'PENDING' %}selected{% endif %}>รอชำระ</option>
+                            <option value="DEPOSIT" {% if payment_filter == 'DEPOSIT' %}selected{% endif %}>มัดจำแล้ว</option>
+                            <option value="PAID" {% if payment_filter == 'PAID' %}selected{% endif %}>จ่ายครบ</option>
+                         </select>
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <div class="input-group border-0 bg-light rounded-3 px-2">
+                         <span class="input-group-text bg-transparent border-0 text-muted"><i class="fas fa-file-signature"></i></span>
+                        <select name="status" class="form-select border-0 bg-transparent shadow-none" style="cursor: pointer;">
+                            <option value="" {% if not status_filter %}selected{% endif %}>สถานะเอกสารทั้งหมด</option>
+                             <option value="DRAFT" {% if status_filter == 'DRAFT' %}selected{% endif %}>ร่าง / รออนุมัติ</option>
+                            <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>อนุมัติแล้ว</option>
+                            <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>ยกเลิก</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <div class="input-group border-0 bg-light rounded-3 px-2">
+                        <span class="input-group-text bg-transparent border-0 text-muted"><i class="far fa-calendar"></i></span>
+                        <input type="text" name="start_date" class="form-control border-0 bg-transparent shadow-none datepicker" placeholder="จากวันที่" value="{{ start_date|default:'' }}">
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <div class="input-group border-0 bg-light rounded-3 px-2">
+                        <span class="input-group-text bg-transparent border-0 text-muted"><i class="far fa-calendar-check"></i></span>
+                        <input type="text" name="end_date" class="form-control border-0 bg-transparent shadow-none datepicker" placeholder="ถึงวันที่" value="{{ end_date|default:'' }}">
+                    </div>
+                </div>
+
+                <div class="col-md-2 d-flex gap-1">
+                    <button type="submit" class="btn btn-success w-100 rounded-3 fw-bold">ค้นหา</button>
+                    {% if search_query or start_date or status_filter or payment_filter %}
+                        <a href="{% url 'po_list' %}" class="btn btn-light rounded-3 border" title="รีเซ็ต"><i class="fas fa-undo"></i></a>
+                    {% endif %}
+                </div>
+
+            </form>
         </div>
     </div>
 
@@ -35,77 +105,89 @@
                     </tr>
                 </thead>
                 <tbody>
-                    {% for po in pos %}
+                     {% for po in pos %}
                     <tr>
                         <td class="ps-4">
                             <div class="fw-bold text-dark font-monospace">{{ po.code }}</div>
-                            <div class="text-muted small"><i class="far fa-calendar-alt me-1"></i> {{ po.date|date:"d/m/Y" }}</div>
+                             <div class="text-muted small"><i class="far fa-calendar-alt me-1"></i> {{ po.date|date:"d/m/Y" }}</div>
                         </td>
                         <td>
-                            <div class="fw-bold text-dark text-truncate" style="max-width: 200px;">{{ po.supplier.name|default:"-" }}</div>
+                             <div class="fw-bold text-dark text-truncate" style="max-width: 200px;">{{ po.supplier.name|default:"-" }}</div>
                         </td>
                         <td class="text-end fw-bold text-primary">{{ po.total_amount|intcomma }}</td>
 
                         <td class="text-center">
-                            {% if po.status == 'DRAFT' %}
+                              {% if po.status == 'DRAFT' %}
                                 <span class="badge bg-secondary bg-opacity-10 text-secondary border rounded-pill px-3">ร่าง / รออนุมัติ</span>
                             {% elif po.status == 'APPROVED' %}
                                 <span class="badge bg-success bg-opacity-10 text-success border rounded-pill px-3">อนุมัติแล้ว</span>
                             {% else %}
-                                <span class="badge bg-danger bg-opacity-10 text-danger border rounded-pill px-3">ยกเลิก</span>
+                                  <span class="badge bg-danger bg-opacity-10 text-danger border rounded-pill px-3">ยกเลิก</span>
                             {% endif %}
                         </td>
 
                         <td class="text-center">
-                            {% if po.payment_status == 'PAID' %}
+                              {% if po.payment_status == 'PAID' %}
                                 <span class="badge bg-success rounded-pill px-3"><i class="fas fa-check me-1"></i> จ่ายครบ</span>
                             {% elif po.payment_status == 'DEPOSIT' %}
-                                <span class="badge bg-info text-dark rounded-pill px-3">มัดจำแล้ว</span>
+                                  <span class="badge bg-info text-dark rounded-pill px-3">มัดจำแล้ว</span>
                             {% else %}
                                 <span class="badge bg-warning text-dark rounded-pill px-3">รอชำระ</span>
-                            {% endif %}
+                             {% endif %}
                         </td>
                         <td class="text-center">
-                            {% if po.delivery_status == 'SHIPPED' %}
+                             {% if po.delivery_status == 'SHIPPED' %}
                                 <span class="badge bg-success rounded-pill px-3"><i class="fas fa-truck me-1"></i> ส่งแล้ว</span>
                             {% else %}
                                 <span class="badge bg-warning text-dark rounded-pill px-3">รอจัดส่ง</span>
                             {% endif %}
                         </td>
                         <td class="text-center">
-                            {% if po.receipt_status == 'COMPLETED' %}
+                             {% if po.receipt_status == 'COMPLETED' %}
                                 <span class="badge bg-success rounded-pill px-3"><i class="fas fa-box-open me-1"></i> รับครบ</span>
-                            {% elif po.receipt_status == 'PARTIAL' %}
+                             {% elif po.receipt_status == 'PARTIAL' %}
                                 <span class="badge bg-info text-dark rounded-pill px-3">รับบางส่วน</span>
                             {% else %}
-                                <span class="badge bg-warning text-dark rounded-pill px-3">รอรับของ</span>
+                                 <span class="badge bg-warning text-dark rounded-pill px-3">รอรับของ</span>
                             {% endif %}
                         </td>
 
                         <td class="pe-4 text-center">
-                            <div class="d-flex justify-content-center gap-2">
-                                <a href="{% url 'po_edit' po.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="ดูรายละเอียด / แก้ไข / อนุมัติ">
-                                    <i class="fas fa-search"></i>
-                                </a>
+                              <div class="d-flex justify-content-center gap-2">
+                                
+                                {% if user.is_superuser or user.groups.all.0.name == 'Purchasing' or user.groups.all.0.name == 'Executive' %}
+                                     <a href="{% url 'po_edit' po.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="ดูรายละเอียด / แก้ไข / อนุมัติ">
+                                        <i class="fas fa-search"></i>
+                                    </a>
+                                 {% endif %}
 
                                 {% if po.status == 'APPROVED' %}
-                                <a href="{% url 'po_payment' po.id %}" class="btn btn-sm btn-outline-success shadow-sm" title="บันทึกชำระเงิน">
-                                    <i class="fas fa-money-bill-wave"></i>
-                                </a>
+                                    {% if user.is_superuser or user.groups.all.0.name == 'Accounting' or user.groups.all.0.name == 'Executive' %}
+                                         <a href="{% url 'po_payment' po.id %}" class="btn btn-sm btn-outline-success shadow-sm" title="บันทึกชำระเงิน">
+                                            <i class="fas fa-money-bill-wave"></i>
+                                        </a>
+                                    {% endif %}
                                 {% endif %}
 
                                 <a href="{% url 'po_print' po.id %}" target="_blank" class="btn btn-sm btn-outline-secondary shadow-sm" title="พิมพ์ใบสั่งซื้อ">
                                     <i class="fas fa-print"></i>
-                                </a>
+                                 </a>
                             </div>
                         </td>
                     </tr>
-                    {% empty %}
-                    <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3 opacity-25"></i><br>ยังไม่มีรายการใบสั่งซื้อ</td></tr>
+                     {% empty %}
+                    <tr><td colspan="8" class="text-center py-5 text-muted"><i class="fas fa-search fa-3x mb-3 opacity-25"></i><br>ไม่พบรายการใบสั่งซื้อที่ค้นหา</td></tr>
                     {% endfor %}
                 </tbody>
-            </table>
+              </table>
         </div>
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+});
+</script>
 {% endblock %}

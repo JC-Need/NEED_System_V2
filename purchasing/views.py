@@ -1,59 +1,63 @@
-from django.shortcuts import render, get_object_or_404, redirect
-from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, Max, Q
-from django.contrib import messages
-from django.forms import inlineformset_factory
-from django.utils import timezone
-import datetime
 import json
+import datetime
+import openpyxl
+from decimal import Decimal
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.db.models import Q, Sum, Count, Max
+from django.core.paginator import Paginator
+from django.utils.dateparse import parse_date
+from django.utils import timezone
+from django.forms.models import inlineformset_factory
 
-# 🌟 อย่าลืม import โมเดล OverseasPO เข้ามาด้วยนะคะ 🌟
 from .models import PurchaseOrder, PurchaseOrderItem, PurchaseOrderPayment, PurchasePreparation, OverseasPO
 from .forms import PurchaseOrderForm, PurchaseOrderItemFormSet, PurchaseOrderItemForm
 from master_data.models import CompanyInfo
 from inventory.models import Product
 from manufacturing.models import BOM
 
-# ==========================================
-# 🛡️ ระบบนายทวาร (Gatekeeper) แบ่งสิทธิ์เป็น 2 ระดับ
-# ==========================================
 def can_view_and_pay(user):
-    """สิทธิ์ในการดูข้อมูลและทำเรื่องจ่ายเงิน (จัดซื้อ + บัญชีทุกคนเข้าได้)"""
     if user.is_superuser: 
         return True
-    
     user_groups = list(user.groups.values_list('name', flat=True))
-    if 'Purchasing' in user_groups or 'Accounting' in user_groups:
+    if 'Purchasing' in user_groups or 'Accounting' in user_groups or 'Executive' in user_groups:
         return True
-        
     if hasattr(user, 'employee') and user.employee:
         dept = user.employee.department.name if user.employee.department else ''
-        # 🌟 อนุญาตให้พนักงานบัญชี "ทุกคน" เข้าหน้านี้ได้เพื่อทำเรื่องจ่ายเงิน
         if 'จัดซื้อ' in dept or 'Purchasing' in dept or 'บัญชี' in dept or 'Accounting' in dept:
             return True
-            
     return False
 
 def can_create_po(user):
-    """สิทธิ์ในการสร้าง/แก้ไขเอกสารจัดซื้อ (เฉพาะจัดซื้อเท่านั้น)"""
     if user.is_superuser: 
         return True
-    
     user_groups = list(user.groups.values_list('name', flat=True))
-    if 'Purchasing' in user_groups:
+    if 'Purchasing' in user_groups or 'Executive' in user_groups:
         return True
-        
     if hasattr(user, 'employee') and user.employee:
         dept = user.employee.department.name if user.employee.department else ''
-        # 🌟 บัญชีไม่มีสิทธิ์สร้างใบสั่งซื้อ 🌟
         if 'จัดซื้อ' in dept or 'Purchasing' in dept:
             return True
-            
     return False
 
-# ==========================================
-# 🛒 ระบบจัดซื้อ (Purchasing)
-# ==========================================
+def check_is_approver(user):
+    if user.is_superuser:
+        return True
+    user_groups = list(user.groups.values_list('name', flat=True))
+    if 'Executive' in user_groups:
+        return True
+    if hasattr(user, 'employee') and user.employee:
+        job_title = user.employee.position.title.lower() if user.employee.position else ""
+        rank = user.employee.business_rank.lower() if user.employee.business_rank else ""
+        if 'manager' in job_title or 'ผู้จัดการ' in job_title or 'director' in job_title or 'ผู้อำนวยการ' in job_title:
+            return True
+        if rank in ['manager', 'director', 'executive']:
+            return True
+    return False
+
 @login_required
 def purchasing_dashboard(request):
     if not can_view_and_pay(request.user):
@@ -87,8 +91,34 @@ def po_list(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้านี้")
         return redirect('dashboard')
 
+    search_query = request.GET.get('q', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    status_filter = request.GET.get('status', '')
+    payment_filter = request.GET.get('payment_status', '')
+
     pos = PurchaseOrder.objects.all().order_by('-created_at')
-    return render(request, 'purchasing/po_list.html', {'pos': pos})
+
+    if search_query:
+        pos = pos.filter(Q(code__icontains=search_query) | Q(supplier__name__icontains=search_query))
+    if status_filter:
+        pos = pos.filter(status=status_filter)
+    if payment_filter:
+        pos = pos.filter(payment_status=payment_filter)
+    if start_date:
+        pos = pos.filter(date__gte=start_date)
+    if end_date:
+        pos = pos.filter(date__lte=end_date)
+
+    context = {
+        'pos': pos,
+        'search_query': search_query,
+        'start_date': start_date,
+        'end_date': end_date,
+        'status_filter': status_filter,
+        'payment_filter': payment_filter
+    }
+    return render(request, 'purchasing/po_list.html', context)
 
 @login_required
 def po_create(request):
@@ -101,7 +131,6 @@ def po_create(request):
     items_json = request.GET.get('items_data', '[]')
     
     initial_items = []
-    
     if items_json:
         try:
             data = json.loads(items_json)
@@ -194,7 +223,7 @@ def po_edit(request, po_id):
     po = get_object_or_404(PurchaseOrder, id=po_id)
     fg_products = Product.objects.filter(product_type='FG', is_active=True)
 
-    is_approver = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists() or request.user.groups.filter(name__icontains='Executive').exists()
+    is_approver = check_is_approver(request.user)
 
     PurchaseOrderItemFormSetEdit = inlineformset_factory(
         PurchaseOrder, PurchaseOrderItem, 
@@ -285,7 +314,6 @@ def ppo_list(request):
         return redirect('dashboard')
 
     ppos = PurchasePreparation.objects.all().order_by('-id')
-    
     for ppo in ppos:
         total_amount = 0
         for job in ppo.production_orders.all():
@@ -339,7 +367,6 @@ def ppo_detail(request, pk):
         sup_total = sum(item['total'] for item in materials_by_supplier[sup_id]['items'].values())
         materials_by_supplier[sup_id]['supplier_total'] = sup_total
         grand_total += sup_total
-        
         materials_by_supplier[sup_id]['items'] = list(materials_by_supplier[sup_id]['items'].values())
 
     created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code)
@@ -357,7 +384,7 @@ def ppo_detail(request, pk):
 @login_required
 def po_approve(request, po_id):
     po = get_object_or_404(PurchaseOrder, id=po_id)
-    is_approver = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists() or request.user.groups.filter(name__icontains='Executive').exists()
+    is_approver = check_is_approver(request.user)
     
     if is_approver and po.status == 'DRAFT':
         po.status = 'APPROVED'
@@ -370,7 +397,7 @@ def po_approve(request, po_id):
 @login_required
 def po_cancel(request, po_id):
     po = get_object_or_404(PurchaseOrder, id=po_id)
-    is_approver = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists() or request.user.groups.filter(name__icontains='Executive').exists()
+    is_approver = check_is_approver(request.user)
     
     if is_approver and po.status == 'DRAFT':
         po.status = 'CANCELLED'
@@ -380,10 +407,6 @@ def po_cancel(request, po_id):
         messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิก หรือสถานะเอกสารไม่ถูกต้อง")
     return redirect('po_list')
 
-
-# ==========================================
-# ✈️ ระบบสั่งซื้อต่างประเทศ (Overseas PO Tracker)
-# ==========================================
 @login_required
 def overseas_po_list(request):
     if not can_view_and_pay(request.user):
@@ -406,8 +429,6 @@ def overseas_po_save(request):
 
     if request.method == 'POST':
         po_id = request.POST.get('po_id')
-        
-        # ดึงข้อมูลจากฟอร์ม
         supplier_name = request.POST.get('supplier_name')
         pi_number = request.POST.get('pi_number')
         total_amount = request.POST.get('total_amount', '0').replace(',', '')
@@ -423,7 +444,6 @@ def overseas_po_save(request):
         doc_pl = request.POST.get('doc_pl') == 'on'
         doc_ci = request.POST.get('doc_ci') == 'on'
 
-        # ถ้ามี ID แปลว่าเป็นการแก้ไข ถ้าไม่มีคือสร้างใหม่
         if po_id: 
             po = get_object_or_404(OverseasPO, id=po_id)
         else: 

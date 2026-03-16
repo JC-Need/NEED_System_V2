@@ -155,7 +155,7 @@
 
                                 <td class="text-center">
                                     {% if item.status != 'PAID' %}
-                                        {% if user.is_superuser or user.employee.department.name == 'Accounting' or user.employee.department.name == 'ฝ่ายบัญชี' or user.employee.department.name == 'บัญชี' %}
+                                        {% if user.is_superuser or 'บัญชี' in user.employee.department.name|default:'' or 'Accounting' in user.employee.department.name|default:'' %}
                                             {% if item.total_amount %}
                                                 <a href="{% url 'confirm_payment' 'pos' item.id %}" class="btn btn-sm btn-warning text-dark fw-bold border-0 px-3 shadow-sm w-100" onclick="return confirm('ยืนยันยอดเงินเข้าบัญชีเรียบร้อย?');" title="ยืนยันยอดเงิน">
                                                     <i class="fas fa-check me-1"></i> ยืนยัน
