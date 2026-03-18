@@ -13,7 +13,7 @@
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-money-check-alt text-success me-2"></i>บันทึกการชำระเงิน (Payment)</h4>
             <p class="text-muted small mb-0">อ้างอิงใบสั่งซื้อ: <span class="fw-bold text-primary">{{ po.code }}</span> | ร้านค้า: {{ po.supplier.name }}</p>
         </div>
-        <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับ</a>
+        <a href="{% url 'po_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ</a>
     </div>
 
     <div class="row g-4">
@@ -101,7 +101,7 @@
                             <small class="text-muted">{{ p.payment_date|date:"d/m/Y" }}</small>
                         </div>
                         <div class="small text-muted">
-                            <i class="fas fa-wallet me-1"></i> {{ p.payment_method }} 
+                            <i class="fas fa-wallet me-1"></i> {{ p.payment_method }}
                             {% if p.reference_no %}| อ้างอิง: {{ p.reference_no }}{% endif %}
                         </div>
                     </div>
@@ -120,8 +120,8 @@
     document.addEventListener('DOMContentLoaded', function() {
         flatpickr(".datepicker", {
             altInput: true,
-            altFormat: "d/m/Y",   
-            dateFormat: "Y-m-d",  
+            altFormat: "d/m/Y",
+            dateFormat: "Y-m-d",
             locale: "th",
             defaultDate: "today"
         });
@@ -130,7 +130,6 @@
         const paymentForm = document.getElementById('payment-form');
 
         if (amountInput) {
-            // จัดรูปแบบให้มีลูกน้ำและทศนิยม 2 ตำแหน่งเมื่อมีการแก้ไขตัวเลข
             amountInput.addEventListener('change', function(e) {
                 let val = parseFloat(e.target.value.replace(/,/g, ''));
                 if (!isNaN(val)) {
@@ -140,7 +139,6 @@
         }
 
         if (paymentForm) {
-            // เอาลูกน้ำออกก่อน Submit ข้อมูลไปที่ฐานระบบ
             paymentForm.addEventListener('submit', function() {
                 if (amountInput && amountInput.value) {
                     amountInput.value = amountInput.value.replace(/,/g, '');

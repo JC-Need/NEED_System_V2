@@ -22,7 +22,7 @@
             <button type="button" class="btn btn-success rounded-pill px-4 shadow-sm fw-bold" onclick="openNewModal()">
                 <i class="fas fa-plus me-1"></i> เพิ่มรายการนำเข้า
             </button>
-            <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-3 ms-2">กลับ Dashboard</a>
+            <a href="{% url 'purchasing_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 ms-2 fw-bold"><i class="fas fa-arrow-left me-2"></i> กลับหน้าจัดซื้อ</a>
         </div>
     </div>
 
@@ -216,7 +216,7 @@
         // เคลียร์วันที่ใน flatpickr
         document.getElementById('modal_dep_date')._flatpickr.clear();
         document.getElementById('modal_bal_date')._flatpickr.clear();
-
+        
         // 3. สั่งเปิด Modal โดยสร้าง Instance ใหม่เพื่อป้องกัน Error
         var poModal = new bootstrap.Modal(document.getElementById('poModal'));
         poModal.show();

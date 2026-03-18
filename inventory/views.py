@@ -289,7 +289,9 @@ def po_receive_process(request, po_id):
             po.save()
 
             messages.success(request, f"✅ รับสินค้าจาก PO: {po.code} สำเร็จ! (เลขที่ใบรับ: {doc.doc_no})")
-            return redirect('po_receive_list')
+            
+            # 🌟 เปลี่ยนให้เด้งไปหน้า Print อัตโนมัติ แทนที่จะกลับไปหน้ารายการ 🌟
+            return redirect('print_document', doc_no=doc.doc_no)
             
         elif not items_to_receive and not has_error:
             messages.warning(request, "⚠️ กรุณาระบุจำนวนสินค้าที่ต้องการรับอย่างน้อย 1 รายการ")
