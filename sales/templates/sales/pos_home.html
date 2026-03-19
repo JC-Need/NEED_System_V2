@@ -137,15 +137,30 @@
                                 </div>
                                 <div class="mt-2 text-end text-muted small" id="changeText">เงินทอน: 0.00</div>
                             </div>
+                            
                             <div id="zone-TRANSFER" class="d-none">
                                 <div class="alert alert-info py-2 small"><i class="fas fa-info-circle me-1"></i> กรุณาแนบสลิปการโอน</div>
                                 <label class="form-label">อัปโหลดสลิป</label>
                                 <input type="file" class="form-control" name="transfer_slip" accept="image/*">
                             </div>
+                            
                             <div id="zone-CHECK" class="d-none">
-                                <div class="mb-2"><label class="form-label">ธนาคาร</label><input type="text" class="form-control" name="check_bank" placeholder="เช่น กสิกรไทย"></div>
-                                <div class="mb-2"><label class="form-label">เลขที่เช็ค</label><input type="text" class="form-control" name="check_number" placeholder="ระบุเลขที่เช็ค"></div>
+                                <div class="row g-2 mb-2">
+                                    <div class="col-6">
+                                        <label class="form-label">ธนาคาร</label>
+                                        <input type="text" class="form-control" name="check_bank" placeholder="เช่น กสิกรไทย">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label">เลขที่เช็ค</label>
+                                        <input type="text" class="form-control" name="check_number" placeholder="ระบุเลขที่เช็ค">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="form-label small">อัปโหลดหน้าเช็ค (รูปถ่าย)</label>
+                                    <input type="file" class="form-control form-control-sm" name="check_slip" accept="image/*">
+                                </div>
                             </div>
+
                         </div>
                     </div>
                 </form>
@@ -206,14 +221,10 @@
         if (cart.length === 0) { Swal.fire('ตะกร้าว่างเปล่า', 'กรุณาเลือกสินค้าก่อนครับ', 'error'); return; }
         
         document.getElementById('modalTotalAmount').innerText = '฿' + currentTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
-        
-        // 🌟 ตั้งค่าให้แสดงยอดแบบมีลูกน้ำและทศนิยมทันทีที่เปิด Modal 🌟
         document.getElementById('cashInput').value = currentTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-        updateChangeText(currentTotal); // คำนวณเงินทอนเริ่มต้น
+        updateChangeText(currentTotal);
         
         selectPayment('CASH');
-
-        // Reset customer form
         document.getElementById('customerIdInput').value = '';
         document.getElementById('custName').value = '';
         document.getElementById('custAddr').value = '';
@@ -237,14 +248,10 @@
 
     // 🌟 ระบบจัดการลูกน้ำ (Comma) สำหรับช่องกรอกเงินสด 🌟
     const cashInput = document.getElementById('cashInput');
-    
-    // เมื่อผู้ใช้พิมพ์ตัวเลข ให้คำนวณเงินทอนแบบ Real-time
     cashInput.addEventListener('input', function() {
-        let val = parseFloat(this.value.replace(/,/g, '')) || 0; // แอบลบลูกน้ำออกก่อนคำนวณ
+        let val = parseFloat(this.value.replace(/,/g, '')) || 0; 
         updateChangeText(val);
     });
-
-    // เมื่อคลิกเข้าไปที่ช่อง (Focus) ให้โชว์ตัวเลขเพียวๆ จะได้ลบ/พิมพ์แก้ง่ายๆ
     cashInput.addEventListener('focus', function() {
         let val = this.value.replace(/,/g, '');
         if (val === '0.00' || val === '0') {
@@ -253,14 +260,10 @@
             this.value = val;
         }
     });
-
-    // เมื่อคลิกออกนอกช่อง (Blur) ให้ใส่ลูกน้ำกลับเข้าไปสวยๆ
     cashInput.addEventListener('blur', function() {
         let val = parseFloat(this.value.replace(/,/g, '')) || 0;
         this.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     });
-
-    // ฟังก์ชันคำนวณและแสดงเงินทอน
     function updateChangeText(receivedAmount) {
         let change = receivedAmount - currentTotal;
         let text = change >= 0 
@@ -305,21 +308,17 @@
     // --- Submit Payment ---
     function confirmPayment() {
         let method = document.getElementById('paymentMethodInput').value;
-        
-        // 🌟 ดึงยอดเงินแบบลบลูกน้ำออก เพื่อให้พร้อมคำนวณและบันทึกเข้าหลังบ้าน 🌟
         let rawReceived = document.getElementById('cashInput').value.replace(/,/g, '');
         let received = parseFloat(rawReceived) || 0;
         
         if (method === 'CASH' && received < currentTotal) { 
-            Swal.fire('ยอดเงินไม่พอ', 'กรุณารับเงินให้ครบครับ', 'warning'); 
+            Swal.fire('ยอดเงินไม่พอ', 'กรุณารับเงินให้ครบครับ', 'warning');
             return; 
         }
 
         let formData = new FormData(document.getElementById('paymentForm'));
         formData.append('total_amount', currentTotal);
         formData.append('cart', JSON.stringify(cart));
-        
-        // 🌟 สำคัญมาก: ส่งยอดรับเงิน (ที่ไม่มีลูกน้ำแล้ว) กลับไปให้หลังบ้าน 🌟
         if (method === 'CASH') {
             formData.set('received_amount', received);
         } else {
@@ -327,7 +326,6 @@
         }
 
         Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
-
         fetch("{% url 'pos_checkout' %}", {
             method: "POST",
             headers: { "X-CSRFToken": "{{ csrf_token }}" },

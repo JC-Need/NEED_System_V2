@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q, Sum, Count, Max
 from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
-from django.utils import timezone
+from django.utils import timezone 
 from django.forms.models import inlineformset_factory
 
 from .models import PurchaseOrder, PurchaseOrderItem, PurchaseOrderPayment, PurchasePreparation, OverseasPO
@@ -19,45 +19,61 @@ from master_data.models import CompanyInfo
 from inventory.models import Product
 from manufacturing.models import BOM
 
+# ==========================================
+# 🛡️ ระบบนายทวาร (Gatekeeper) แบ่งสิทธิ์การทำงาน
+# ==========================================
 def can_view_and_pay(user):
     if user.is_superuser: 
         return True
+    
     user_groups = list(user.groups.values_list('name', flat=True))
     if 'Purchasing' in user_groups or 'Accounting' in user_groups or 'Executive' in user_groups:
         return True
+        
     if hasattr(user, 'employee') and user.employee:
         dept = user.employee.department.name if user.employee.department else ''
         if 'จัดซื้อ' in dept or 'Purchasing' in dept or 'บัญชี' in dept or 'Accounting' in dept:
             return True
+            
     return False
 
 def can_create_po(user):
     if user.is_superuser: 
         return True
+    
     user_groups = list(user.groups.values_list('name', flat=True))
     if 'Purchasing' in user_groups or 'Executive' in user_groups:
         return True
+        
     if hasattr(user, 'employee') and user.employee:
         dept = user.employee.department.name if user.employee.department else ''
         if 'จัดซื้อ' in dept or 'Purchasing' in dept:
             return True
+            
     return False
 
 def check_is_approver(user):
     if user.is_superuser:
         return True
+        
     user_groups = list(user.groups.values_list('name', flat=True))
     if 'Executive' in user_groups:
         return True
+        
     if hasattr(user, 'employee') and user.employee:
         job_title = user.employee.position.title.lower() if user.employee.position else ""
         rank = user.employee.business_rank.lower() if user.employee.business_rank else ""
+        
         if 'manager' in job_title or 'ผู้จัดการ' in job_title or 'director' in job_title or 'ผู้อำนวยการ' in job_title:
             return True
         if rank in ['manager', 'director', 'executive']:
             return True
+            
     return False
 
+# ==========================================
+# 🛒 ระบบจัดซื้อ (Purchasing)
+# ==========================================
 @login_required
 def purchasing_dashboard(request):
     if not can_view_and_pay(request.user):
@@ -76,12 +92,16 @@ def purchasing_dashboard(request):
     pending_receipt_count = pos.filter(receipt_status__in=['PENDING', 'PARTIAL'], status='APPROVED').count()
     recent_pos = pos.order_by('-created_at')[:10]
 
+    # 🌟 เช็กสิทธิ์ว่าเป็นผู้จัดการ (ผู้อนุมัติ) หรือไม่ เพื่อเปิดฟังก์ชันคลิกที่การ์ด
+    is_approver = check_is_approver(request.user)
+
     context = {
         'draft_count': draft_count,
         'pending_payment_count': pending_payment_count,
         'pending_payment_amount': actual_pending_amount,
         'pending_receipt_count': pending_receipt_count,
         'recent_pos': recent_pos,
+        'is_approver': is_approver, # 🌟 ส่งค่านี้ไปบอกหน้าเว็บ
     }
     return render(request, 'purchasing/purchasing_dashboard.html', context)
 
@@ -101,10 +121,13 @@ def po_list(request):
 
     if search_query:
         pos = pos.filter(Q(code__icontains=search_query) | Q(supplier__name__icontains=search_query))
+
     if status_filter:
         pos = pos.filter(status=status_filter)
+
     if payment_filter:
         pos = pos.filter(payment_status=payment_filter)
+
     if start_date:
         pos = pos.filter(date__gte=start_date)
     if end_date:
@@ -131,6 +154,7 @@ def po_create(request):
     items_json = request.GET.get('items_data', '[]')
     
     initial_items = []
+    
     if items_json:
         try:
             data = json.loads(items_json)
@@ -314,6 +338,7 @@ def ppo_list(request):
         return redirect('dashboard')
 
     ppos = PurchasePreparation.objects.all().order_by('-id')
+    
     for ppo in ppos:
         total_amount = 0
         for job in ppo.production_orders.all():
@@ -367,6 +392,7 @@ def ppo_detail(request, pk):
         sup_total = sum(item['total'] for item in materials_by_supplier[sup_id]['items'].values())
         materials_by_supplier[sup_id]['supplier_total'] = sup_total
         grand_total += sup_total
+        
         materials_by_supplier[sup_id]['items'] = list(materials_by_supplier[sup_id]['items'].values())
 
     created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code)
@@ -384,6 +410,7 @@ def ppo_detail(request, pk):
 @login_required
 def po_approve(request, po_id):
     po = get_object_or_404(PurchaseOrder, id=po_id)
+    
     is_approver = check_is_approver(request.user)
     
     if is_approver and po.status == 'DRAFT':
@@ -397,6 +424,7 @@ def po_approve(request, po_id):
 @login_required
 def po_cancel(request, po_id):
     po = get_object_or_404(PurchaseOrder, id=po_id)
+    
     is_approver = check_is_approver(request.user)
     
     if is_approver and po.status == 'DRAFT':
@@ -407,6 +435,10 @@ def po_cancel(request, po_id):
         messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิก หรือสถานะเอกสารไม่ถูกต้อง")
     return redirect('po_list')
 
+
+# ==========================================
+# ✈️ ระบบสั่งซื้อต่างประเทศ (Overseas PO Tracker)
+# ==========================================
 @login_required
 def overseas_po_list(request):
     if not can_view_and_pay(request.user):
@@ -429,6 +461,7 @@ def overseas_po_save(request):
 
     if request.method == 'POST':
         po_id = request.POST.get('po_id')
+        
         supplier_name = request.POST.get('supplier_name')
         pi_number = request.POST.get('pi_number')
         total_amount = request.POST.get('total_amount', '0').replace(',', '')

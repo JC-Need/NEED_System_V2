@@ -2,6 +2,12 @@
 {% load humanize %}
 
 {% block content %}
+<style>
+    /* 🌟 CSS เพิ่มเอฟเฟกต์การกดการ์ดให้ดูสมูท 🌟 */
+    .hover-card { transition: all 0.3s ease; cursor: pointer; }
+    .hover-card:hover { transform: translateY(-5px); box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important; }
+</style>
+
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
@@ -46,13 +52,25 @@
 
     <div class="row g-4 mb-4">
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white position-relative overflow-hidden">
-                <div class="card-body p-4">
-                    <div class="text-muted small fw-bold mb-2">PO รออนุมัติ / ร่าง</div>
-                    <h2 class="fw-bold text-dark mb-0">{{ draft_count }} <span class="fs-6 fw-normal text-muted">ใบ</span></h2>
-                    <i class="fas fa-file-signature position-absolute text-secondary opacity-10" style="font-size: 5rem; bottom: -10px; right: -10px;"></i>
+            {% if is_approver %}
+            <a href="{% url 'po_list' %}?status=DRAFT" class="text-decoration-none">
+            {% endif %}
+                <div class="card border-0 shadow-sm rounded-4 h-100 bg-white position-relative overflow-hidden {% if is_approver %}hover-card{% endif %}">
+                    <div class="card-body p-4">
+                        <div class="text-muted small fw-bold mb-2">PO รออนุมัติ / ร่าง</div>
+                        <h2 class="fw-bold text-dark mb-0">{{ draft_count }} <span class="fs-6 fw-normal text-muted">ใบ</span></h2>
+                        <i class="fas fa-file-signature position-absolute text-secondary opacity-10" style="font-size: 5rem; bottom: -10px; right: -10px;"></i>
+                        
+                        {% if is_approver %}
+                        <div class="position-absolute top-0 end-0 p-3">
+                            <i class="fas fa-external-link-alt text-primary opacity-50" title="คลิกเพื่อดูรายการรออนุมัติ"></i>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
-            </div>
+            {% if is_approver %}
+            </a>
+            {% endif %}
         </div>
 
         <div class="col-md-4">

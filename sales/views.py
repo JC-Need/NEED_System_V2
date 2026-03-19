@@ -79,7 +79,6 @@ def get_sales_queryset(model_class, user, target_employees):
 
     return model_class.objects.filter(employee__in=target_employees)
 
-# 🌟 แก้ไข: ลบสิทธิ์ของบัญชีออก เพื่อปิดประตู Dashboard ฝ่ายขาย 🌟
 def is_sales_authorized(user):
     if user.is_superuser: 
         return True
@@ -90,7 +89,6 @@ def is_sales_authorized(user):
         
     if hasattr(user, 'employee') and user.employee:
         dept = user.employee.department.name if user.employee.department else ''
-        
         if 'ขาย' in dept or 'Sales' in dept:
             return True
             
@@ -239,6 +237,8 @@ def pos_checkout(request):
             elif payment_method == 'CHECK':
                 order.check_number = request.POST.get('check_number', '')
                 order.check_bank = request.POST.get('check_bank', '')
+                if 'check_slip' in request.FILES:
+                    order.check_slip = request.FILES['check_slip']
             
             order.save()
 
@@ -353,8 +353,9 @@ def quotation_edit(request, qt_id):
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
     
     if request.method == 'POST':
-        if qt.status in ['CONVERTED', 'CANCELLED']:
-            messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากใบเสนอราคานี้ถูกล็อกหรือยกเลิกไปแล้ว")
+        # 🌟 อุดช่องโหว่: ถ้าระบบพบว่าไม่ใช่ฉบับร่าง จะตัดจบกระบวนการบันทึกทันที 🌟
+        if qt.status != 'DRAFT':
+            messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว (กรุณาใช้ฟังก์ชันคัดลอกสร้างใบใหม่แทน)")
             return redirect('quotation_edit', qt_id=qt.id)
 
         if 'add_item' in request.POST:
@@ -397,13 +398,62 @@ def delete_item(request, item_id):
     item = get_object_or_404(QuotationItem, pk=item_id)
     qt = item.quotation
     
-    if qt.status in ['CONVERTED', 'CANCELLED']:
-        messages.error(request, "❌ ไม่สามารถลบรายการได้ เนื่องจากใบเสนอราคานี้ถูกล็อกหรือยกเลิกไปแล้ว")
+    # 🌟 อุดช่องโหว่: ห้ามลบรายการสินค้าในเอกสารที่ถูกอนุมัติแล้ว 🌟
+    if qt.status != 'DRAFT':
+        messages.error(request, "❌ ไม่สามารถลบรายการได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว")
         return redirect('quotation_edit', qt_id=qt.id)
         
     item.delete()
     calculate_totals(qt)
     return redirect('quotation_edit', qt_id=qt.id)
+
+# 🌟 ฟังก์ชันคัดลอกสร้างเอกสารฉบับใหม่ 🌟
+@login_required
+def quotation_clone(request, qt_id):
+    old_qt = get_object_or_404(Quotation, pk=qt_id)
+    
+    # 1. สร้างเลขที่เอกสารใหม่
+    now = datetime.datetime.now()
+    thai_year = (now.year + 543) % 100
+    prefix = f"QT-{thai_year:02d}{now.strftime('%m')}"
+    last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
+    seq = int(last.code.split('-')[-1]) + 1 if last else 1
+    new_code = f"{prefix}-{seq:03d}"
+
+    # 2. คัดลอกข้อมูลส่วนหัวของใบเสนอราคา
+    new_qt = Quotation.objects.create(
+        code=new_code,
+        date=timezone.now().date(),
+        valid_until=timezone.now().date() + datetime.timedelta(days=15),
+        customer=old_qt.customer,
+        customer_name=old_qt.customer_name,
+        customer_address=old_qt.customer_address,
+        customer_tax_id=old_qt.customer_tax_id,
+        customer_phone=old_qt.customer_phone,
+        employee=request.user.employee if hasattr(request.user, 'employee') else None,
+        subtotal=old_qt.subtotal,
+        discount=old_qt.discount,
+        shipping_cost=old_qt.shipping_cost,
+        tax_amount=old_qt.tax_amount,
+        grand_total=old_qt.grand_total,
+        status='DRAFT', # กลับไปเริ่มต้นที่สถานะร่างเสมอ
+        note=old_qt.note,
+    )
+
+    # 3. คัดลอกรายการสินค้าทั้งหมด
+    for item in old_qt.items.all():
+        QuotationItem.objects.create(
+            quotation=new_qt,
+            product=item.product,
+            item_name=item.item_name,
+            description=item.description,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            amount=item.amount
+        )
+
+    messages.success(request, f"📋 คัดลอกเอกสารสำเร็จ! (คุณกำลังอยู่ในเอกสารใหม่ อ้างอิงข้อมูลจากใบเดิม {old_qt.code})")
+    return redirect('quotation_edit', qt_id=new_qt.id)
 
 @login_required
 def quotation_approve(request, qt_id):
@@ -449,9 +499,9 @@ def export_sales_excel(request):
     ws = wb.active; ws.title = "Sales Report"
     ws.append(["วันที่", "เลขที่เอกสาร", "ประเภท", "ยอดขาย"])
     for p in POSOrder.objects.all():
-        ws.append([p.created_at.strftime('%Y-%m-%d'), p.code, "POS", p.total_amount])
+        ws.append([p.created_at.strftime('%d/%m/%Y'), p.code, "POS", p.total_amount])
     for i in Invoice.objects.all():
-        ws.append([i.date.strftime('%Y-%m-%d'), i.code, "Invoice", i.grand_total])
+        ws.append([i.date.strftime('%d/%m/%Y'), i.code, "Invoice", i.grand_total])
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     response['Content-Disposition'] = 'attachment; filename="Sales_Report.xlsx"'
     wb.save(response)
@@ -591,7 +641,7 @@ def invoice_print(request, inv_id):
         shipping_cost = qt.shipping_cost
         note = qt.note
         
-        if not getattr(inv, 'customer_name', None):
+    if not getattr(inv, 'customer_name', None):
             inv.customer_name = qt.customer_name
             inv.customer_address = qt.customer_address
             inv.customer_tax_id = qt.customer_tax_id

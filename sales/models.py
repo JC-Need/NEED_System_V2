@@ -4,6 +4,7 @@ from decimal import Decimal
 from master_data.models import Customer
 from hr.models import Employee
 from inventory.models import Product
+from PIL import Image # 🌟 เพิ่มเครื่องมือจัดการรูปภาพของ Python 🌟
 
 # =========================
 # 1. ระบบ POS (ขายหน้าร้านแบบด่วน)
@@ -37,12 +38,42 @@ class POSOrder(models.Model):
     transfer_slip = models.ImageField(upload_to='pos_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
     check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
     check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
+    check_slip = models.ImageField(upload_to='pos_checks/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายเช็ค")
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PAID', verbose_name="สถานะ") 
     is_commission_calculated = models.BooleanField(default=False, verbose_name="คำนวณคอมฯแล้ว")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาที่ขาย")
     
     def __str__(self): return self.code
+
+    # 🌟 ฟังก์ชันบีบอัดรูปภาพอัตโนมัติก่อนเซฟลงฐานข้อมูล 🌟
+    def save(self, *args, **kwargs):
+        # 1. ให้ระบบเซฟไฟล์รูปต้นฉบับลงไปก่อน
+        super().save(*args, **kwargs)
+        
+        # 2. บีบอัดรูปสลิปโอนเงิน (ถ้ามีการอัปโหลดมา)
+        if self.transfer_slip:
+            try:
+                img = Image.open(self.transfer_slip.path)
+                # ถ้ารูปใหญ่กว่า 800px ให้ย่อลงมาให้เหลือ 800px
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size) # thumbnail จะช่วยรักษาสัดส่วนภาพ (Aspect Ratio) ไว้ไม่ให้รูปเบี้ยว
+                    img.save(self.transfer_slip.path, quality=85, optimize=True) # เซฟทับไฟล์เดิม พร้อมลด Quality ลงนิดหน่อยเพื่อประหยัดพื้นที่
+            except Exception as e:
+                pass # ถ้าเกิดข้อผิดพลาดในการอ่านไฟล์ ให้ข้ามไป (ป้องกันระบบพัง)
+                
+        # 3. บีบอัดรูปถ่ายเช็ค (ถ้ามีการอัปโหลดมา)
+        if self.check_slip:
+            try:
+                img = Image.open(self.check_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.check_slip.path, quality=85, optimize=True)
+            except Exception as e:
+                pass
+
 
 class POSOrderItem(models.Model):
     order = models.ForeignKey(POSOrder, related_name='items', on_delete=models.CASCADE)
@@ -51,6 +82,7 @@ class POSOrderItem(models.Model):
     quantity = models.IntegerField(default=1, verbose_name="จำนวน")
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคาต่อชิ้น")
     total_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคารวม")
+    
     def save(self, *args, **kwargs):
         self.total_price = self.quantity * self.price
         if not self.product_name and self.product: self.product_name = self.product.name
@@ -65,7 +97,7 @@ class Quotation(models.Model):
         ('APPROVED', 'อนุมัติแล้ว'), 
         ('CONVERTED', 'เปิดบิลขายแล้ว'), 
         ('REJECTED', 'ไม่อนุมัติ'),
-        ('CANCELLED', 'ยกเลิกแล้ว')  # 🌟 เพิ่มสถานะใหม่ตรงนี้ 🌟
+        ('CANCELLED', 'ยกเลิกแล้ว')  
     ]
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสนอราคา")
@@ -94,6 +126,7 @@ class Quotation(models.Model):
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่อนุมัติ")
 
     def __str__(self): return self.code
+    
     @property
     def customer_code(self): return self.customer.code if self.customer else None
 
@@ -105,6 +138,7 @@ class QuotationItem(models.Model):
     quantity = models.IntegerField(default=1, verbose_name="จำนวน")
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคาต่อหน่วย")
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="รวมเงิน")
+    
     def save(self, *args, **kwargs):
         self.amount = self.quantity * self.unit_price
         super().save(*args, **kwargs)
