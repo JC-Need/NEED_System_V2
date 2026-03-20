@@ -43,8 +43,6 @@ def get_target_employees(user):
         return Employee.objects.all(), "Admin View"
     elif current_emp:
         dept_name = current_emp.department.name if current_emp.department else ""
-        
-        # 🌟 บัญชียังคงมองเห็นบิลของเซลส์ทุกคน เพื่อกดยืนยันยอดได้ 🌟
         if 'บัญชี' in dept_name or 'Accounting' in dept_name:
             return Employee.objects.all(), "Accounting View"
             
@@ -161,10 +159,48 @@ def sales_hub(request):
         'today_pos': today_pos
     })
 
+# 🌟 ฟังก์ชันบันทึกรับมัดจำ 🌟
+@login_required
+def record_deposit(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    if request.method == 'POST':
+        amount_str = request.POST.get('deposit_amount', '0').replace(',', '')
+        try: 
+            amount = Decimal(amount_str)
+        except: 
+            amount = Decimal(0)
+            
+        method = request.POST.get('deposit_method', 'TRANSFER')
+        date_str = request.POST.get('deposit_date')
+        
+        if amount > 0:
+            qt.deposit_amount = amount
+            qt.deposit_method = method
+            if date_str: 
+                qt.deposit_date = parse_date(date_str)
+            else:
+                qt.deposit_date = timezone.now().date()
+            qt.is_deposit_paid = True
+            
+            if 'deposit_slip' in request.FILES:
+                qt.deposit_slip = request.FILES['deposit_slip']
+                
+            qt.save()
+            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
+        else:
+            messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
+            
+    return redirect('quotation_edit', qt_id=qt.id)
+
 @login_required
 def convert_quote_to_invoice(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     new_code = get_next_document_number()
+    
+    # 🌟 คำนวณยอดคงค้างตอนเปิดบิล 🌟
+    balance = qt.grand_total - qt.deposit_amount
+    # ถ้าลูกค้ายอมจ่ายมัดจำ 100% เลย สถานะจะกลายเป็น PAID ทันที
+    status = 'PAID' if balance <= 0 else 'PENDING'
     
     invoice = Invoice.objects.create(
         code=new_code,
@@ -173,11 +209,13 @@ def convert_quote_to_invoice(request, qt_id):
         customer=qt.customer,
         employee=request.user.employee if hasattr(request.user, 'employee') else None,
         grand_total=qt.grand_total,
-        status='PENDING'
+        deposit_amount=qt.deposit_amount, # บันทึกยอดมัดจำ
+        balance_amount=balance,           # บันทึกยอดคงค้าง
+        status=status
     )
     qt.status = 'CONVERTED'
     qt.save()
-    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย (รอตรวจสอบยอดเงิน)")
+    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย (ยอดคงค้างชำระ: {balance:,.2f} บาท)")
     return redirect('invoice_list')
 
 @login_required
@@ -351,9 +389,9 @@ def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     products = Product.objects.filter(is_active=True, product_type='FG')
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
+    balance_due = qt.grand_total - qt.deposit_amount # ส่งยอดคงค้างไปโชว์หน้าเว็บ
     
     if request.method == 'POST':
-        # 🌟 อุดช่องโหว่: ถ้าระบบพบว่าไม่ใช่ฉบับร่าง จะตัดจบกระบวนการบันทึกทันที 🌟
         if qt.status != 'DRAFT':
             messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว (กรุณาใช้ฟังก์ชันคัดลอกสร้างใบใหม่แทน)")
             return redirect('quotation_edit', qt_id=qt.id)
@@ -380,7 +418,7 @@ def quotation_edit(request, qt_id):
                 messages.success(request, "อัปเดตยอดเงินและหมายเหตุเรียบร้อย")
                 return redirect('quotation_edit', qt_id=qt.id)
                 
-    return render(request, 'sales/quotation_edit.html', {'qt': qt, 'products': products, 'item_total': item_total})
+    return render(request, 'sales/quotation_edit.html', {'qt': qt, 'products': products, 'item_total': item_total, 'balance_due': balance_due})
 
 def calculate_totals(qt):
     item_sum = sum(item.quantity * item.unit_price for item in qt.items.all())
@@ -398,7 +436,6 @@ def delete_item(request, item_id):
     item = get_object_or_404(QuotationItem, pk=item_id)
     qt = item.quotation
     
-    # 🌟 อุดช่องโหว่: ห้ามลบรายการสินค้าในเอกสารที่ถูกอนุมัติแล้ว 🌟
     if qt.status != 'DRAFT':
         messages.error(request, "❌ ไม่สามารถลบรายการได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว")
         return redirect('quotation_edit', qt_id=qt.id)
@@ -407,12 +444,9 @@ def delete_item(request, item_id):
     calculate_totals(qt)
     return redirect('quotation_edit', qt_id=qt.id)
 
-# 🌟 ฟังก์ชันคัดลอกสร้างเอกสารฉบับใหม่ 🌟
 @login_required
 def quotation_clone(request, qt_id):
     old_qt = get_object_or_404(Quotation, pk=qt_id)
-    
-    # 1. สร้างเลขที่เอกสารใหม่
     now = datetime.datetime.now()
     thai_year = (now.year + 543) % 100
     prefix = f"QT-{thai_year:02d}{now.strftime('%m')}"
@@ -420,7 +454,6 @@ def quotation_clone(request, qt_id):
     seq = int(last.code.split('-')[-1]) + 1 if last else 1
     new_code = f"{prefix}-{seq:03d}"
 
-    # 2. คัดลอกข้อมูลส่วนหัวของใบเสนอราคา
     new_qt = Quotation.objects.create(
         code=new_code,
         date=timezone.now().date(),
@@ -436,11 +469,10 @@ def quotation_clone(request, qt_id):
         shipping_cost=old_qt.shipping_cost,
         tax_amount=old_qt.tax_amount,
         grand_total=old_qt.grand_total,
-        status='DRAFT', # กลับไปเริ่มต้นที่สถานะร่างเสมอ
+        status='DRAFT',
         note=old_qt.note,
     )
 
-    # 3. คัดลอกรายการสินค้าทั้งหมด
     for item in old_qt.items.all():
         QuotationItem.objects.create(
             quotation=new_qt,
@@ -615,7 +647,7 @@ def confirm_payment(request, doc_type, doc_id):
     obj.status = 'PAID'
     obj.save()
     
-    messages.success(request, f"✅ ยืนยันการชำระเงินเอกสาร {obj.code} เรียบร้อยแล้ว")
+    messages.success(request, f"✅ ยืนยันรับชำระเงินเอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
     return redirect('invoice_list')
 
 @login_required
@@ -641,7 +673,7 @@ def invoice_print(request, inv_id):
         shipping_cost = qt.shipping_cost
         note = qt.note
         
-    if not getattr(inv, 'customer_name', None):
+    if not getattr(inv, 'customer_name', None) and inv.quotation_ref:
             inv.customer_name = qt.customer_name
             inv.customer_address = qt.customer_address
             inv.customer_tax_id = qt.customer_tax_id
@@ -649,6 +681,11 @@ def invoice_print(request, inv_id):
     
     if not hasattr(inv, 'total_amount'):
         inv.total_amount = inv.grand_total
+        
+    # เผื่อบิลเก่าที่ยังไม่มีค่า deposit_amount จะได้ไม่ Error
+    if not hasattr(inv, 'deposit_amount'):
+        inv.deposit_amount = 0
+        inv.balance_amount = inv.grand_total
 
     context = {
         'inv': inv,

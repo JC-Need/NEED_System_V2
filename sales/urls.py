@@ -21,7 +21,7 @@ urlpatterns = [
     path('quotation/delete-item/<int:item_id>/', views.delete_item, name='delete_item'),
     path('quotation/print/<int:qt_id>/', views.quotation_print, name='quotation_print'),
     path('quotation/approve/<int:qt_id>/', views.quotation_approve, name='quotation_approve'),
-    path('quotation/cancel/<int:qt_id>/', views.quotation_cancel, name='quotation_cancel'), # 🌟 เพิ่มบรรทัดนี้
+    path('quotation/cancel/<int:qt_id>/', views.quotation_cancel, name='quotation_cancel'), 
 
     # 5. Invoice & Payment
     path('invoice/', views.invoice_list, name='invoice_list'),
@@ -33,4 +33,5 @@ urlpatterns = [
     path('api/customer-create/', views.api_create_customer, name='api_create_customer'),
     path('export/excel/', views.export_sales_excel, name='export_sales_excel'),
     path('quotation/clone/<int:qt_id>/', views.quotation_clone, name='quotation_clone'),
+    path('quotation/deposit/<int:qt_id>/', views.record_deposit, name='record_deposit'),
 ]

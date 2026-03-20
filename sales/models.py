@@ -4,7 +4,7 @@ from decimal import Decimal
 from master_data.models import Customer
 from hr.models import Employee
 from inventory.models import Product
-from PIL import Image # 🌟 เพิ่มเครื่องมือจัดการรูปภาพของ Python 🌟
+from PIL import Image
 
 # =========================
 # 1. ระบบ POS (ขายหน้าร้านแบบด่วน)
@@ -20,21 +20,18 @@ class POSOrder(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสร็จ")
     employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
     
-    # --- ข้อมูลลูกค้า ---
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ลูกค้า (สมาชิก)")
     customer_name = models.CharField(max_length=200, blank=True, verbose_name="ชื่อลูกค้า (ระบุเอง)")
     customer_address = models.TextField(blank=True, verbose_name="ที่อยู่")
     customer_tax_id = models.CharField(max_length=20, blank=True, verbose_name="เลขผู้เสียภาษี")
     customer_phone = models.CharField(max_length=20, blank=True, verbose_name="เบอร์โทรศัพท์")
 
-    # --- การเงิน ---
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดรวม")
     received_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รับเงินมา")
     change_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="เงินทอน")
     
     payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, default='CASH', verbose_name="วิธีชำระ")
     
-    # --- หลักฐานการโอน/เช็ค ---
     transfer_slip = models.ImageField(upload_to='pos_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
     check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
     check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
@@ -46,24 +43,18 @@ class POSOrder(models.Model):
     
     def __str__(self): return self.code
 
-    # 🌟 ฟังก์ชันบีบอัดรูปภาพอัตโนมัติก่อนเซฟลงฐานข้อมูล 🌟
     def save(self, *args, **kwargs):
-        # 1. ให้ระบบเซฟไฟล์รูปต้นฉบับลงไปก่อน
         super().save(*args, **kwargs)
-        
-        # 2. บีบอัดรูปสลิปโอนเงิน (ถ้ามีการอัปโหลดมา)
         if self.transfer_slip:
             try:
                 img = Image.open(self.transfer_slip.path)
-                # ถ้ารูปใหญ่กว่า 800px ให้ย่อลงมาให้เหลือ 800px
                 if img.height > 800 or img.width > 800:
                     output_size = (800, 800)
-                    img.thumbnail(output_size) # thumbnail จะช่วยรักษาสัดส่วนภาพ (Aspect Ratio) ไว้ไม่ให้รูปเบี้ยว
-                    img.save(self.transfer_slip.path, quality=85, optimize=True) # เซฟทับไฟล์เดิม พร้อมลด Quality ลงนิดหน่อยเพื่อประหยัดพื้นที่
+                    img.thumbnail(output_size)
+                    img.save(self.transfer_slip.path, quality=85, optimize=True)
             except Exception as e:
-                pass # ถ้าเกิดข้อผิดพลาดในการอ่านไฟล์ ให้ข้ามไป (ป้องกันระบบพัง)
+                pass
                 
-        # 3. บีบอัดรูปถ่ายเช็ค (ถ้ามีการอัปโหลดมา)
         if self.check_slip:
             try:
                 img = Image.open(self.check_slip.path)
@@ -118,6 +109,13 @@ class Quotation(models.Model):
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ภาษีมูลค่าเพิ่ม")
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดสุทธิ")
     
+    # 🌟 ระบบรับมัดจำ 🌟
+    deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดมัดจำที่รับแล้ว")
+    deposit_date = models.DateField(null=True, blank=True, verbose_name="วันที่รับมัดจำ")
+    deposit_method = models.CharField(max_length=50, blank=True, null=True, verbose_name="ช่องทางรับมัดจำ")
+    deposit_slip = models.ImageField(upload_to='deposit_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปมัดจำ")
+    is_deposit_paid = models.BooleanField(default=False, verbose_name="รับมัดจำแล้ว")
+
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT', verbose_name="สถานะ")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -129,6 +127,20 @@ class Quotation(models.Model):
     
     @property
     def customer_code(self): return self.customer.code if self.customer else None
+
+    # ย่อสลิปมัดจำอัตโนมัติ
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.deposit_slip:
+            try:
+                img = Image.open(self.deposit_slip.path)
+                if img.height > 800 or img.width > 800:
+                    output_size = (800, 800)
+                    img.thumbnail(output_size)
+                    img.save(self.deposit_slip.path, quality=85, optimize=True)
+            except Exception as e:
+                pass
+
 
 class QuotationItem(models.Model):
     quotation = models.ForeignKey(Quotation, related_name='items', on_delete=models.CASCADE)
@@ -157,7 +169,12 @@ class Invoice(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
     
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดสุทธิ")
-    status = models.CharField(max_length=20, choices=[('UNPAID', 'ยังไม่ชำระ'), ('PAID', 'ชำระแล้ว')], default='UNPAID', verbose_name="สถานะ")
+    
+    # 🌟 ยอดหักมัดจำและยอดคงค้าง 🌟
+    deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="หักมัดจำ")
+    balance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดคงค้างชำระ")
+
+    status = models.CharField(max_length=20, choices=[('UNPAID', 'ยังไม่ชำระ'), ('PAID', 'ชำระแล้ว'), ('PENDING', 'รอตรวจสอบ')], default='UNPAID', verbose_name="สถานะ")
     
     created_at = models.DateTimeField(auto_now_add=True)
 

@@ -52,6 +52,12 @@
                 <i class="fas fa-copy me-1"></i> คัดลอกสร้างใบใหม่
             </a>
 
+            {% if qt.status == 'APPROVED' and not qt.is_deposit_paid %}
+            <button type="button" class="btn btn-warning shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold text-dark" data-bs-toggle="modal" data-bs-target="#depositModal">
+                <i class="fas fa-hand-holding-usd me-1"></i> บันทึกรับมัดจำ
+            </button>
+            {% endif %}
+
             {% if qt.status != 'CANCELLED' %}
             <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-primary shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold">
                 <i class="fas fa-print me-1"></i> พิมพ์ / ตัวอย่าง
@@ -61,7 +67,6 @@
     </div>
 
     <div class="row g-3">
-
         <div class="col-lg-4">
             <div class="card shadow-sm border-0 rounded-3 h-100">
                 <div class="card-header bg-white py-2 border-bottom d-flex justify-content-between align-items-center">
@@ -107,7 +112,6 @@
         </div>
 
         <div class="col-lg-8">
-            
             {% if qt.status == 'DRAFT' %}
             <div class="card shadow-sm border-0 rounded-3 mb-3 border-bottom border-success border-3">
                 <div class="card-header py-2 bg-white">
@@ -223,9 +227,25 @@
                                 
                                 {% if qt.status == 'DRAFT' %}
                                 <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3">
-                                    <i class="fas fa-sync-alt me-1"></i> คำนวณยอดใหม่ / บันทึกหมายเหตุ
+                                    <i class="fas fa-sync-alt me-1"></i> บันทึกหมายเหตุ
                                 </button>
                                 {% endif %}
+
+                                {% if qt.is_deposit_paid %}
+                                <div class="mt-4 p-3 bg-success bg-opacity-10 border border-success border-opacity-25 rounded-3">
+                                    <h6 class="text-success fw-bold mb-2"><i class="fas fa-check-circle me-1"></i> รับมัดจำเรียบร้อยแล้ว</h6>
+                                    <div class="small text-dark">
+                                        <strong>วันที่รับ:</strong> {{ qt.deposit_date|date:"d/m/Y" }} <br>
+                                        <strong>ช่องทาง:</strong> {{ qt.deposit_method }}
+                                    </div>
+                                    {% if qt.deposit_slip %}
+                                    <div class="mt-2">
+                                        <a href="{{ qt.deposit_slip.url }}" target="_blank" class="btn btn-sm btn-success rounded-pill px-3"><i class="fas fa-image me-1"></i> ดูสลิปมัดจำ</a>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
                             </div>
 
                             <div class="col-lg-5 ps-lg-4 d-flex flex-column justify-content-center">
@@ -237,7 +257,7 @@
                                     <tr>
                                         <td class="text-end text-muted align-middle pt-1">ค่าขนส่ง:</td>
                                         <td class="pt-1 text-end">
-                                            <input type="number" step="0.01" name="shipping_cost"
+                                            <input type="number" step="0.01" name="shipping_cost" id="live_shipping"
                                                    value="{% if qt.shipping_cost > 0 %}{{ qt.shipping_cost }}{% endif %}"
                                                    class="form-control form-control-sm text-end d-inline-block custom-input-number"
                                                    placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' %}readonly{% endif %}>
@@ -246,7 +266,7 @@
                                     <tr>
                                         <td class="text-end text-muted align-middle">หักส่วนลด:</td>
                                         <td class="text-end">
-                                            <input type="number" step="0.01" name="discount"
+                                            <input type="number" step="0.01" name="discount" id="live_discount"
                                                    value="{% if qt.discount > 0 %}{{ qt.discount }}{% endif %}"
                                                    class="form-control form-control-sm text-end d-inline-block text-danger custom-input-number"
                                                    placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' %}readonly{% endif %}>
@@ -254,20 +274,40 @@
                                     </tr>
                                     <tr class="border-top">
                                         <td class="text-end text-muted small pt-1">ราคาสินค้าก่อนภาษี:</td>
-                                        <td class="text-end fw-bold small pt-1">{{ qt.subtotal|floatformat:2|intcomma }}</td>
+                                        <td class="text-end fw-bold small pt-1" id="live_subtotal">{{ qt.subtotal|floatformat:2|intcomma }}</td>
                                     </tr>
                                     <tr>
                                         <td class="text-end text-muted small">VAT 7%:</td>
-                                        <td class="text-end text-danger small">{{ qt.tax_amount|floatformat:2|intcomma }}</td>
+                                        <td class="text-end text-danger small" id="live_tax">{{ qt.tax_amount|floatformat:2|intcomma }}</td>
                                     </tr>
                                     <tr class="border-top border-dark">
                                         <td class="text-end align-middle pt-2">
-                                            <span class="fw-bold text-dark fs-6">จำนวนเงินรวมทั้งสิ้น:</span>
+                                            <span class="fw-bold text-dark fs-6">ยอดรวมสุทธิ:</span>
                                         </td>
                                         <td class="text-end pt-2">
-                                            <span class="fw-bold text-success fs-4">฿{{ qt.grand_total|floatformat:2|intcomma }}</span>
+                                            <span class="fw-bold text-dark fs-5" id="live_grand_total">฿{{ qt.grand_total|floatformat:2|intcomma }}</span>
                                         </td>
                                     </tr>
+
+                                    {% if qt.is_deposit_paid %}
+                                    <tr class="border-top border-success">
+                                        <td class="text-end align-middle pt-2">
+                                            <span class="fw-bold text-success fs-6">หักมัดจำรับแล้ว:</span>
+                                        </td>
+                                        <td class="text-end pt-2">
+                                            <span class="fw-bold text-success fs-5">-฿{{ qt.deposit_amount|floatformat:2|intcomma }}</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="border-top border-dark border-2">
+                                        <td class="text-end align-middle pt-2">
+                                            <span class="fw-bold text-danger fs-6">ยอดคงค้างชำระ:</span>
+                                        </td>
+                                        <td class="text-end pt-2">
+                                            <span class="fw-bold text-danger fs-4" id="live_balance_due">฿{{ balance_due|floatformat:2|intcomma }}</span>
+                                        </td>
+                                    </tr>
+                                    {% endif %}
+
                                 </table>
                             </div>
                         </div>
@@ -287,10 +327,61 @@
     </div>
 </div>
 
+<div class="modal fade" id="depositModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 rounded-4 shadow-lg">
+            <div class="modal-header bg-warning border-0">
+                <h5 class="modal-title fw-bold text-dark"><i class="fas fa-hand-holding-usd me-2"></i>บันทึกรับเงินมัดจำ</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{% url 'record_deposit' qt.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <div class="alert alert-info py-2 small mb-4">
+                        <i class="fas fa-info-circle me-1"></i> บันทึกมัดจำก้อนแรกเพื่อยืนยันออเดอร์ ยอดคงเหลือจะถูกเรียกเก็บเมื่อเปิดบิลขาย
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">ยอดมัดจำที่ได้รับ (บาท)</label>
+                        <input type="text" name="deposit_amount" class="form-control form-control-lg text-end fw-bold text-primary" id="depositInput" placeholder="0.00" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
+                        <input type="text" name="deposit_date" class="form-control datepicker" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">ช่องทางรับเงิน</label>
+                        <select name="deposit_method" class="form-select">
+                            <option value="TRANSFER">โอนเงินเข้าบัญชี</option>
+                            <option value="CASH">เงินสด</option>
+                            <option value="CHECK">เช็คธนาคาร</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-bold text-muted">อัปโหลดสลิป/รูปเช็ค</label>
+                        <input type="file" name="deposit_slip" class="form-control" accept="image/*">
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ยืนยันรับมัดจำ? ยอดนี้จะถูกนำไปหักในใบเสร็จรับเงิน')">บันทึกยอดมัดจำ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
 <script>
     $(document).ready(function() {
         var $select = $('#product_selector').select2({ theme: 'bootstrap4', placeholder: "-- พิมพ์ชื่อสินค้าเพื่อค้นหา --", allowClear: true, width: '100%' });
@@ -306,6 +397,46 @@
         });
         $select.on('select2:clear', function (e) { $('#input_name').val(''); $('#input_price').val(''); });
         $('#input_price').on('input', function() { this.value = this.value.replace(/[^0-9.,]/g, ''); });
+
+        // --- จัดการ Comma ในช่องกรอกมัดจำ ---
+        $('#depositInput').on('blur', function() {
+            let val = parseFloat(this.value.replace(/,/g, '')) || 0;
+            this.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        });
+        $('#depositInput').on('focus', function() {
+            let val = this.value.replace(/,/g, '');
+            if (val === '0.00' || val === '0') this.value = '';
+            else this.value = val;
+        });
+
+        // --- เปิดใช้งานปฏิทิน Flatpickr ---
+        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+
+        // --- ระบบคำนวณยอด Real-time ---
+        const baseItemTotal = {{ item_total|default:0 }};
+        const depositAmount = {{ qt.deposit_amount|default:0 }};
+        
+        function calculateLiveTotals() {
+            let shipping = parseFloat($('#live_shipping').val()) || 0;
+            let discount = parseFloat($('#live_discount').val()) || 0;
+            
+            let grandTotal = (baseItemTotal + shipping) - discount;
+            if (grandTotal < 0) grandTotal = 0; // ป้องกันยอดติดลบ
+            
+            let subtotal = grandTotal / 1.07;
+            let taxAmount = grandTotal - subtotal;
+            let balanceDue = grandTotal - depositAmount;
+            if (balanceDue < 0) balanceDue = 0;
+            
+            $('#live_subtotal').text(subtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            $('#live_tax').text(taxAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            $('#live_grand_total').text('฿' + grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            
+            if ($('#live_balance_due').length) {
+                $('#live_balance_due').text('฿' + balanceDue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+            }
+        }
+        $('#live_shipping, #live_discount').on('input', calculateLiveTotals);
     });
 </script>
 

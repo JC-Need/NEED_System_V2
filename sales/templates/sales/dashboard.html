@@ -8,12 +8,22 @@
             <h2 class="fw-bold text-dark mb-0"><i class="fas fa-chart-pie me-2 text-warning"></i>ภาพรวมฝ่ายขาย (Sales Overview)</h2>
             <p class="text-muted mb-0">ข้อมูล Realtime ประจำวันที่ {% now "j F Y" %} | <span class="badge bg-info text-dark">{{ scope_title }}</span></p>
         </div>
-        <div class="d-flex gap-2">
-            <a href="{% url 'sales_hub' %}" class="btn btn-primary btn-lg rounded-pill shadow-sm px-4">
-                <i class="fas fa-plus-circle me-2"></i>เปิดบิลขาย / POS
+
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <a href="{% url 'invoice_list' %}" class="btn btn-outline-primary rounded-pill shadow-sm px-3">
+                <i class="fas fa-list-ul me-1"></i> รายการใบขาย
             </a>
-            <a href="{% url 'quotation_create' %}" class="btn btn-outline-dark btn-lg rounded-pill shadow-sm px-4">
-                <i class="fas fa-file-invoice me-2"></i>เปิดใบเสนอราคา
+            <a href="{% url 'sales_hub' %}" class="btn btn-primary rounded-pill shadow-sm px-3 fw-bold">
+                <i class="fas fa-plus-circle me-1"></i> เปิดบิลขาย / POS
+            </a>
+
+            <div class="vr mx-1 bg-secondary opacity-25" style="width: 2px; height: 35px;"></div>
+
+            <a href="{% url 'quotation_list' %}" class="btn btn-outline-dark rounded-pill shadow-sm px-3">
+                <i class="fas fa-list-ul me-1"></i> รายการใบเสนอราคา
+            </a>
+            <a href="{% url 'quotation_create' %}" class="btn btn-dark rounded-pill shadow-sm px-3 fw-bold">
+                <i class="fas fa-file-invoice me-1"></i> สร้างใบเสนอราคา
             </a>
         </div>
     </div>
@@ -40,15 +50,15 @@
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <h6 class="text-muted text-uppercase fw-bold mb-1">จำนวนบิล</h6>
-                            <h3 class="fw-bold mb-0 text-dark">{{ total_orders|intcomma }} <small class="text-muted fs-6">ใบ</small></h3>
+                            <h6 class="text-muted text-uppercase fw-bold mb-1" style="font-size: 0.85rem;">ใบขายวันนี้</h6>
+                            <h3 class="fw-bold mb-0 text-dark">{{ total_orders|intcomma }} <small class="text-muted fs-6">บิล</small></h3>
                         </div>
                         <div class="bg-success bg-opacity-10 p-3 rounded-circle">
                             <i class="fas fa-receipt fa-2x text-success"></i>
                         </div>
                     </div>
-                    <a href="{% url 'invoice_list' %}" class="btn btn-sm btn-outline-success rounded-pill w-100 mt-2">
-                        ไปหน้ารายการชำระเงิน <i class="fas fa-arrow-right ms-1"></i>
+                    <a href="{% url 'invoice_list' %}" class="btn btn-sm btn-outline-success rounded-pill w-100 mt-2 fw-bold">
+                        ตรวจสอบบิลขาย <i class="fas fa-arrow-right ms-1"></i>
                     </a>
                 </div>
             </div>
@@ -63,13 +73,13 @@
                                 <i class="fas fa-user-clock fa-2x text-info"></i>
                             </div>
                             <div>
-                                <h6 class="text-muted text-uppercase fw-bold mb-1">รออนุมัติ</h6>
-                                <h3 class="fw-bold mb-0 text-dark">{{ pending_approval_quotes }}</h3>
+                                <h6 class="text-muted text-uppercase fw-bold mb-1" style="font-size: 0.85rem;">ใบเสนอราคา (รออนุมัติ)</h6>
+                                <h3 class="fw-bold mb-0 text-dark">{{ pending_approval_quotes }} <small class="text-muted fs-6">ใบ</small></h3>
                             </div>
                         </div>
                     </div>
-                    <a href="{% url 'quotation_list' %}?status=DRAFT" class="btn btn-sm btn-outline-info rounded-pill w-100 mt-2">
-                        ไปอนุมัติ <i class="fas fa-arrow-right ms-1"></i>
+                    <a href="{% url 'quotation_list' %}?status=DRAFT" class="btn btn-sm btn-outline-info rounded-pill w-100 mt-2 fw-bold">
+                        เช็คสถานะเอกสาร <i class="fas fa-arrow-right ms-1"></i>
                     </a>
                 </div>
             </div>
@@ -84,13 +94,13 @@
                                 <i class="fas fa-file-signature fa-2x text-warning"></i>
                             </div>
                             <div>
-                                <h6 class="text-muted text-uppercase fw-bold mb-1">รอปิดการขาย</h6>
-                                <h3 class="fw-bold mb-0 text-dark">{{ pending_closing_quotes }}</h3>
+                                <h6 class="text-muted text-uppercase fw-bold mb-1" style="font-size: 0.85rem;">ใบเสนอราคา (รอปิดการขาย)</h6>
+                                <h3 class="fw-bold mb-0 text-dark">{{ pending_closing_quotes }} <small class="text-muted fs-6">ใบ</small></h3>
                             </div>
                         </div>
                     </div>
-                    <a href="{% url 'quotation_list' %}?status=APPROVED" class="btn btn-sm btn-outline-warning rounded-pill w-100 mt-2">
-                        ติดตามงาน <i class="fas fa-arrow-right ms-1"></i>
+                    <a href="{% url 'quotation_list' %}?status=APPROVED" class="btn btn-sm btn-outline-warning rounded-pill w-100 mt-2 fw-bold text-dark">
+                        ติดตามลูกค้า / เปิดบิล <i class="fas fa-arrow-right ms-1"></i>
                     </a>
                 </div>
             </div>
@@ -161,7 +171,7 @@
             <div class="card border-0 shadow-sm rounded-4 h-100 bg-dark text-white" style="background: linear-gradient(to bottom, #323232, #000000);">
                 <div class="card-body text-center p-4">
                     <h6 class="text-uppercase text-warning fw-bold mb-4"><i class="fas fa-crown me-2"></i>Top Seller of the Month</h6>
-                    
+
                     {% if top_seller %}
                         <div class="position-relative d-inline-block mb-3">
                             {% if top_seller.employee__photo %}
