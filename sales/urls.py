@@ -2,19 +2,14 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
-    # 1. Dashboard
     path('', views.sales_dashboard, name='sales_dashboard'),
-
-    # 2. Sales Hub
     path('hub/', views.sales_hub, name='sales_hub'),
     path('convert-quote/<int:qt_id>/', views.convert_quote_to_invoice, name='convert_quote_to_invoice'),
 
-    # 3. POS
     path('pos/', views.pos_home, name='pos_home'),
     path('pos/checkout/', views.pos_checkout, name='pos_checkout'),
     path('pos/print/<str:order_code>/', views.pos_print_slip, name='pos_print_slip'),
 
-    # 4. Quotation
     path('quotation/', views.quotation_list, name='quotation_list'),
     path('quotation/create/', views.quotation_create, name='quotation_create'),
     path('quotation/edit/<int:qt_id>/', views.quotation_edit, name='quotation_edit'),
@@ -22,16 +17,22 @@ urlpatterns = [
     path('quotation/print/<int:qt_id>/', views.quotation_print, name='quotation_print'),
     path('quotation/approve/<int:qt_id>/', views.quotation_approve, name='quotation_approve'),
     path('quotation/cancel/<int:qt_id>/', views.quotation_cancel, name='quotation_cancel'), 
+    path('quotation/clone/<int:qt_id>/', views.quotation_clone, name='quotation_clone'),
 
-    # 5. Invoice & Payment
+    path('deposit/', views.deposit_list, name='deposit_list'),
+    path('deposit/record/<int:qt_id>/', views.record_deposit, name='record_deposit'),
+    path('deposit/verify/<int:qt_id>/', views.verify_deposit, name='verify_deposit'),
+    path('deposit/print/<int:qt_id>/', views.deposit_print, name='deposit_print'),
+
     path('invoice/', views.invoice_list, name='invoice_list'),
     path('invoice/print/<int:inv_id>/', views.invoice_print, name='invoice_print'),
+    
+    # 🌟 เพิ่ม Endpoint นี้ สำหรับบันทึกรับชำระเงินส่วนที่เหลือ 🌟
+    path('invoice/record-payment/<int:inv_id>/', views.record_invoice_payment, name='record_invoice_payment'),
+    
     path('confirm-payment/<str:doc_type>/<int:doc_id>/', views.confirm_payment, name='confirm_payment'),
 
-    # 6. Others / API
     path('api/customer-search/', views.api_search_customer, name='api_search_customer'),
     path('api/customer-create/', views.api_create_customer, name='api_create_customer'),
     path('export/excel/', views.export_sales_excel, name='export_sales_excel'),
-    path('quotation/clone/<int:qt_id>/', views.quotation_clone, name='quotation_clone'),
-    path('quotation/deposit/<int:qt_id>/', views.record_deposit, name='record_deposit'),
 ]

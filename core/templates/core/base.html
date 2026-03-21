@@ -12,10 +12,8 @@
 
     <style>
         body { font-family: 'Sarabun', sans-serif; background-color: #f8f9fa; }
-
         .navbar-custom {
-            background-color: #ffffff;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            background-color: #ffffff; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             padding-top: 15px; padding-bottom: 15px;
         }
         .navbar-brand {
@@ -29,14 +27,10 @@
         }
         .nav-link:hover { color: #d4af37 !important; transform: translateY(-2px); }
         .nav-link.active { color: #c5a059 !important; border-bottom: 2px solid #c5a059; }
-        
         .nav-user { color: #555; font-weight: 600; }
-        .btn-logout {
-            border: 1px solid #eee; color: #777; background: #f8f9fa;
-        }
+        .btn-logout { border: 1px solid #eee; color: #777; background: #f8f9fa; }
         .btn-logout:hover { background: #fee; color: #d9534f; border-color: #f5c6cb; }
 
-        /* สไตล์เพิ่มเติมสำหรับ Dropdown Menu */
         .dropdown-menu { border-radius: 12px; border: 1px solid #eee; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         .dropdown-item { font-weight: 500; padding: 10px 20px; color: #555; transition: 0.2s; }
         .dropdown-item:hover { background-color: #f8f9fa; color: #c5a059; }
@@ -64,6 +58,20 @@
                         <a class="nav-link" href="/"><i class="fas fa-home me-1"></i> หน้าหลัก</a>
                     </li>
                     
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="salesDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-store me-1"></i> ระบบขาย
+                        </a>
+                        <ul class="dropdown-menu border-0 shadow-lg">
+                            <li><a class="dropdown-item" href="{% url 'sales_dashboard' %}"><i class="fas fa-chart-pie me-2 text-warning"></i> ภาพรวมฝ่ายขาย</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'sales_hub' %}"><i class="fas fa-cash-register me-2 text-primary"></i> เปิดบิลขาย / POS</a></li>
+                            <li><a class="dropdown-item" href="{% url 'quotation_list' %}"><i class="fas fa-file-invoice me-2 text-secondary"></i> รายการใบเสนอราคา</a></li>
+                            <li><a class="dropdown-item" href="{% url 'deposit_list' %}"><i class="fas fa-hand-holding-usd me-2 text-info"></i> รายการใบรับเงินมัดจำ</a></li>
+                            <li><a class="dropdown-item" href="{% url 'invoice_list' %}"><i class="fas fa-receipt me-2 text-success"></i> รายการใบขาย (ชำระเต็ม)</a></li>
+                        </ul>
+                    </li>
+
                     {% if request.user.is_superuser or request.user.groups.all.0.name == "Inventory_Team" %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'inventory_dashboard' %}"><i class="fas fa-boxes me-1"></i> คลังสินค้า</a>
@@ -81,31 +89,16 @@
                             <i class="fas fa-users me-1"></i> ระบบบุคลากร
                         </a>
                         <ul class="dropdown-menu">
-                            <li>
-                                <a class="dropdown-item" href="{% url 'employee_dashboard' %}">
-                                    <i class="fas fa-id-card me-2 text-primary"></i> แดชบอร์ดพนักงาน (ฉัน)
-                                </a>
-                            </li>
-
+                            <li><a class="dropdown-item" href="{% url 'employee_dashboard' %}"><i class="fas fa-id-card me-2 text-primary"></i> แดชบอร์ดพนักงาน (ฉัน)</a></li>
                             {% if request.user.is_superuser or request.user.groups.all.0.name == "Manager_Team" or request.user.groups.all.0.name == "HR_Team" %}
                             <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <a class="dropdown-item" href="{% url 'manager_dashboard' %}">
-                                    <i class="fas fa-user-tie me-2 text-warning"></i> อนุมัติการลา (หัวหน้างาน)
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item" href="{% url 'manager_dashboard' %}"><i class="fas fa-user-tie me-2 text-warning"></i> อนุมัติการลา (หัวหน้างาน)</a></li>
                             {% endif %}
-
                             {% if request.user.is_superuser or request.user.groups.all.0.name == "HR_Team" %}
-                            <li>
-                                <a class="dropdown-item" href="{% url 'hr_executive_dashboard' %}">
-                                    <i class="fas fa-chart-line me-2 text-danger"></i> ข้อมูลองค์กร (HR)
-                                </a>
-                            </li>
+                            <li><a class="dropdown-item" href="{% url 'hr_executive_dashboard' %}"><i class="fas fa-chart-line me-2 text-danger"></i> ข้อมูลองค์กร (HR)</a></li>
                             {% endif %}
                         </ul>
                     </li>
-
                 </ul>
 
                 <div class="d-flex align-items-center">
@@ -132,7 +125,6 @@
                 {% endfor %}
             </div>
         {% endif %}
-
         {% block content %}{% endblock %}
     </div>
 
@@ -141,10 +133,7 @@
         document.addEventListener("DOMContentLoaded", function() {
             setTimeout(function() {
                 var alerts = document.querySelectorAll('.alert');
-                alerts.forEach(function(alert) {
-                    var bsAlert = new bootstrap.Alert(alert);
-                    bsAlert.close();
-                });
+                alerts.forEach(function(alert) { var bsAlert = new bootstrap.Alert(alert); bsAlert.close(); });
             }, 3000);
         });
     </script>

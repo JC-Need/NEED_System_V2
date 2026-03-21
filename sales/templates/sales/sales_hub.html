@@ -2,11 +2,11 @@
 {% load humanize %}
 
 {% block content %}
-<div class="container py-5">
+<div class="container-fluid py-4 px-4">
     
-    <div class="mb-4">
-        <a href="{% url 'sales_dashboard' %}" class="text-decoration-none text-muted hover-dark">
-            <i class="fas fa-arrow-left me-2"></i>กลับหน้า Dashboard
+    <div class="d-flex justify-content-end mb-4">
+        <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 text-uppercase d-flex align-items-center" style="font-size: 0.85rem; letter-spacing: 0.5px;">
+            <i class="fas fa-arrow-left me-2"></i> กลับหน้า Dashboard
         </a>
     </div>
 

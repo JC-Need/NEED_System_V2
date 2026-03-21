@@ -10,7 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q, Sum, Count, Max
 from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
-from django.utils import timezone 
+from django.utils import timezone
 
 from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice
 from inventory.models import Product, Category
@@ -22,10 +22,10 @@ def get_next_document_number():
     now = timezone.now()
     thai_year = (now.year + 543) % 100
     prefix = f"DLN-{thai_year:02d}{now.strftime('%m')}"
-    
+
     last_inv = Invoice.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
     last_pos = POSOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
-    
+
     max_seq = 0
     if last_inv:
         try: max_seq = max(max_seq, int(last_inv.split('-')[-1]))
@@ -33,7 +33,7 @@ def get_next_document_number():
     if last_pos:
         try: max_seq = max(max_seq, int(last_pos.split('-')[-1]))
         except: pass
-        
+
     new_seq = max_seq + 1
     return f"{prefix}-{new_seq:03d}"
 
@@ -45,10 +45,10 @@ def get_target_employees(user):
         dept_name = current_emp.department.name if current_emp.department else ""
         if 'บัญชี' in dept_name or 'Accounting' in dept_name:
             return Employee.objects.all(), "Accounting View"
-            
+
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
         job_title = current_emp.position.title.lower() if current_emp.position else ""
-        
+
         if rank in ['manager', 'director'] or 'manager' in job_title:
             return Employee.objects.all(), "Manager View"
         elif rank == 'supervisor':
@@ -64,12 +64,12 @@ def get_target_employees(user):
 def get_sales_queryset(model_class, user, target_employees):
     if user.is_superuser:
         return model_class.objects.all()
-        
+
     if hasattr(user, 'employee') and user.employee:
         dept_name = user.employee.department.name if user.employee.department else ""
         rank = user.employee.business_rank.lower() if user.employee.business_rank else ""
         job_title = user.employee.position.title.lower() if user.employee.position else ""
-        
+
         if 'บัญชี' in dept_name or 'Accounting' in dept_name:
             return model_class.objects.all()
         if rank in ['manager', 'director'] or 'manager' in job_title:
@@ -78,18 +78,18 @@ def get_sales_queryset(model_class, user, target_employees):
     return model_class.objects.filter(employee__in=target_employees)
 
 def is_sales_authorized(user):
-    if user.is_superuser: 
+    if user.is_superuser:
         return True
-    
+
     user_groups = list(user.groups.values_list('name', flat=True))
     if 'Sales' in user_groups:
         return True
-        
+
     if hasattr(user, 'employee') and user.employee:
         dept = user.employee.department.name if user.employee.department else ''
         if 'ขาย' in dept or 'Sales' in dept:
             return True
-            
+
     return False
 
 @login_required
@@ -132,7 +132,7 @@ def sales_dashboard(request):
         'pending_approval_quotes': pending_approval_quotes,
         'pending_closing_quotes': pending_closing_quotes,
         'top_seller': top_seller,
-        'recent_sales': combined_sales, 
+        'recent_sales': combined_sales,
         'scope_title': scope_title,
     }
     return render(request, 'sales/dashboard.html', context)
@@ -159,49 +159,47 @@ def sales_hub(request):
         'today_pos': today_pos
     })
 
-# 🌟 ฟังก์ชันบันทึกรับมัดจำ 🌟
 @login_required
 def record_deposit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     if request.method == 'POST':
         amount_str = request.POST.get('deposit_amount', '0').replace(',', '')
-        try: 
+        try:
             amount = Decimal(amount_str)
-        except: 
+        except:
             amount = Decimal(0)
-            
+
         method = request.POST.get('deposit_method', 'TRANSFER')
         date_str = request.POST.get('deposit_date')
-        
+
         if amount > 0:
             qt.deposit_amount = amount
             qt.deposit_method = method
-            if date_str: 
+            if date_str:
                 qt.deposit_date = parse_date(date_str)
             else:
                 qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
-            
+
             if 'deposit_slip' in request.FILES:
                 qt.deposit_slip = request.FILES['deposit_slip']
-                
+
             qt.save()
             messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
         else:
             messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
-            
+
     return redirect('quotation_edit', qt_id=qt.id)
 
 @login_required
 def convert_quote_to_invoice(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     new_code = get_next_document_number()
-    
-    # 🌟 คำนวณยอดคงค้างตอนเปิดบิล 🌟
+
     balance = qt.grand_total - qt.deposit_amount
-    # ถ้าลูกค้ายอมจ่ายมัดจำ 100% เลย สถานะจะกลายเป็น PAID ทันที
-    status = 'PAID' if balance <= 0 else 'PENDING'
-    
+    # 🌟 แก้ไขตรงนี้: ให้สถานะเริ่มต้นเป็น UNPAID (ยังไม่ชำระ) ถ้ายังมีค้างจ่าย 🌟
+    status = 'PAID' if balance <= 0 else 'UNPAID'
+
     invoice = Invoice.objects.create(
         code=new_code,
         quotation_ref=qt,
@@ -209,8 +207,8 @@ def convert_quote_to_invoice(request, qt_id):
         customer=qt.customer,
         employee=request.user.employee if hasattr(request.user, 'employee') else None,
         grand_total=qt.grand_total,
-        deposit_amount=qt.deposit_amount, # บันทึกยอดมัดจำ
-        balance_amount=balance,           # บันทึกยอดคงค้าง
+        deposit_amount=qt.deposit_amount,
+        balance_amount=balance,
         status=status
     )
     qt.status = 'CONVERTED'
@@ -236,7 +234,7 @@ def pos_checkout(request):
             payment_method = request.POST.get('payment_method', 'CASH')
             total_amount = Decimal(request.POST.get('total_amount', 0))
             received_amount = Decimal(request.POST.get('received_amount', 0))
-            
+
             cust_id = request.POST.get('customer_id')
             cust_name = request.POST.get('customer_name', '')
             cust_addr = request.POST.get('customer_address', '')
@@ -261,8 +259,8 @@ def pos_checkout(request):
                 received_amount=received_amount,
                 change_amount=received_amount - total_amount,
                 payment_method=payment_method,
-                status='PENDING', 
-                customer=customer_obj, 
+                status='PENDING',
+                customer=customer_obj,
                 customer_name=cust_name,
                 customer_address=cust_addr,
                 customer_phone=cust_phone,
@@ -277,7 +275,7 @@ def pos_checkout(request):
                 order.check_bank = request.POST.get('check_bank', '')
                 if 'check_slip' in request.FILES:
                     order.check_slip = request.FILES['check_slip']
-            
+
             order.save()
 
             for item in cart:
@@ -302,29 +300,37 @@ def pos_checkout(request):
 def pos_print_slip(request, order_code):
     order = get_object_or_404(POSOrder, code=order_code)
     company = CompanyInfo.objects.first()
-    
+
     items = list(order.items.all())
+    item_total = Decimal('0.00')
     for item in items:
-        item.item_name = item.product_name  
-        item.unit_price = item.price        
-        item.amount = item.total_price      
-        
+        item.item_name = item.product_name
+        item.unit_price = item.price
+        item.amount = item.total_price
+        item_total += Decimal(str(item.amount))
+
     payment_note = "ชำระโดย: เงินสด (Cash)"
     if order.payment_method == 'TRANSFER':
         payment_note = "ชำระโดย: โอนเงิน (Bank Transfer)"
     elif order.payment_method == 'CHECK':
         payment_note = f"ชำระโดย: เช็คธนาคาร {order.check_bank} #{order.check_number}"
 
+    # 🌟 สูตรคำนวณถอด VAT จากยอดรวม 🌟
+    grand_total = order.total_amount
+    subtotal = grand_total / Decimal('1.07')
+    tax_amount = grand_total - subtotal
+
     context = {
         'inv': order,
         'company': company,
         'items': items,
-        'subtotal': order.total_amount,
-        'tax_amount': 0,
-        'discount': 0,
-        'shipping_cost': 0,
+        'item_total': item_total,
+        'subtotal': subtotal,
+        'tax_amount': tax_amount,
+        'discount': Decimal('0.00'),
+        'shipping_cost': Decimal('0.00'),
         'note': payment_note,
-        'is_pos': True 
+        'is_pos': True
     }
     return render(request, 'sales/invoice_print.html', context)
 
@@ -343,7 +349,7 @@ def quotation_list(request):
 
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
-    
+
     is_manager = False
     current_emp = getattr(request.user, 'employee', None)
     if request.user.is_superuser: is_manager = True
@@ -351,10 +357,10 @@ def quotation_list(request):
         rank = current_emp.business_rank.lower()
         if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower():
             is_manager = True
-            
+
     return render(request, 'sales/quotation_list.html', {
-        'page_obj': page_obj, 
-        'search_query': search_query, 
+        'page_obj': page_obj,
+        'search_query': search_query,
         'is_manager': is_manager,
         'status_filter': status_filter
     })
@@ -365,7 +371,7 @@ def quotation_create(request):
         form = QuotationForm(request.POST)
         if form.is_valid():
             qt = form.save(commit=False)
-            qt.created_by = request.user 
+            qt.created_by = request.user
             if hasattr(request.user, 'employee'): qt.employee = request.user.employee
             cust_id = request.POST.get('customer_id')
             if cust_id:
@@ -389,8 +395,8 @@ def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     products = Product.objects.filter(is_active=True, product_type='FG')
     item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
-    balance_due = qt.grand_total - qt.deposit_amount # ส่งยอดคงค้างไปโชว์หน้าเว็บ
-    
+    balance_due = qt.grand_total - qt.deposit_amount
+
     if request.method == 'POST':
         if qt.status != 'DRAFT':
             messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว (กรุณาใช้ฟังก์ชันคัดลอกสร้างใบใหม่แทน)")
@@ -404,20 +410,20 @@ def quotation_edit(request, qt_id):
                 QuotationItem.objects.create(quotation=qt, item_name=item_name, quantity=qty, unit_price=price)
                 calculate_totals(qt)
             return redirect('quotation_edit', qt_id=qt.id)
-            
+
         elif 'update_info' in request.POST or 'finish_quote' in request.POST:
             qt.note = request.POST.get('note', '')
             qt.discount = Decimal(request.POST.get('discount', '0') or 0)
             qt.shipping_cost = Decimal(request.POST.get('shipping_cost', '0') or 0)
             calculate_totals(qt)
-            
+
             if 'finish_quote' in request.POST:
                 messages.success(request, f"✅ สร้างใบเสนอราคา {qt.code} เสร็จสมบูรณ์แล้ว! (รอผู้จัดการอนุมัติ)")
                 return redirect('quotation_list')
             else:
                 messages.success(request, "อัปเดตยอดเงินและหมายเหตุเรียบร้อย")
                 return redirect('quotation_edit', qt_id=qt.id)
-                
+
     return render(request, 'sales/quotation_edit.html', {'qt': qt, 'products': products, 'item_total': item_total, 'balance_due': balance_due})
 
 def calculate_totals(qt):
@@ -435,11 +441,11 @@ def calculate_totals(qt):
 def delete_item(request, item_id):
     item = get_object_or_404(QuotationItem, pk=item_id)
     qt = item.quotation
-    
+
     if qt.status != 'DRAFT':
         messages.error(request, "❌ ไม่สามารถลบรายการได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว")
         return redirect('quotation_edit', qt_id=qt.id)
-        
+
     item.delete()
     calculate_totals(qt)
     return redirect('quotation_edit', qt_id=qt.id)
@@ -501,11 +507,11 @@ def quotation_approve(request, qt_id):
 @login_required
 def quotation_cancel(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
-    
+
     current_emp = getattr(request.user, 'employee', None)
     is_manager = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists()
     is_owner = (qt.employee == current_emp) if current_emp else False
-    
+
     if is_manager or is_owner:
         if qt.status in ['DRAFT', 'APPROVED']:
             qt.status = 'CANCELLED'
@@ -515,7 +521,7 @@ def quotation_cancel(request, qt_id):
             messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากเอกสารถูกนำไปเปิดบิลแล้ว")
     else:
         messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกใบเสนอราคานี้")
-        
+
     return redirect('quotation_list')
 
 @login_required
@@ -549,11 +555,11 @@ def api_search_customer(request):
         addr_parts = [c.address, f"ต.{c.sub_district}" if c.sub_district else "", f"อ.{c.district}" if c.district else "", f"จ.{c.province}" if c.province else "", c.zip_code]
         full_address = " ".join(filter(None, addr_parts))
         results.append({
-            'id': c.id, 
-            'name': c.name, 
-            'code': c.code, 
-            'address': full_address, 
-            'tax_id': c.tax_id, 
+            'id': c.id,
+            'name': c.name,
+            'code': c.code,
+            'address': full_address,
+            'tax_id': c.tax_id,
             'phone': c.phone
         })
     return JsonResponse({'results': results})
@@ -568,7 +574,7 @@ def api_create_customer(request):
             phone = request.POST.get('phone')
             tax_id = request.POST.get('tax_id')
             address = request.POST.get('address')
-            
+
             if not code:
                 count = Customer.objects.count() + 1
                 code = f"C{count:04d}"
@@ -620,7 +626,7 @@ def invoice_list(request):
     if start_date and start_date != 'None':
         qs_invoice = qs_invoice.filter(date__gte=start_date)
         qs_pos = qs_pos.filter(created_at__date__gte=start_date)
-    
+
     if end_date and end_date != 'None':
         qs_invoice = qs_invoice.filter(date__lte=end_date)
         qs_pos = qs_pos.filter(created_at__date__lte=end_date)
@@ -630,9 +636,9 @@ def invoice_list(request):
     page_obj = paginator.get_page(request.GET.get('page'))
 
     return render(request, 'sales/invoice_list.html', {
-        'page_obj': page_obj, 
-        'search_query': search_query, 
-        'start_date': start_date, 
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'start_date': start_date,
         'end_date': end_date,
         'status_filter': status_filter
     })
@@ -643,10 +649,10 @@ def confirm_payment(request, doc_type, doc_id):
         obj = get_object_or_404(POSOrder, id=doc_id)
     else:
         obj = get_object_or_404(Invoice, id=doc_id)
-        
+
     obj.status = 'PAID'
     obj.save()
-    
+
     messages.success(request, f"✅ ยืนยันรับชำระเงินเอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
     return redirect('invoice_list')
 
@@ -654,43 +660,45 @@ def confirm_payment(request, doc_type, doc_id):
 def invoice_print(request, inv_id):
     inv = get_object_or_404(Invoice, pk=inv_id)
     company = CompanyInfo.objects.first()
-    
+
     items = []
-    subtotal = 0
-    tax_amount = 0
-    discount = 0
-    shipping_cost = 0
+    item_total = Decimal('0.00')
+    subtotal = Decimal('0.00')
+    tax_amount = Decimal('0.00')
+    discount = Decimal('0.00')
+    shipping_cost = Decimal('0.00')
     note = ""
 
     if inv.quotation_ref:
         qt = inv.quotation_ref
-        items = list(qt.items.all()) 
+        items = list(qt.items.all())
         for item in items:
-            item.amount = item.quantity * item.unit_price 
+            item.amount = item.quantity * item.unit_price
+            item_total += Decimal(str(item.amount))
         subtotal = qt.subtotal
         tax_amount = qt.tax_amount
         discount = qt.discount
         shipping_cost = qt.shipping_cost
         note = qt.note
-        
+
     if not getattr(inv, 'customer_name', None) and inv.quotation_ref:
             inv.customer_name = qt.customer_name
             inv.customer_address = qt.customer_address
             inv.customer_tax_id = qt.customer_tax_id
             inv.customer_phone = qt.customer_phone
-    
+
     if not hasattr(inv, 'total_amount'):
         inv.total_amount = inv.grand_total
-        
-    # เผื่อบิลเก่าที่ยังไม่มีค่า deposit_amount จะได้ไม่ Error
+
     if not hasattr(inv, 'deposit_amount'):
-        inv.deposit_amount = 0
+        inv.deposit_amount = Decimal('0.00')
         inv.balance_amount = inv.grand_total
 
     context = {
         'inv': inv,
         'company': company,
         'items': items,
+        'item_total': item_total,
         'subtotal': subtotal,
         'tax_amount': tax_amount,
         'discount': discount,
@@ -698,3 +706,84 @@ def invoice_print(request, inv_id):
         'note': note,
     }
     return render(request, 'sales/invoice_print.html', context)
+
+# ==========================================
+# 🌟 ฟังก์ชันสำหรับระบบใบรับเงินมัดจำ (เพิ่มใหม่) 🌟
+# ==========================================
+@login_required
+def deposit_list(request):
+    target_employees, _ = get_target_employees(request.user)
+    # ดึงเฉพาะใบเสนอราคาที่มีการรับมัดจำแล้ว
+    qs = get_sales_queryset(Quotation, request.user, target_employees).filter(is_deposit_paid=True)
+
+    search_query = request.GET.get('q', '')
+    if search_query:
+        qs = qs.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
+
+    status_filter = request.GET.get('status')
+    if status_filter == 'VERIFIED':
+        qs = qs.filter(is_deposit_verified=True)
+    elif status_filter == 'PENDING':
+        qs = qs.filter(is_deposit_verified=False)
+
+    qs = qs.order_by('-deposit_date', '-created_at')
+    paginator = Paginator(qs, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'sales/deposit_list.html', {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter
+    })
+
+@login_required
+def verify_deposit(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    qt.is_deposit_verified = True
+    qt.save()
+    messages.success(request, f"✅ บัญชียืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว!")
+    return redirect('deposit_list')
+
+@login_required
+def deposit_print(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    company = CompanyInfo.objects.first()
+    item_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    balance_due = qt.grand_total - qt.deposit_amount
+    return render(request, 'sales/deposit_print.html', {
+        'qt': qt,
+        'company': company,
+        'item_total': item_total,
+        'balance_due': balance_due
+    })
+
+# ==========================================
+# 🌟 ฟังก์ชันสำหรับระบบบันทึกรับชำระเงิน Invoice (เพิ่มใหม่) 🌟
+# ==========================================
+@login_required
+def record_invoice_payment(request, inv_id):
+    inv = get_object_or_404(Invoice, pk=inv_id)
+    if request.method == 'POST':
+        method = request.POST.get('payment_method', 'TRANSFER')
+        date_str = request.POST.get('payment_date')
+
+        inv.payment_method = method
+        if date_str:
+            inv.payment_date = parse_date(date_str)
+        else:
+            inv.payment_date = timezone.now().date()
+
+        if method == 'TRANSFER' and 'transfer_slip' in request.FILES:
+            inv.transfer_slip = request.FILES['transfer_slip']
+        elif method == 'CHECK':
+            inv.check_number = request.POST.get('check_number', '')
+            inv.check_bank = request.POST.get('check_bank', '')
+            if 'check_slip' in request.FILES:
+                inv.check_slip = request.FILES['check_slip']
+
+        # เปลี่ยนสถานะเป็นรอให้บัญชีตรวจสอบ
+        inv.status = 'PENDING'
+        inv.save()
+        messages.success(request, f"💰 บันทึกรับชำระเงินสำหรับเอกสาร {inv.code} เรียบร้อยแล้ว (รอการตรวจสอบยอดจากฝ่ายบัญชี)")
+
+    return redirect('invoice_list')
