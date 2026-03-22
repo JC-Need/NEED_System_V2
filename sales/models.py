@@ -138,7 +138,6 @@ class Invoice(models.Model):
     deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="หักมัดจำ")
     balance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดคงค้างชำระ")
     
-    # 🌟 เพิ่มฟิลด์เก็บข้อมูลการชำระเงินส่วนที่เหลือ 🌟
     payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, blank=True, null=True, verbose_name="วิธีชำระเงิน")
     payment_date = models.DateField(null=True, blank=True, verbose_name="วันที่ชำระเงิน")
     transfer_slip = models.ImageField(upload_to='invoice_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
@@ -169,3 +168,29 @@ class Invoice(models.Model):
                     img.thumbnail(output_size)
                     img.save(self.check_slip.path, quality=85, optimize=True)
             except Exception: pass
+
+# ==========================================
+# 🌟 [เพิ่มใหม่] ส่วนของแคตตาล็อก Upsale 🌟
+# ==========================================
+class UpsaleCatalog(models.Model):
+    name = models.CharField(max_length=200, verbose_name="ชื่อรายการปรับเปลี่ยน/เพิ่มเติม")
+    default_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคามาตรฐาน")
+    unit = models.CharField(max_length=50, blank=True, null=True, default="รายการ", verbose_name="หน่วยนับ")
+    is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
+
+    def __str__(self):
+        return self.name
+
+class QuotationUpsale(models.Model):
+    quotation = models.ForeignKey(Quotation, related_name='upsales', on_delete=models.CASCADE)
+    description = models.CharField(max_length=255, verbose_name="รายการเพิ่มเติม")
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
+    def save(self, *args, **kwargs):
+        self.total_price = self.quantity * self.unit_price
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.description} ({self.quotation.code})"

@@ -12,13 +12,12 @@ from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 
-from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice
+from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCatalog, QuotationUpsale
 from inventory.models import Product, Category
 from master_data.models import Customer, CompanyInfo
 from hr.models import Employee
 from .forms import QuotationForm
 
-# 🌟 Import โมเดลฝ่ายผลิต เพื่อให้เซลล์สั่งผลิตข้ามแผนกได้ 🌟
 from manufacturing.models import ProductionOrder
 
 def get_next_document_number():
@@ -258,7 +257,6 @@ def sales_hub(request):
         'today_pos': today_pos
     })
 
-# 🌟 อัปเดตฟังก์ชันบันทึกมัดจำ ให้พากลับไปหน้าเดิมที่กดมา 🌟
 @login_required
 def record_deposit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
@@ -271,7 +269,7 @@ def record_deposit(request, qt_id):
 
         method = request.POST.get('deposit_method', 'TRANSFER')
         date_str = request.POST.get('deposit_date')
-        next_url = request.POST.get('next') # รับค่า URL หน้าปัจจุบัน
+        next_url = request.POST.get('next') 
 
         if amount > 0:
             qt.deposit_amount = amount
@@ -290,11 +288,11 @@ def record_deposit(request, qt_id):
         else:
             messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
 
-        # ถ้าระบุหน้าเดิมมา ให้เด้งกลับไปที่เดิม (List View)
         if next_url:
             return redirect(next_url)
 
     return redirect('quotation_edit', qt_id=qt.id)
+
 @login_required
 def create_job_order(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
@@ -315,7 +313,6 @@ def create_job_order(request, qt_id):
         note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}"
     )
 
-    # 🌟 [เพิ่มใหม่] ตรวจสอบว่าสินค้ามีแบบแปลนมาตรฐานไหม ถ้ามีให้ก๊อปปี้ลง Job Order อัตโนมัติ 🌟
     if first_item.product and first_item.product.standard_blueprint:
         job.blueprint_file = first_item.product.standard_blueprint
         job.save()
@@ -469,7 +466,6 @@ def quotation_list(request):
     target_employees, _ = get_target_employees(request.user)
     queryset = get_sales_queryset(Quotation, request.user, target_employees).order_by('-created_at')
 
-    # 🌟 1. รับค่าตัวกรองสถานะใบเสนอราคา 🌟
     status_filter = request.GET.get('status')
     if status_filter:
         if status_filter == 'PENDING_PRODUCTION':
@@ -477,17 +473,14 @@ def quotation_list(request):
         else:
             queryset = queryset.filter(status=status_filter)
 
-    # 🌟 2. รับค่าตัวกรองสถานะการผลิต (เพิ่มใหม่) 🌟
     prod_status_filter = request.GET.get('prod_status')
     if prod_status_filter:
         queryset = queryset.filter(production_orders__status=prod_status_filter)
 
-    # 🌟 3. รับค่าตัวกรองการค้นหาข้อความ 🌟
     search_query = request.GET.get('q', '')
     if search_query:
         queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
 
-    # 🌟 4. รับค่าตัวกรองวันที่ (เพิ่มการทำงานให้สมบูรณ์) 🌟
     date_start = request.GET.get('start_date', '')
     date_end = request.GET.get('end_date', '')
     if date_start:
@@ -495,11 +488,9 @@ def quotation_list(request):
     if date_end:
         queryset = queryset.filter(date__lte=date_end)
 
-    # แบ่งหน้าเพจ
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
 
-    # ตรวจสอบสิทธิ์ Manager
     is_manager = False
     current_emp = getattr(request.user, 'employee', None)
     if request.user.is_superuser: is_manager = True
@@ -513,7 +504,7 @@ def quotation_list(request):
         'search_query': search_query,
         'is_manager': is_manager,
         'status_filter': status_filter,
-        'prod_status_filter': prod_status_filter, # ส่งค่าสถานะผลิตไปที่ HTML
+        'prod_status_filter': prod_status_filter, 
         'date_start': date_start,
         'date_end': date_end
     })
@@ -543,11 +534,22 @@ def quotation_create(request):
         form = QuotationForm(initial={'date': datetime.date.today(), 'valid_until': datetime.date.today() + datetime.timedelta(days=15)})
     return render(request, 'sales/quotation_form.html', {'form': form})
 
+# ==========================================
+# 🌟 [แก้ใหม่] ผูกระบบ Upsale เข้ากับ Edit Quotation เดิม 🌟
+# ==========================================
 @login_required
 def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     products = Product.objects.filter(is_active=True, product_type='FG')
-    item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
+    
+    # ดึงแคตตาล็อกของ Upsale ส่งไปให้หน้าเว็บ
+    upsale_catalogs = UpsaleCatalog.objects.filter(is_active=True).order_by('name')
+
+    # คำนวณยอดเดิม + ยอดของสั่งเพิ่ม
+    main_item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
+    upsale_total = sum(u.total_price for u in qt.upsales.all())
+    item_total = main_item_total + upsale_total
+
     balance_due = qt.grand_total - qt.deposit_amount
 
     if request.method == 'POST':
@@ -555,6 +557,7 @@ def quotation_edit(request, qt_id):
             messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว (กรุณาใช้ฟังก์ชันคัดลอกสร้างใบใหม่แทน)")
             return redirect('quotation_edit', qt_id=qt.id)
 
+        # 🌟 1. ส่วนเพิ่มสินค้าหลัก (ของเดิม) 🌟
         if 'add_item' in request.POST:
             item_name = request.POST.get('item_name')
             qty = int(request.POST.get('quantity', 1))
@@ -563,22 +566,38 @@ def quotation_edit(request, qt_id):
             product_id = request.POST.get('product_id')
             product_obj = None
             if product_id:
-                try:
-                    product_obj = Product.objects.get(id=product_id)
-                except Product.DoesNotExist:
-                    pass
+                try: product_obj = Product.objects.get(id=product_id)
+                except Product.DoesNotExist: pass
 
             if item_name:
                 QuotationItem.objects.create(
-                    quotation=qt,
-                    product=product_obj,
-                    item_name=item_name,
-                    quantity=qty,
-                    unit_price=price
+                    quotation=qt, product=product_obj, item_name=item_name, quantity=qty, unit_price=price
                 )
                 calculate_totals(qt)
             return redirect('quotation_edit', qt_id=qt.id)
 
+        # 🌟 2. ส่วนเพิ่มรายการปรับเปลี่ยน (Upsale - เพิ่มใหม่) 🌟
+        elif 'add_upsale' in request.POST:
+            desc = request.POST.get('upsale_desc')
+            qty = Decimal(request.POST.get('upsale_qty', '1'))
+            price = Decimal(request.POST.get('upsale_price', '0').replace(',', ''))
+            if desc:
+                QuotationUpsale.objects.create(
+                    quotation=qt, description=desc, quantity=qty, unit_price=price
+                )
+                calculate_totals(qt)
+            return redirect('quotation_edit', qt_id=qt.id)
+
+        # 🌟 3. ส่วนลบรายการปรับเปลี่ยน (Upsale - เพิ่มใหม่) 🌟
+        elif 'delete_upsale' in request.POST:
+            upsale_id = request.POST.get('upsale_id')
+            try:
+                QuotationUpsale.objects.filter(id=upsale_id).delete()
+                calculate_totals(qt)
+            except: pass
+            return redirect('quotation_edit', qt_id=qt.id)
+
+        # 🌟 4. ส่วนอัปเดตหมายเหตุและเงินรวม (ของเดิม) 🌟
         elif 'update_info' in request.POST or 'finish_quote' in request.POST:
             qt.note = request.POST.get('note', '')
             qt.discount = Decimal(request.POST.get('discount', '0') or 0)
@@ -592,14 +611,26 @@ def quotation_edit(request, qt_id):
                 messages.success(request, "อัปเดตยอดเงินและหมายเหตุเรียบร้อย")
                 return redirect('quotation_edit', qt_id=qt.id)
 
-    return render(request, 'sales/quotation_edit.html', {'qt': qt, 'products': products, 'item_total': item_total, 'balance_due': balance_due})
+    return render(request, 'sales/quotation_edit.html', {
+        'qt': qt, 
+        'products': products, 
+        'upsale_catalogs': upsale_catalogs, # ส่งไปทำ Datalist
+        'item_total': item_total, 
+        'balance_due': balance_due
+    })
 
+# 🌟 อัปเดตการคำนวณเงิน ให้รวมยอดของ Upsale ด้วย 🌟
 def calculate_totals(qt):
     item_sum = sum(item.quantity * item.unit_price for item in qt.items.all())
+    upsale_sum = sum(u.quantity * u.unit_price for u in qt.upsales.all())
+    total_goods = item_sum + upsale_sum
+
     shipping = qt.shipping_cost if qt.shipping_cost else Decimal(0)
     discount = qt.discount if qt.discount else Decimal(0)
-    grand_total = (item_sum + shipping) - discount
+    
+    grand_total = (total_goods + shipping) - discount
     if grand_total < 0: grand_total = 0
+    
     qt.subtotal = grand_total / Decimal('1.07')
     qt.tax_amount = grand_total - qt.subtotal
     qt.grand_total = grand_total
@@ -649,13 +680,15 @@ def quotation_clone(request, qt_id):
 
     for item in old_qt.items.all():
         QuotationItem.objects.create(
-            quotation=new_qt,
-            product=item.product,
-            item_name=item.item_name,
-            description=item.description,
-            quantity=item.quantity,
-            unit_price=item.unit_price,
-            amount=item.amount
+            quotation=new_qt, product=item.product, item_name=item.item_name,
+            description=item.description, quantity=item.quantity, unit_price=item.unit_price, amount=item.amount
+        )
+        
+    # 🌟 คัดลอกรายการ Upsale ไปด้วย 🌟
+    for upsale in old_qt.upsales.all():
+        QuotationUpsale.objects.create(
+            quotation=new_qt, description=upsale.description, 
+            quantity=upsale.quantity, unit_price=upsale.unit_price, total_price=upsale.total_price
         )
 
     messages.success(request, f"📋 คัดลอกเอกสารสำเร็จ! (คุณกำลังอยู่ในเอกสารใหม่ อ้างอิงข้อมูลจากใบเดิม {old_qt.code})")
@@ -675,7 +708,6 @@ def quotation_approve(request, qt_id):
 @login_required
 def quotation_cancel(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
-
     current_emp = getattr(request.user, 'employee', None)
     is_manager = request.user.is_superuser or request.user.groups.filter(name__icontains='Manager').exists()
     is_owner = (qt.employee == current_emp) if current_emp else False
@@ -696,7 +728,12 @@ def quotation_cancel(request, qt_id):
 def quotation_print(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     company = CompanyInfo.objects.first()
-    item_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    
+    # 🌟 ส่งยอดรวมทั้งหมดไปหน้า Print 🌟
+    main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
+    item_total = main_total + upsale_total
+    
     return render(request, 'sales/quotation_print.html', {'qt': qt, 'company': company, 'item_total': item_total})
 
 @login_required
@@ -749,20 +786,13 @@ def api_create_customer(request):
                 code = f"C{count:04d}"
 
             customer = Customer.objects.create(
-                name=name,
-                code=code,
-                phone=phone,
-                tax_id=tax_id,
-                address=address
+                name=name, code=code, phone=phone, tax_id=tax_id, address=address
             )
             return JsonResponse({
                 'success': True,
                 'customer': {
-                    'id': customer.id,
-                    'name': customer.name,
-                    'address': customer.address,
-                    'tax_id': customer.tax_id,
-                    'phone': customer.phone
+                    'id': customer.id, 'name': customer.name, 'address': customer.address,
+                    'tax_id': customer.tax_id, 'phone': customer.phone
                 }
             })
         except Exception as e:
@@ -805,11 +835,8 @@ def invoice_list(request):
     page_obj = paginator.get_page(request.GET.get('page'))
 
     return render(request, 'sales/invoice_list.html', {
-        'page_obj': page_obj,
-        'search_query': search_query,
-        'start_date': start_date,
-        'end_date': end_date,
-        'status_filter': status_filter
+        'page_obj': page_obj, 'search_query': search_query,
+        'start_date': start_date, 'end_date': end_date, 'status_filter': status_filter
     })
 
 @login_required
@@ -821,7 +848,6 @@ def confirm_payment(request, doc_type, doc_id):
 
     obj.status = 'PAID'
     obj.save()
-
     messages.success(request, f"✅ ยืนยันรับชำระเงินเอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
     return redirect('invoice_list')
 
@@ -871,6 +897,12 @@ def invoice_print(request, inv_id):
         for item in items:
             item.amount = item.quantity * item.unit_price
             item_total += Decimal(str(item.amount))
+        
+        # 🌟 ถ้าระบบบิลเก่ารองรับ Upsale ด้วย ให้เพิ่มตรงนี้ 🌟
+        for u in qt.upsales.all():
+            items.append(u)
+            item_total += Decimal(str(u.total_price))
+
         subtotal = qt.subtotal
         tax_amount = qt.tax_amount
         discount = qt.discount
@@ -891,15 +923,9 @@ def invoice_print(request, inv_id):
         inv.balance_amount = inv.grand_total
 
     context = {
-        'inv': inv,
-        'company': company,
-        'items': items,
-        'item_total': item_total,
-        'subtotal': subtotal,
-        'tax_amount': tax_amount,
-        'discount': discount,
-        'shipping_cost': shipping_cost,
-        'note': note,
+        'inv': inv, 'company': company, 'items': items,
+        'item_total': item_total, 'subtotal': subtotal, 'tax_amount': tax_amount,
+        'discount': discount, 'shipping_cost': shipping_cost, 'note': note,
     }
     return render(request, 'sales/invoice_print.html', context)
 
@@ -923,9 +949,7 @@ def deposit_list(request):
     page_obj = paginator.get_page(request.GET.get('page'))
 
     return render(request, 'sales/deposit_list.html', {
-        'page_obj': page_obj,
-        'search_query': search_query,
-        'status_filter': status_filter
+        'page_obj': page_obj, 'search_query': search_query, 'status_filter': status_filter
     })
 
 @login_required
@@ -940,11 +964,13 @@ def verify_deposit(request, qt_id):
 def deposit_print(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     company = CompanyInfo.objects.first()
-    item_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    
+    # 🌟 ให้หน้ามัดจำคำนวณเงินให้ถูกตามระบบใหม่ 🌟
+    main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
+    upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
+    item_total = main_total + upsale_total
+    
     balance_due = qt.grand_total - qt.deposit_amount
     return render(request, 'sales/deposit_print.html', {
-        'qt': qt,
-        'company': company,
-        'item_total': item_total,
-        'balance_due': balance_due
+        'qt': qt, 'company': company, 'item_total': item_total, 'balance_due': balance_due
     })

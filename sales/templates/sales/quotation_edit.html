@@ -72,6 +72,12 @@
         </div>
     </div>
 
+    <datalist id="upsale-list">
+        {% for item in upsale_catalogs %}
+            <option value="{{ item.name }}" data-price="{{ item.default_price }}"></option>
+        {% endfor %}
+    </datalist>
+
     <div class="row g-3">
         <div class="col-lg-4">
             <div class="card shadow-sm border-0 rounded-3 h-100">
@@ -119,15 +125,16 @@
 
         <div class="col-lg-8">
             {% if qt.status == 'DRAFT' %}
-            <div class="card shadow-sm border-0 rounded-3 mb-3 border-bottom border-success border-3">
+            <div class="card shadow-sm border-0 rounded-3 mb-3 border-bottom border-primary border-3">
                 <div class="card-header py-2 bg-white">
-                    <h6 class="m-0 fw-bold text-success" style="font-size: 1rem;"><i class="fas fa-cart-plus me-2"></i> เพิ่มรายการสินค้า</h6>
+                    <h6 class="m-0 fw-bold text-primary" style="font-size: 1rem;"><i class="fas fa-home me-2"></i> เพิ่มสินค้าหลัก (Main Product)</h6>
                 </div>
                 <div class="card-body bg-light bg-opacity-25 p-3">
                     <form method="post" autocomplete="off">
                         {% csrf_token %}
                         <input type="hidden" name="add_item" value="true">
-                        <input type="hidden" name="product_id" id="input_product_id" value=""> <div class="card mb-2 border-0 shadow-sm rounded-3">
+                        <input type="hidden" name="product_id" id="input_product_id" value=""> 
+                        <div class="card mb-2 border-0 shadow-sm rounded-3">
                             <div class="card-body py-2 px-3">
                                 <label class="fw-bold text-primary mb-1 custom-label"><i class="fas fa-search me-1"></i> ค้นหาสินค้าจากคลัง</label>
                                 <select id="product_selector" class="form-control custom-input" style="width: 100%;">
@@ -158,8 +165,42 @@
                                 <input type="number" name="quantity" class="form-control custom-input text-center" value="1" required autocomplete="off">
                             </div>
                             <div class="col-md-1">
-                                <button type="submit" class="btn btn-success w-100 shadow-sm fw-bold btn-sm custom-input">
-                                    <i class="fas fa-plus"></i>
+                                <button type="submit" class="btn btn-primary w-100 shadow-sm fw-bold btn-sm custom-input">
+                                     <i class="fas fa-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 rounded-3 mb-3 border-bottom border-warning border-3">
+                <div class="card-header py-2 bg-white">
+                    <h6 class="m-0 fw-bold text-dark" style="font-size: 1rem;"><i class="fas fa-plus-circle text-warning me-2"></i> เพิ่มรายการปรับเปลี่ยน / ของแถม (Upsale)</h6>
+                </div>
+                <div class="card-body bg-light bg-opacity-25 p-3">
+                    <form method="post" autocomplete="off">
+                        {% csrf_token %}
+                        <input type="hidden" name="add_upsale" value="true">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-6">
+                                <label class="text-muted fw-bold custom-label mb-1">รายการเพิ่มเติม / ของแถม *</label>
+                                <input type="text" name="upsale_desc" id="upsale_desc" class="form-control custom-input" placeholder="พิมพ์หาจากแคตตาล็อก..." required autocomplete="off" list="upsale-list">
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <label class="text-muted fw-bold custom-label mb-1">ราคา/หน่วย</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="text" name="upsale_price" id="upsale_price" class="form-control custom-input text-end" placeholder="0.00" required autocomplete="off">
+                                    <span class="input-group-text bg-white small">฿</span>
+                                </div>
+                            </div>
+                            <div class="col-md-2 col-6">
+                                <label class="text-muted fw-bold custom-label mb-1">จำนวน</label>
+                                <input type="number" name="upsale_qty" class="form-control custom-input text-center" value="1" required autocomplete="off">
+                            </div>
+                            <div class="col-md-1">
+                                <button type="submit" class="btn btn-warning text-dark w-100 shadow-sm fw-bold btn-sm custom-input">
+                                     <i class="fas fa-plus"></i>
                                 </button>
                             </div>
                         </div>
@@ -171,50 +212,69 @@
             <div class="card shadow-sm border-0 rounded-3">
                 <div class="card-header py-2 bg-white d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark" style="font-size: 1rem;">รายการในใบเสนอราคา</h6>
-                    <span class="badge bg-secondary rounded-pill">{{ qt.items.count }} รายการ</span>
                 </div>
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0 custom-table">
                         <thead class="bg-light text-secondary text-uppercase">
                             <tr>
-                                <th class="ps-4" style="width: 15%;">ลำดับ</th>
-                                <th style="width: 45%;">สินค้า</th>
+                                <th class="ps-4" style="width: 10%;">#</th>
+                                <th style="width: 45%;">สินค้า / รายการ</th>
                                 <th class="text-center" style="width: 15%;">จำนวน</th>
                                 <th class="text-end" style="width: 15%;">ราคา/หน่วย</th>
-                                <th class="text-end pe-4" style="width: 20%;">รวมเงิน</th>
+                                <th class="text-end pe-4" style="width: 15%;">รวมเงิน</th>
                                 {% if qt.status == 'DRAFT' %}<th style="width: 5%;"></th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
                             {% for item in qt.items.all %}
                             <tr>
-                                <td class="ps-4 text-muted small">{{ forloop.counter }}</td>
-                                <td class="fw-bold text-dark">{{ item.item_name }}</td>
+                                <td class="ps-4 text-muted small"><i class="fas fa-box text-primary"></i></td>
+                                <td class="fw-bold text-primary">{{ item.item_name }}</td>
                                 <td class="text-center"><span class="badge bg-light text-dark border px-3">{{ item.quantity }}</span></td>
                                 <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
                                 <td class="text-end pe-4 fw-bold text-primary">{{ item.amount|floatformat:2|intcomma }}</td>
-                                
                                 {% if qt.status == 'DRAFT' %}
                                 <td class="text-center">
-                                    <a href="{% url 'delete_item' item.id %}" class="text-danger" onclick="return confirm('ลบรายการนี้?')">
+                                    <a href="{% url 'delete_item' item.id %}" class="text-danger" onclick="return confirm('ลบสินค้านี้?')">
                                         <i class="fas fa-trash-alt"></i>
                                     </a>
                                 </td>
                                 {% endif %}
                             </tr>
-                            {% empty %}
+                            {% endfor %}
+
+                            {% for u in qt.upsales.all %}
+                            <tr class="bg-warning bg-opacity-10">
+                                <td class="ps-4 text-muted small"><i class="fas fa-tools text-warning"></i></td>
+                                <td class="fw-bold text-dark"><small class="text-muted border rounded px-1 me-1">เพิ่ม</small> {{ u.description }}</td>
+                                <td class="text-center"><span class="badge bg-white text-dark border px-3">{{ u.quantity }}</span></td>
+                                <td class="text-end">{{ u.unit_price|floatformat:2|intcomma }}</td>
+                                <td class="text-end pe-4 fw-bold text-dark">{{ u.total_price|floatformat:2|intcomma }}</td>
+                                {% if qt.status == 'DRAFT' %}
+                                <td class="text-center">
+                                    <form method="POST" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="delete_upsale" value="true">
+                                        <input type="hidden" name="upsale_id" value="{{ u.id }}">
+                                        <button type="submit" class="btn btn-link text-danger p-0" onclick="return confirm('ลบรายการเพิ่มเติมนี้?')"><i class="fas fa-trash-alt"></i></button>
+                                    </form>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+
+                            {% if not qt.items.all and not qt.upsales.all %}
                             <tr>
                                 <td colspan="{% if qt.status == 'DRAFT' %}6{% else %}5{% endif %}" class="text-center py-5">
                                     {% if qt.status == 'CANCELLED' %}
-                                        <h3 class="text-danger fw-bold mb-0 py-3"><i class="fas fa-ban me-2"></i> ยกเลิก (CANCELLED)</h3>
+                                    <h3 class="text-danger fw-bold mb-0 py-3"><i class="fas fa-ban me-2"></i> ยกเลิก (CANCELLED)</h3>
                                     {% else %}
                                         <i class="fas fa-shopping-basket fa-2x mb-3 text-muted opacity-25"></i>
                                         <p class="small mb-0 text-muted">ยังไม่มีรายการสินค้า</p>
-                                        {% if qt.status == 'DRAFT' %}<small class="text-muted">กรุณาเพิ่มสินค้าจากกล่องด้านบน</small>{% endif %}
                                     {% endif %}
                                 </td>
                             </tr>
-                            {% endfor %}
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -312,7 +372,6 @@
                                         </td>
                                     </tr>
                                     {% endif %}
-
                                 </table>
                             </div>
                         </div>
@@ -390,15 +449,14 @@
     $(document).ready(function() {
         var $select = $('#product_selector').select2({ theme: 'bootstrap4', placeholder: "-- พิมพ์ชื่อสินค้าเพื่อค้นหา --", allowClear: true, width: '100%' });
         
-        // 🌟 แก้ไข JavaScript เพื่อดึง Product ID ส่งไปด้วย 🌟
         $select.on('select2:select', function (e) {
             var selectedOption = $(this).find(':selected');
             var name = selectedOption.data('name');
             var price = parseFloat(selectedOption.data('price'));
-            var prodId = $(this).val(); // ดึง ID สินค้าออกมา
+            var prodId = $(this).val();
 
             if(name) {
-                $('#input_product_id').val(prodId); // ยัด ID ใส่ฟอร์มที่ซ่อนไว้
+                $('#input_product_id').val(prodId);
                 $('#input_name').val(name);
                 $('#input_price').val(price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                 $('input[name="quantity"]').select();
@@ -406,12 +464,25 @@
         });
         
         $select.on('select2:clear', function (e) { 
-            $('#input_product_id').val(''); // เคลียร์ ID
+            $('#input_product_id').val(''); 
             $('#input_name').val(''); 
             $('#input_price').val(''); 
         });
 
-        $('#input_price').on('input', function() { this.value = this.value.replace(/[^0-9.,]/g, ''); });
+        // 🌟 Auto Fill ราคา Upsale 🌟
+        $('#upsale_desc').on('input', function() {
+            var val = $(this).val();
+            var $options = $('#upsale-list option');
+            for(var i=0; i<$options.length; i++) {
+                if($options[i].value === val) {
+                    var price = parseFloat($options[i].getAttribute('data-price'));
+                    $('#upsale_price').val(price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
+                    break;
+                }
+            }
+        });
+
+        $('#input_price, #upsale_price').on('input', function() { this.value = this.value.replace(/[^0-9.,]/g, ''); });
 
         $('#depositInput').on('blur', function() {
             let val = parseFloat(this.value.replace(/,/g, '')) || 0;
@@ -433,7 +504,7 @@
 
         const baseItemTotal = {{ item_total|default:0 }};
         const depositAmount = {{ qt.deposit_amount|default:0 }};
-        
+
         function calculateLiveTotals() {
             let shipping = parseFloat($('#live_shipping').val()) || 0;
             let discount = parseFloat($('#live_discount').val()) || 0;
@@ -449,7 +520,7 @@
             $('#live_subtotal').text(subtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
             $('#live_tax').text(taxAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
             $('#live_grand_total').text('฿' + grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
-
+            
             if ($('#live_balance_due').length) {
                 $('#live_balance_due').text('฿' + balanceDue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
             }
