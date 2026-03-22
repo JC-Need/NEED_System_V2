@@ -170,9 +170,17 @@ class Invoice(models.Model):
             except Exception: pass
 
 # ==========================================
-# 🌟 [เพิ่มใหม่] ส่วนของแคตตาล็อก Upsale 🌟
+# 🌟 [เพิ่มใหม่] ตารางหมวดหมู่ และแคตตาล็อก Upsale 🌟
 # ==========================================
+class UpsaleCategory(models.Model):
+    name = models.CharField(max_length=100, verbose_name="หมวดหมู่รายการเพิ่มเติม")
+    is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
+    
+    def __str__(self):
+        return self.name
+
 class UpsaleCatalog(models.Model):
+    category = models.ForeignKey(UpsaleCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่")
     name = models.CharField(max_length=200, verbose_name="ชื่อรายการปรับเปลี่ยน/เพิ่มเติม")
     default_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคามาตรฐาน")
     unit = models.CharField(max_length=50, blank=True, null=True, default="รายการ", verbose_name="หน่วยนับ")

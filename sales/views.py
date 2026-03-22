@@ -12,7 +12,7 @@ from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 
-from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCatalog, QuotationUpsale
+from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale
 from inventory.models import Product, Category
 from master_data.models import Customer, CompanyInfo
 from hr.models import Employee
@@ -159,7 +159,6 @@ def sales_dashboard(request):
         'end_date': end_date.strftime('%Y-%m-%d'),
     }
     return render(request, 'sales/dashboard.html', context)
-
 
 @login_required
 def api_dashboard_data(request):
@@ -535,17 +534,40 @@ def quotation_create(request):
     return render(request, 'sales/quotation_form.html', {'form': form})
 
 # ==========================================
-# 🌟 [แก้ใหม่] ผูกระบบ Upsale เข้ากับ Edit Quotation เดิม 🌟
+# 🌟 [อัปเกรด] ผูกระบบ Upsale แบบมี Category Filter 🌟
 # ==========================================
 @login_required
 def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
+    
+    # 🌟 1. ดึงข้อมูลสินค้าหลักทั้งหมด 🌟
+    main_categories = Category.objects.all()
     products = Product.objects.filter(is_active=True, product_type='FG')
     
-    # ดึงแคตตาล็อกของ Upsale ส่งไปให้หน้าเว็บ
-    upsale_catalogs = UpsaleCatalog.objects.filter(is_active=True).order_by('name')
+    products_list = []
+    for p in products:
+        products_list.append({
+            'id': p.id,
+            'name': p.name,
+            'code': p.code,
+            'sell_price': float(p.sell_price),
+            'category_id': getattr(p, 'category_id', None)
+        })
 
-    # คำนวณยอดเดิม + ยอดของสั่งเพิ่ม
+    # 🌟 2. ดึงข้อมูลแคตตาล็อก Upsale 🌟
+    upsale_categories = UpsaleCategory.objects.filter(is_active=True)
+    upsale_catalogs = UpsaleCatalog.objects.filter(is_active=True)
+    
+    upsales_list = []
+    for u in upsale_catalogs:
+        upsales_list.append({
+            'id': u.id,
+            'name': u.name,
+            'default_price': float(u.default_price),
+            'category_id': u.category_id
+        })
+
+    # คำนวณยอด
     main_item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
     upsale_total = sum(u.total_price for u in qt.upsales.all())
     item_total = main_item_total + upsale_total
@@ -554,16 +576,15 @@ def quotation_edit(request, qt_id):
 
     if request.method == 'POST':
         if qt.status != 'DRAFT':
-            messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว (กรุณาใช้ฟังก์ชันคัดลอกสร้างใบใหม่แทน)")
+            messages.error(request, "❌ ไม่สามารถแก้ไขได้ เนื่องจากเอกสารนี้ถูกอนุมัติหรือล็อกไปแล้ว")
             return redirect('quotation_edit', qt_id=qt.id)
 
-        # 🌟 1. ส่วนเพิ่มสินค้าหลัก (ของเดิม) 🌟
         if 'add_item' in request.POST:
             item_name = request.POST.get('item_name')
             qty = int(request.POST.get('quantity', 1))
             price = Decimal(request.POST.get('price', '0').replace(',', ''))
-
             product_id = request.POST.get('product_id')
+            
             product_obj = None
             if product_id:
                 try: product_obj = Product.objects.get(id=product_id)
@@ -576,7 +597,6 @@ def quotation_edit(request, qt_id):
                 calculate_totals(qt)
             return redirect('quotation_edit', qt_id=qt.id)
 
-        # 🌟 2. ส่วนเพิ่มรายการปรับเปลี่ยน (Upsale - เพิ่มใหม่) 🌟
         elif 'add_upsale' in request.POST:
             desc = request.POST.get('upsale_desc')
             qty = Decimal(request.POST.get('upsale_qty', '1'))
@@ -588,7 +608,6 @@ def quotation_edit(request, qt_id):
                 calculate_totals(qt)
             return redirect('quotation_edit', qt_id=qt.id)
 
-        # 🌟 3. ส่วนลบรายการปรับเปลี่ยน (Upsale - เพิ่มใหม่) 🌟
         elif 'delete_upsale' in request.POST:
             upsale_id = request.POST.get('upsale_id')
             try:
@@ -597,7 +616,6 @@ def quotation_edit(request, qt_id):
             except: pass
             return redirect('quotation_edit', qt_id=qt.id)
 
-        # 🌟 4. ส่วนอัปเดตหมายเหตุและเงินรวม (ของเดิม) 🌟
         elif 'update_info' in request.POST or 'finish_quote' in request.POST:
             qt.note = request.POST.get('note', '')
             qt.discount = Decimal(request.POST.get('discount', '0') or 0)
@@ -613,13 +631,15 @@ def quotation_edit(request, qt_id):
 
     return render(request, 'sales/quotation_edit.html', {
         'qt': qt, 
-        'products': products, 
-        'upsale_catalogs': upsale_catalogs, # ส่งไปทำ Datalist
+        'main_categories': main_categories,
+        'upsale_categories': upsale_categories,
+        'products_json': json.dumps(products_list),
+        'upsales_json': json.dumps(upsales_list),
         'item_total': item_total, 
         'balance_due': balance_due
     })
 
-# 🌟 อัปเดตการคำนวณเงิน ให้รวมยอดของ Upsale ด้วย 🌟
+
 def calculate_totals(qt):
     item_sum = sum(item.quantity * item.unit_price for item in qt.items.all())
     upsale_sum = sum(u.quantity * u.unit_price for u in qt.upsales.all())
@@ -684,7 +704,6 @@ def quotation_clone(request, qt_id):
             description=item.description, quantity=item.quantity, unit_price=item.unit_price, amount=item.amount
         )
         
-    # 🌟 คัดลอกรายการ Upsale ไปด้วย 🌟
     for upsale in old_qt.upsales.all():
         QuotationUpsale.objects.create(
             quotation=new_qt, description=upsale.description, 
@@ -729,7 +748,6 @@ def quotation_print(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     company = CompanyInfo.objects.first()
     
-    # 🌟 ส่งยอดรวมทั้งหมดไปหน้า Print 🌟
     main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
     upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
     item_total = main_total + upsale_total
@@ -761,12 +779,7 @@ def api_search_customer(request):
         addr_parts = [c.address, f"ต.{c.sub_district}" if c.sub_district else "", f"อ.{c.district}" if c.district else "", f"จ.{c.province}" if c.province else "", c.zip_code]
         full_address = " ".join(filter(None, addr_parts))
         results.append({
-            'id': c.id,
-            'name': c.name,
-            'code': c.code,
-            'address': full_address,
-            'tax_id': c.tax_id,
-            'phone': c.phone
+            'id': c.id, 'name': c.name, 'code': c.code, 'address': full_address, 'tax_id': c.tax_id, 'phone': c.phone
         })
     return JsonResponse({'results': results})
 
@@ -898,7 +911,6 @@ def invoice_print(request, inv_id):
             item.amount = item.quantity * item.unit_price
             item_total += Decimal(str(item.amount))
         
-        # 🌟 ถ้าระบบบิลเก่ารองรับ Upsale ด้วย ให้เพิ่มตรงนี้ 🌟
         for u in qt.upsales.all():
             items.append(u)
             item_total += Decimal(str(u.total_price))
@@ -965,7 +977,6 @@ def deposit_print(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     company = CompanyInfo.objects.first()
     
-    # 🌟 ให้หน้ามัดจำคำนวณเงินให้ถูกตามระบบใหม่ 🌟
     main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
     upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
     item_total = main_total + upsale_total
