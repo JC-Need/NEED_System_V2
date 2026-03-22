@@ -58,6 +58,12 @@
             </button>
             {% endif %}
 
+            {% if qt.is_deposit_paid and not qt.production_orders.all %}
+            <a href="{% url 'create_job_order' qt.id %}" class="btn btn-success shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="return confirm('ยืนยันส่งข้อมูลเพื่อเปิดใบสั่งผลิต (Job Order) ให้แผนกปฏิบัติการใช่หรือไม่?');">
+                <i class="fas fa-industry me-1"></i> สร้างใบสั่งผลิต
+            </a>
+            {% endif %}
+
             {% if qt.status != 'CANCELLED' %}
             <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-primary shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold">
                 <i class="fas fa-print me-1"></i> พิมพ์ / ตัวอย่าง
@@ -121,8 +127,7 @@
                     <form method="post" autocomplete="off">
                         {% csrf_token %}
                         <input type="hidden" name="add_item" value="true">
-
-                        <div class="card mb-2 border-0 shadow-sm rounded-3">
+                        <input type="hidden" name="product_id" id="input_product_id" value=""> <div class="card mb-2 border-0 shadow-sm rounded-3">
                             <div class="card-body py-2 px-3">
                                 <label class="fw-bold text-primary mb-1 custom-label"><i class="fas fa-search me-1"></i> ค้นหาสินค้าจากคลัง</label>
                                 <select id="product_selector" class="form-control custom-input" style="width: 100%;">
@@ -384,20 +389,30 @@
 <script>
     $(document).ready(function() {
         var $select = $('#product_selector').select2({ theme: 'bootstrap4', placeholder: "-- พิมพ์ชื่อสินค้าเพื่อค้นหา --", allowClear: true, width: '100%' });
+        
+        // 🌟 แก้ไข JavaScript เพื่อดึง Product ID ส่งไปด้วย 🌟
         $select.on('select2:select', function (e) {
             var selectedOption = $(this).find(':selected');
             var name = selectedOption.data('name');
-            var price = parseFloat(selectedOption.data('price')); 
+            var price = parseFloat(selectedOption.data('price'));
+            var prodId = $(this).val(); // ดึง ID สินค้าออกมา
+
             if(name) {
+                $('#input_product_id').val(prodId); // ยัด ID ใส่ฟอร์มที่ซ่อนไว้
                 $('#input_name').val(name);
                 $('#input_price').val(price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
                 $('input[name="quantity"]').select();
             }
         });
-        $select.on('select2:clear', function (e) { $('#input_name').val(''); $('#input_price').val(''); });
+        
+        $select.on('select2:clear', function (e) { 
+            $('#input_product_id').val(''); // เคลียร์ ID
+            $('#input_name').val(''); 
+            $('#input_price').val(''); 
+        });
+
         $('#input_price').on('input', function() { this.value = this.value.replace(/[^0-9.,]/g, ''); });
 
-        // --- จัดการ Comma ในช่องกรอกมัดจำ ---
         $('#depositInput').on('blur', function() {
             let val = parseFloat(this.value.replace(/,/g, '')) || 0;
             this.value = val.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -408,7 +423,6 @@
             else this.value = val;
         });
 
-        // 🌟 เพิ่ม defaultDate: "today" เพื่อให้ชัวร์ว่า Flatpickr จะเลือกวันปัจจุบันเสมอ 🌟
         flatpickr(".datepicker", { 
             dateFormat: "Y-m-d", 
             altInput: true, 
@@ -417,7 +431,6 @@
             defaultDate: "today"
         });
 
-        // --- ระบบคำนวณยอด Real-time ---
         const baseItemTotal = {{ item_total|default:0 }};
         const depositAmount = {{ qt.deposit_amount|default:0 }};
         
@@ -426,17 +439,17 @@
             let discount = parseFloat($('#live_discount').val()) || 0;
             
             let grandTotal = (baseItemTotal + shipping) - discount;
-            if (grandTotal < 0) grandTotal = 0; // ป้องกันยอดติดลบ
+            if (grandTotal < 0) grandTotal = 0; 
             
             let subtotal = grandTotal / 1.07;
             let taxAmount = grandTotal - subtotal;
             let balanceDue = grandTotal - depositAmount;
             if (balanceDue < 0) balanceDue = 0;
-            
+
             $('#live_subtotal').text(subtotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
             $('#live_tax').text(taxAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
             $('#live_grand_total').text('฿' + grandTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
-            
+
             if ($('#live_balance_due').length) {
                 $('#live_balance_due').text('฿' + balanceDue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}));
             }

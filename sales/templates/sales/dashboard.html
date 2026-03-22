@@ -14,6 +14,16 @@
     .search-capsule {
         border: 1px solid #e2e8f0;
     }
+    
+    /* 🌟 แต่งสีตัวเลขแจ้งเตือนบนปุ่มให้เด่นชัด 🌟 */
+    .badge-pulse {
+        animation: pulse-animation 2s infinite;
+    }
+    @keyframes pulse-animation {
+        0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+        70% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+    }
 </style>
 
 <div class="container-fluid py-4 px-4">
@@ -33,7 +43,21 @@
                 <a href="{% url 'invoice_list' %}" class="btn btn-outline-primary fw-bold"><i class="fas fa-receipt me-1"></i> ใบขาย</a>
             </div>
             <div class="vr mx-2 bg-secondary opacity-25" style="width: 2px; height: 35px;"></div> 
+            
             <a href="{% url 'quotation_create' %}" class="btn btn-dark rounded-pill shadow-sm px-3 fw-bold"><i class="fas fa-file-signature me-1"></i> สร้างใบเสนอราคา</a>
+            
+            <a href="{% url 'quotation_list' %}?status=PENDING_PRODUCTION" class="btn btn-success rounded-pill shadow-sm px-3 fw-bold position-relative">
+                <i class="fas fa-industry me-1"></i> สร้างใบสั่งผลิต
+                {% if pending_production_quotes > 0 %}
+                <span id="badge-pending-production" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light border-2 badge-pulse">
+                    {{ pending_production_quotes }}
+                </span>
+                {% else %}
+                <span id="badge-pending-production" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light border-2 d-none">
+                    0
+                </span>
+                {% endif %}
+            </a>
             <a href="{% url 'sales_hub' %}" class="btn btn-primary rounded-pill shadow-sm px-3 fw-bold"><i class="fas fa-cash-register me-1"></i> เปิดบิลขาย / POS</a>
         </div>
     </div>
@@ -229,7 +253,6 @@
     let fpStart, fpEnd;
 
     document.addEventListener("DOMContentLoaded", function() {
-        // 🌟 เปลี่ยน altFormat ให้แสดงผลแบบ DD-MM-YYYY 🌟
         fpStart = flatpickr("#filter_start", { dateFormat: "Y-m-d", altInput: true, altFormat: "d-m-Y", allowInput: true, defaultDate: "today" });
         fpEnd = flatpickr("#filter_end", { dateFormat: "Y-m-d", altInput: true, altFormat: "d-m-Y", allowInput: true, defaultDate: "today" });
 
@@ -289,7 +312,6 @@
         fetchDashboardData(true);
     }
 
-    // 🌟 แก้ไข: ให้ดึงค่าจากช่องที่จัดฟอร์แมตแล้ว (altInput.value) มาแสดง 🌟
     function updateDateLabel() {
         let s = document.getElementById('filter_start').value;
         let e = document.getElementById('filter_end').value;
@@ -301,7 +323,6 @@
         if(s === todayStr && e === todayStr) { 
             label.innerText = "วันนี้"; 
         } else { 
-            // ดึงค่า DD-MM-YYYY มาแสดง
             label.innerText = `ตั้งแต่วันที่ ${fpStart.altInput.value} ถึง ${fpEnd.altInput.value}`; 
         }
     }
@@ -324,6 +345,19 @@
                 document.getElementById('val-total-orders').innerHTML = data.total_orders.toLocaleString() + ' <small class="text-muted fs-6">บิล</small>';
                 document.getElementById('val-pending-approval').innerHTML = data.pending_approval_quotes + ' <small class="text-muted fs-6">ใบ</small>';
                 document.getElementById('val-pending-closing').innerHTML = data.pending_closing_quotes + ' <small class="text-muted fs-6">ใบ</small>';
+
+                // 🌟 อัปเดตตัวเลขแจ้งเตือนปุ่มสั่งผลิตแบบ Real-time 🌟
+                let badgeProd = document.getElementById('badge-pending-production');
+                if (badgeProd) {
+                    badgeProd.innerText = data.pending_production_quotes;
+                    if (data.pending_production_quotes > 0) {
+                        badgeProd.classList.remove('d-none');
+                        badgeProd.classList.add('badge-pulse'); // เพิ่มเอฟเฟกต์กระพริบดึงดูดสายตา
+                    } else {
+                        badgeProd.classList.add('d-none');
+                        badgeProd.classList.remove('badge-pulse');
+                    }
+                }
 
                 let feedHtml = '';
                 if (data.recent_sales.length > 0) {

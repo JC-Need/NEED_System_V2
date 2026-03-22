@@ -18,6 +18,9 @@ from master_data.models import Customer, CompanyInfo
 from hr.models import Employee
 from .forms import QuotationForm
 
+# 🌟 Import โมเดลฝ่ายผลิต เพื่อให้เซลล์สั่งผลิตข้ามแผนกได้ 🌟
+from manufacturing.models import ProductionOrder
+
 def get_next_document_number():
     now = timezone.now()
     thai_year = (now.year + 543) % 100
@@ -92,8 +95,6 @@ def is_sales_authorized(user):
 
     return False
 
-from datetime import timedelta
-
 @login_required
 def sales_dashboard(request):
     if not is_sales_authorized(request.user):
@@ -102,7 +103,6 @@ def sales_dashboard(request):
 
     target_employees, scope_title = get_target_employees(request.user)
 
-    # 🌟 รับค่าช่วงเวลาจาก URL (ถ้าไม่มีให้ใช้วันนี้เป็นค่าเริ่มต้น) 🌟
     today = timezone.now().date()
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
@@ -110,7 +110,6 @@ def sales_dashboard(request):
     start_date = parse_date(start_date_str) if start_date_str else today
     end_date = parse_date(end_date_str) if end_date_str else today
 
-    # 🌟 กรองข้อมูลตามช่วงเวลาที่เลือก 🌟
     pos_qs = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
     inv_qs = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
     qt_qs = get_sales_queryset(Quotation, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
@@ -123,7 +122,11 @@ def sales_dashboard(request):
     pending_approval_quotes = qt_qs.filter(status='DRAFT').count()
     pending_closing_quotes = qt_qs.filter(status='APPROVED').count()
 
-    # 🌟 คำนวณกราฟแยกตามทีม (ตามช่วงเวลาที่เลือก) 🌟
+    pending_production_quotes = get_sales_queryset(Quotation, request.user, target_employees).filter(
+        is_deposit_paid=True,
+        production_orders__isnull=True
+    ).count()
+
     pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
     inv_team = inv_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('grand_total'))
 
@@ -148,14 +151,90 @@ def sales_dashboard(request):
         'total_orders': total_orders,
         'pending_approval_quotes': pending_approval_quotes,
         'pending_closing_quotes': pending_closing_quotes,
+        'pending_production_quotes': pending_production_quotes,
         'chart_labels': json.dumps(chart_labels),
         'chart_data': json.dumps(chart_data),
         'recent_sales': combined_sales,
         'scope_title': scope_title,
-        'start_date': start_date.strftime('%Y-%m-%d'), # ส่งค่ากลับไปโชว์ที่หน้าเว็บ
+        'start_date': start_date.strftime('%Y-%m-%d'),
         'end_date': end_date.strftime('%Y-%m-%d'),
     }
     return render(request, 'sales/dashboard.html', context)
+
+
+@login_required
+def api_dashboard_data(request):
+    if not is_sales_authorized(request.user):
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    target_employees, _ = get_target_employees(request.user)
+
+    today = timezone.now().date()
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+
+    start_date = parse_date(start_date_str) if start_date_str else today
+    end_date = parse_date(end_date_str) if end_date_str else today
+
+    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+    inv_qs = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
+    qt_qs = get_sales_queryset(Quotation, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
+
+    pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
+    total_sales_amount = float(pos_total + inv_total)
+
+    total_orders = pos_qs.count() + inv_qs.count()
+    pending_approval_quotes = qt_qs.filter(status='DRAFT').count()
+    pending_closing_quotes = qt_qs.filter(status='APPROVED').count()
+
+    pending_production_quotes = get_sales_queryset(Quotation, request.user, target_employees).filter(
+        is_deposit_paid=True,
+        production_orders__isnull=True
+    ).count()
+
+    pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
+    inv_team = inv_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('grand_total'))
+
+    team_sales_dict = {}
+    for p in pos_team:
+        dept = p['employee__department__name'] or 'ไม่ระบุทีม'
+        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(p['total'] or 0)
+    for i in inv_team:
+        dept = i['employee__department__name'] or 'ไม่ระบุทีม'
+        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(i['total'] or 0)
+
+    sorted_teams = sorted(team_sales_dict.items(), key=lambda x: x[1], reverse=True)
+    chart_labels = [x[0] for x in sorted_teams]
+    chart_data = [x[1] for x in sorted_teams]
+
+    recent_pos = list(pos_qs.order_by('-created_at')[:10])
+    recent_inv = list(inv_qs.order_by('-created_at')[:10])
+    combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
+
+    recent_sales_data = []
+    for item in combined_sales:
+        is_pos = 'POS' in item.code
+        recent_sales_data.append({
+            'time': item.created_at.strftime('%H:%M') if item.created_at.date() == timezone.now().date() else item.created_at.strftime('%d/%m/%Y'),
+            'code': item.code,
+            'is_pos': is_pos,
+            'employee_name': item.employee.first_name if item.employee else '-',
+            'employee_photo': item.employee.photo.url if item.employee and item.employee.photo else None,
+            'employee_initial': item.employee.first_name[0] if item.employee and item.employee.first_name else '-',
+            'amount': float(item.total_amount) if hasattr(item, 'total_amount') else float(item.grand_total)
+        })
+
+    return JsonResponse({
+        'total_sales_today': total_sales_amount,
+        'total_orders': total_orders,
+        'pending_approval_quotes': pending_approval_quotes,
+        'pending_closing_quotes': pending_closing_quotes,
+        'pending_production_quotes': pending_production_quotes,
+        'recent_sales': recent_sales_data,
+        'chart_labels': chart_labels,
+        'chart_data': chart_data
+    })
 
 @login_required
 def sales_hub(request):
@@ -179,6 +258,7 @@ def sales_hub(request):
         'today_pos': today_pos
     })
 
+# 🌟 อัปเดตฟังก์ชันบันทึกมัดจำ ให้พากลับไปหน้าเดิมที่กดมา 🌟
 @login_required
 def record_deposit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
@@ -191,6 +271,7 @@ def record_deposit(request, qt_id):
 
         method = request.POST.get('deposit_method', 'TRANSFER')
         date_str = request.POST.get('deposit_date')
+        next_url = request.POST.get('next') # รับค่า URL หน้าปัจจุบัน
 
         if amount > 0:
             qt.deposit_amount = amount
@@ -209,7 +290,34 @@ def record_deposit(request, qt_id):
         else:
             messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
 
+        # ถ้าระบุหน้าเดิมมา ให้เด้งกลับไปที่เดิม (List View)
+        if next_url:
+            return redirect(next_url)
+
     return redirect('quotation_edit', qt_id=qt.id)
+
+@login_required
+def create_job_order(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+
+    if qt.production_orders.exists():
+        messages.warning(request, f"⚠️ ใบเสนอราคา {qt.code} ถูกส่งสั่งผลิตไปแล้ว!")
+        return redirect('quotation_list')
+
+    first_item = qt.items.filter(product__isnull=False).first()
+    if not first_item:
+        messages.error(request, "❌ ไม่พบข้อมูลสินค้า (FG) ในใบเสนอราคา ไม่สามารถสร้างใบสั่งผลิตได้")
+        return redirect('quotation_list')
+
+    job = ProductionOrder.objects.create(
+        product=first_item.product,
+        quotation_ref=qt,
+        customer_name=qt.customer_name,
+        note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}"
+    )
+
+    messages.success(request, f"🏭 ส่งข้อมูลเปิดใบสั่งผลิต (Job Order: {job.code}) ให้แผนกปฏิบัติการเรียบร้อยแล้ว!")
+    return redirect('quotation_list')
 
 @login_required
 def convert_quote_to_invoice(request, qt_id):
@@ -217,7 +325,6 @@ def convert_quote_to_invoice(request, qt_id):
     new_code = get_next_document_number()
 
     balance = qt.grand_total - qt.deposit_amount
-    # 🌟 แก้ไขตรงนี้: ให้สถานะเริ่มต้นเป็น UNPAID (ยังไม่ชำระ) ถ้ายังมีค้างจ่าย 🌟
     status = 'PAID' if balance <= 0 else 'UNPAID'
 
     invoice = Invoice.objects.create(
@@ -335,7 +442,6 @@ def pos_print_slip(request, order_code):
     elif order.payment_method == 'CHECK':
         payment_note = f"ชำระโดย: เช็คธนาคาร {order.check_bank} #{order.check_number}"
 
-    # 🌟 สูตรคำนวณถอด VAT จากยอดรวม 🌟
     grand_total = order.total_amount
     subtotal = grand_total / Decimal('1.07')
     tax_amount = grand_total - subtotal
@@ -359,17 +465,37 @@ def quotation_list(request):
     target_employees, _ = get_target_employees(request.user)
     queryset = get_sales_queryset(Quotation, request.user, target_employees).order_by('-created_at')
 
+    # 🌟 1. รับค่าตัวกรองสถานะใบเสนอราคา 🌟
     status_filter = request.GET.get('status')
     if status_filter:
-        queryset = queryset.filter(status=status_filter)
+        if status_filter == 'PENDING_PRODUCTION':
+            queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True)
+        else:
+            queryset = queryset.filter(status=status_filter)
 
+    # 🌟 2. รับค่าตัวกรองสถานะการผลิต (เพิ่มใหม่) 🌟
+    prod_status_filter = request.GET.get('prod_status')
+    if prod_status_filter:
+        queryset = queryset.filter(production_orders__status=prod_status_filter)
+
+    # 🌟 3. รับค่าตัวกรองการค้นหาข้อความ 🌟
     search_query = request.GET.get('q', '')
     if search_query:
         queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
 
+    # 🌟 4. รับค่าตัวกรองวันที่ (เพิ่มการทำงานให้สมบูรณ์) 🌟
+    date_start = request.GET.get('start_date', '')
+    date_end = request.GET.get('end_date', '')
+    if date_start:
+        queryset = queryset.filter(date__gte=date_start)
+    if date_end:
+        queryset = queryset.filter(date__lte=date_end)
+
+    # แบ่งหน้าเพจ
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
 
+    # ตรวจสอบสิทธิ์ Manager
     is_manager = False
     current_emp = getattr(request.user, 'employee', None)
     if request.user.is_superuser: is_manager = True
@@ -382,7 +508,10 @@ def quotation_list(request):
         'page_obj': page_obj,
         'search_query': search_query,
         'is_manager': is_manager,
-        'status_filter': status_filter
+        'status_filter': status_filter,
+        'prod_status_filter': prod_status_filter, # ส่งค่าสถานะผลิตไปที่ HTML
+        'date_start': date_start,
+        'date_end': date_end
     })
 
 @login_required
@@ -426,8 +555,23 @@ def quotation_edit(request, qt_id):
             item_name = request.POST.get('item_name')
             qty = int(request.POST.get('quantity', 1))
             price = Decimal(request.POST.get('price', '0').replace(',', ''))
+
+            product_id = request.POST.get('product_id')
+            product_obj = None
+            if product_id:
+                try:
+                    product_obj = Product.objects.get(id=product_id)
+                except Product.DoesNotExist:
+                    pass
+
             if item_name:
-                QuotationItem.objects.create(quotation=qt, item_name=item_name, quantity=qty, unit_price=price)
+                QuotationItem.objects.create(
+                    quotation=qt,
+                    product=product_obj,
+                    item_name=item_name,
+                    quantity=qty,
+                    unit_price=price
+                )
                 calculate_totals(qt)
             return redirect('quotation_edit', qt_id=qt.id)
 
@@ -554,7 +698,8 @@ def quotation_print(request, qt_id):
 @login_required
 def export_sales_excel(request):
     wb = openpyxl.Workbook()
-    ws = wb.active; ws.title = "Sales Report"
+    ws = wb.active
+    ws.title = "Sales Report"
     ws.append(["วันที่", "เลขที่เอกสาร", "ประเภท", "ยอดขาย"])
     for p in POSOrder.objects.all():
         ws.append([p.created_at.strftime('%d/%m/%Y'), p.code, "POS", p.total_amount])
@@ -677,6 +822,33 @@ def confirm_payment(request, doc_type, doc_id):
     return redirect('invoice_list')
 
 @login_required
+def record_invoice_payment(request, inv_id):
+    inv = get_object_or_404(Invoice, pk=inv_id)
+    if request.method == 'POST':
+        method = request.POST.get('payment_method', 'TRANSFER')
+        date_str = request.POST.get('payment_date')
+
+        inv.payment_method = method
+        if date_str:
+            inv.payment_date = parse_date(date_str)
+        else:
+            inv.payment_date = timezone.now().date()
+
+        if method == 'TRANSFER' and 'transfer_slip' in request.FILES:
+            inv.transfer_slip = request.FILES['transfer_slip']
+        elif method == 'CHECK':
+            inv.check_number = request.POST.get('check_number', '')
+            inv.check_bank = request.POST.get('check_bank', '')
+            if 'check_slip' in request.FILES:
+                inv.check_slip = request.FILES['check_slip']
+
+        inv.status = 'PENDING'
+        inv.save()
+        messages.success(request, f"💰 บันทึกรับชำระเงินสำหรับเอกสาร {inv.code} เรียบร้อยแล้ว (รอการตรวจสอบยอดจากฝ่ายบัญชี)")
+
+    return redirect('invoice_list')
+
+@login_required
 def invoice_print(request, inv_id):
     inv = get_object_or_404(Invoice, pk=inv_id)
     company = CompanyInfo.objects.first()
@@ -727,13 +899,9 @@ def invoice_print(request, inv_id):
     }
     return render(request, 'sales/invoice_print.html', context)
 
-# ==========================================
-# 🌟 ฟังก์ชันสำหรับระบบใบรับเงินมัดจำ (เพิ่มใหม่) 🌟
-# ==========================================
 @login_required
 def deposit_list(request):
     target_employees, _ = get_target_employees(request.user)
-    # ดึงเฉพาะใบเสนอราคาที่มีการรับมัดจำแล้ว
     qs = get_sales_queryset(Quotation, request.user, target_employees).filter(is_deposit_paid=True)
 
     search_query = request.GET.get('q', '')
@@ -775,107 +943,4 @@ def deposit_print(request, qt_id):
         'company': company,
         'item_total': item_total,
         'balance_due': balance_due
-    })
-
-# ==========================================
-# 🌟 ฟังก์ชันสำหรับระบบบันทึกรับชำระเงิน Invoice (เพิ่มใหม่) 🌟
-# ==========================================
-@login_required
-def record_invoice_payment(request, inv_id):
-    inv = get_object_or_404(Invoice, pk=inv_id)
-    if request.method == 'POST':
-        method = request.POST.get('payment_method', 'TRANSFER')
-        date_str = request.POST.get('payment_date')
-
-        inv.payment_method = method
-        if date_str:
-            inv.payment_date = parse_date(date_str)
-        else:
-            inv.payment_date = timezone.now().date()
-
-        if method == 'TRANSFER' and 'transfer_slip' in request.FILES:
-            inv.transfer_slip = request.FILES['transfer_slip']
-        elif method == 'CHECK':
-            inv.check_number = request.POST.get('check_number', '')
-            inv.check_bank = request.POST.get('check_bank', '')
-            if 'check_slip' in request.FILES:
-                inv.check_slip = request.FILES['check_slip']
-
-        # เปลี่ยนสถานะเป็นรอให้บัญชีตรวจสอบ
-        inv.status = 'PENDING'
-        inv.save()
-        messages.success(request, f"💰 บันทึกรับชำระเงินสำหรับเอกสาร {inv.code} เรียบร้อยแล้ว (รอการตรวจสอบยอดจากฝ่ายบัญชี)")
-
-    return redirect('invoice_list')
-
-# ==========================================
-# 🌟 ฟังก์ชันสำหรับ Silent Update (AJAX) Dashboard 🌟
-# ==========================================
-@login_required
-def api_dashboard_data(request):
-    if not is_sales_authorized(request.user):
-        return JsonResponse({'error': 'Unauthorized'}, status=403)
-
-    target_employees, _ = get_target_employees(request.user)
-
-    # 🌟 รับค่าช่วงเวลาจาก AJAX 🌟
-    today = timezone.now().date()
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
-
-    start_date = parse_date(start_date_str) if start_date_str else today
-    end_date = parse_date(end_date_str) if end_date_str else today
-
-    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
-    inv_qs = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
-    qt_qs = get_sales_queryset(Quotation, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
-
-    pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
-    total_sales_amount = float(pos_total + inv_total)
-
-    total_orders = pos_qs.count() + inv_qs.count()
-    pending_approval_quotes = qt_qs.filter(status='DRAFT').count()
-    pending_closing_quotes = qt_qs.filter(status='APPROVED').count()
-
-    pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
-    inv_team = inv_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('grand_total'))
-
-    team_sales_dict = {}
-    for p in pos_team:
-        dept = p['employee__department__name'] or 'ไม่ระบุทีม'
-        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(p['total'] or 0)
-    for i in inv_team:
-        dept = i['employee__department__name'] or 'ไม่ระบุทีม'
-        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(i['total'] or 0)
-
-    sorted_teams = sorted(team_sales_dict.items(), key=lambda x: x[1], reverse=True)
-    chart_labels = [x[0] for x in sorted_teams]
-    chart_data = [x[1] for x in sorted_teams]
-
-    recent_pos = list(pos_qs.order_by('-created_at')[:10])
-    recent_inv = list(inv_qs.order_by('-created_at')[:10])
-    combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
-
-    recent_sales_data = []
-    for item in combined_sales:
-        is_pos = 'POS' in item.code
-        recent_sales_data.append({
-            'time': item.created_at.strftime('%H:%M') if item.created_at.date() == timezone.now().date() else item.created_at.strftime('%d/%m/%Y'),
-            'code': item.code,
-            'is_pos': is_pos,
-            'employee_name': item.employee.first_name if item.employee else '-',
-            'employee_photo': item.employee.photo.url if item.employee and item.employee.photo else None,
-            'employee_initial': item.employee.first_name[0] if item.employee and item.employee.first_name else '-',
-            'amount': float(item.total_amount) if hasattr(item, 'total_amount') else float(item.grand_total)
-        })
-
-    return JsonResponse({
-        'total_sales_today': total_sales_amount,
-        'total_orders': total_orders,
-        'pending_approval_quotes': pending_approval_quotes,
-        'pending_closing_quotes': pending_closing_quotes,
-        'recent_sales': recent_sales_data,
-        'chart_labels': chart_labels,
-        'chart_data': chart_data
     })

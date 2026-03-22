@@ -71,6 +71,10 @@ class ProductionOrder(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้าที่จะผลิต")
     quantity = models.IntegerField(default=1, verbose_name="จำนวนที่ผลิต (ล็อกที่ 1 เสมอ)")
     
+    # 🌟 [เพิ่มใหม่] สะพานเชื่อมกับฝ่ายขาย และเก็บไฟล์แบบแปลน 🌟
+    quotation_ref = models.ForeignKey('sales.Quotation', on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="อ้างอิงใบเสนอราคา/มัดจำ")
+    blueprint_file = models.FileField(upload_to='blueprints/%Y/%m/', null=True, blank=True, verbose_name="ไฟล์แบบแปลน (PDF/รูปภาพ)")
+    
     # --- ข้อมูลวันที่และการขาย ---
     start_date = models.DateField(default=timezone.now, verbose_name="วันที่เริ่มผลิต")
     finish_date = models.DateField(null=True, blank=True, verbose_name="วันที่เสร็จ (เข้าคลัง)")
@@ -116,3 +120,19 @@ class ProductionOrder(models.Model):
                 seq = 1
             self.code = f"{prefix}{seq:03d}"
         super().save(*args, **kwargs)
+
+# ==========================================
+# 3. รายการวัตถุดิบที่ใช้จริงต่อ 1 งาน (Job Material List)
+# ==========================================
+class ProductionOrderMaterial(models.Model):
+    production_order = models.ForeignKey(ProductionOrder, related_name='materials', on_delete=models.CASCADE)
+    raw_material = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="วัตถุดิบ")
+    quantity = models.DecimalField(max_digits=10, decimal_places=4, verbose_name="จำนวนที่ต้องใช้")
+    is_additional = models.BooleanField(default=False, verbose_name="เป็นรายการสั่งเพิ่มพิเศษ (ไม่อยู่ใน BOM)")
+
+    def __str__(self):
+        return f"{self.production_order.code} - {self.raw_material.name}"
+
+    class Meta:
+        verbose_name = "3. วัตถุดิบในใบสั่งผลิต"
+        verbose_name_plural = "3. จัดการวัตถุดิบในงานผลิต"
