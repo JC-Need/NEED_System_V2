@@ -34,7 +34,7 @@
                     <label class="small text-muted fw-bold">ถึงวันที่</label>
                     <input type="text" name="end_date" class="form-control form-control-sm bg-light datepicker" value="{{ end_date }}" placeholder="วว/ดด/ปปปป">
                 </div>
-                
+
                 <div class="col-md-3">
                     <label class="small text-muted fw-bold">ค้นหา JOB / ลูกค้า</label>
                     <div class="input-group input-group-sm">
@@ -42,7 +42,7 @@
                         <input type="text" name="q" class="form-control border-start-0 bg-light" placeholder="ค้นหา..." value="{{ search_q }}">
                     </div>
                 </div>
-                
+
                 <div class="col-md-2">
                     <label class="small text-muted fw-bold">พนักงานขาย</label>
                     <select name="salesperson" class="form-select form-select-sm bg-light">
@@ -61,7 +61,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                
+
                 <div class="col-md-1 d-grid">
                     <button type="submit" class="btn btn-sm btn-dark fw-bold rounded-pill shadow-sm">กรอง</button>
                 </div>
@@ -83,7 +83,7 @@
     </ul>
 
     <div class="tab-content" id="pills-tabContent">
-      
+
       <div class="tab-pane fade show active" id="pills-active" role="tabpanel">
         <div class="card shadow-sm border-0 rounded-4 overflow-hidden border-top border-primary border-4">
             <div class="table-responsive">
@@ -139,15 +139,19 @@
                             </td>
                             <td class="pe-4 text-center">
                                 <div class="d-flex flex-column gap-2">
-                                    <button type="button" class="btn btn-sm btn-outline-primary shadow-sm rounded-pill fw-bold" 
+                                    <a href="{% url 'production_detail' order.id %}" class="btn btn-sm btn-primary shadow-sm rounded-pill fw-bold w-100">
+                                        <i class="fas fa-folder-open me-1"></i> เปิดใบงาน
+                                    </a>
+
+                                    <button type="button" class="btn btn-sm btn-outline-info shadow-sm rounded-pill fw-bold w-100"
                                             onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{{ order.production_status.id|default:'' }}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}')">
-                                        <i class="fas fa-edit me-1"></i> อัปเดตงาน
+                                        <i class="fas fa-edit me-1"></i> อัปเดตสถานะ
                                     </button>
-                                    
+
                                     <a href="{% url 'production_print' order.id %}" target="_blank" class="btn btn-sm btn-outline-dark shadow-sm rounded-pill fw-bold w-100">
                                         <i class="fas fa-print me-1"></i> พิมพ์ใบงาน
                                     </a>
-                                    
+
                                     {% if order.status != 'COMPLETED' %}
                                     <form method="POST" action="{% url 'production_process' order.id %}" onsubmit="return confirm('ยืนยันตัดสต็อกวัตถุดิบสำหรับ JOB นี้ใช่หรือไม่?');">
                                         {% csrf_token %}
@@ -165,7 +169,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             {% if active_orders.has_other_pages %}
             <div class="card-footer bg-white border-top">
                 <nav>
@@ -173,7 +177,7 @@
                         {% if active_orders.has_previous %}
                             <li class="page-item"><a class="page-link shadow-sm" href="?active_page={{ active_orders.previous_page_number }}&{{ filter_string }}">ก่อนหน้า</a></li>
                         {% endif %}
-                        
+
                         {% for num in active_orders.paginator.page_range %}
                             {% if active_orders.number == num %}
                                 <li class="page-item active"><span class="page-link shadow-sm">{{ num }}</span></li>
@@ -181,7 +185,7 @@
                                 <li class="page-item"><a class="page-link shadow-sm" href="?active_page={{ num }}&{{ filter_string }}">{{ num }}</a></li>
                             {% endif %}
                         {% endfor %}
-                        
+
                         {% if active_orders.has_next %}
                             <li class="page-item"><a class="page-link shadow-sm" href="?active_page={{ active_orders.next_page_number }}&{{ filter_string }}">ถัดไป</a></li>
                         {% endif %}
@@ -239,11 +243,11 @@
                             </td>
                             <td class="pe-4 text-center">
                                 <div class="d-flex flex-column gap-2">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary shadow-sm rounded-pill fw-bold w-100" 
+                                    <button type="button" class="btn btn-sm btn-outline-secondary shadow-sm rounded-pill fw-bold w-100"
                                             onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{{ order.production_status.id|default:'' }}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}')">
                                         <i class="fas fa-folder-open me-1"></i> ดู/แก้ไขงาน
                                     </button>
-                                    
+
                                     <a href="{% url 'production_print' order.id %}" target="_blank" class="btn btn-sm btn-outline-dark shadow-sm rounded-pill fw-bold w-100">
                                         <i class="fas fa-print me-1"></i> พิมพ์ใบงาน
                                     </a>
@@ -256,7 +260,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             {% if closed_orders.has_other_pages %}
             <div class="card-footer bg-white border-top">
                 <nav>
@@ -264,7 +268,7 @@
                         {% if closed_orders.has_previous %}
                             <li class="page-item"><a class="page-link shadow-sm" href="?closed_page={{ closed_orders.previous_page_number }}&{{ filter_string }}">ก่อนหน้า</a></li>
                         {% endif %}
-                        
+
                         {% for num in closed_orders.paginator.page_range %}
                             {% if closed_orders.number == num %}
                                 <li class="page-item active"><span class="page-link shadow-sm">{{ num }}</span></li>
@@ -272,7 +276,7 @@
                                 <li class="page-item"><a class="page-link shadow-sm" href="?closed_page={{ num }}&{{ filter_string }}">{{ num }}</a></li>
                             {% endif %}
                         {% endfor %}
-                        
+
                         {% if closed_orders.has_next %}
                             <li class="page-item"><a class="page-link shadow-sm" href="?closed_page={{ closed_orders.next_page_number }}&{{ filter_string }}">ถัดไป</a></li>
                         {% endif %}
@@ -282,7 +286,7 @@
             {% endif %}
         </div>
       </div>
-      
+
     </div>
 </div>
 
@@ -293,11 +297,11 @@
                 <h5 class="modal-title fw-bold text-primary"><i class="fas fa-clipboard-check me-2"></i>อัปเดตสถานะ: <span id="displayJobCode" class="text-dark"></span></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            
+
             <form id="updateForm" method="POST">
                 {% csrf_token %}
                 <input type="hidden" id="updateJobId" name="job_id">
-                
+
                 <div class="modal-body p-4">
                     <div class="row g-4">
                         <div class="col-md-6 border-end">
@@ -314,7 +318,7 @@
                                     <button type="button" class="btn btn-outline-info" onclick="quickAdd('prod_status')"><i class="fas fa-plus"></i></button>
                                 </div>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="small fw-bold">ทีมช่างที่รับผิดชอบ</label>
                                 <div class="input-group">
@@ -343,7 +347,7 @@
                                     <button type="button" class="btn btn-outline-warning" onclick="quickAdd('deliv_status')"><i class="fas fa-plus"></i></button>
                                 </div>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="small fw-bold">ทีมขนส่ง</label>
                                 <div class="input-group">
@@ -358,7 +362,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="mt-4 pt-3 border-top">
                         <div class="form-check form-switch form-control-lg d-flex align-items-center">
                             <input class="form-check-input mt-0 me-3" type="checkbox" role="switch" id="modalIsClosed" name="is_closed" style="transform: scale(1.5);">
@@ -368,7 +372,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="modal-footer bg-light border-top-0 pt-0">
                     <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
                     <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm"><i class="fas fa-save me-1"></i> บันทึกการอัปเดต</button>
@@ -384,7 +388,7 @@
     let updateModal;
     document.addEventListener('DOMContentLoaded', function() {
         updateModal = new bootstrap.Modal(document.getElementById('updateBoardModal'));
-        
+
         // 🌟 ตั้งค่าปฏิทินค้นหาวันที่ 🌟
         flatpickr(".datepicker", {
             altInput: true,
@@ -397,14 +401,14 @@
     function openUpdateModal(jobId, jobCode, pStatus, pTeam, dStatus, transp, isClosed) {
         document.getElementById('updateJobId').value = jobId;
         document.getElementById('displayJobCode').innerText = jobCode;
-        
+
         document.getElementById('modalProdStatus').value = pStatus;
         document.getElementById('modalProdTeam').value = pTeam;
         document.getElementById('modalDelivStatus').value = dStatus;
         document.getElementById('modalTransporter').value = transp;
-        
+
         document.getElementById('modalIsClosed').checked = (isClosed === 'True');
-        
+
         document.getElementById('updateForm').action = `/manufacturing/production/${jobId}/update-board/`;
         updateModal.show();
     }
@@ -415,7 +419,7 @@
         if(type === 'prod_team') { title = "เพิ่มชื่อทีมช่างใหม่:"; url = "{% url 'ajax_add_prod_team' %}"; selectId = 'modalProdTeam'; }
         if(type === 'deliv_status') { title = "เพิ่มสถานะการจัดส่งใหม่:"; url = "{% url 'ajax_add_delivery_status' %}"; selectId = 'modalDelivStatus'; }
         if(type === 'transporter') { title = "เพิ่มชื่อทีมขนส่งใหม่:"; url = "{% url 'ajax_add_transporter' %}"; selectId = 'modalTransporter'; }
-        
+
         const newName = prompt(title);
         if (!newName || newName.trim() === '') return;
 

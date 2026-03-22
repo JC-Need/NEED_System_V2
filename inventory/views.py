@@ -16,18 +16,61 @@ from purchasing.models import PurchaseOrder, PurchaseOrderItem
 
 @login_required
 def inventory_dashboard(request):
-    fg_products = Product.objects.filter(is_active=True, product_type='FG').order_by('code')
-    rm_products = Product.objects.filter(is_active=True, product_type='RM').order_by('code')
+    # ดึงข้อมูลทั้งหมดเพื่อใช้นับจำนวน (Summary)
+    fg_qs = Product.objects.filter(is_active=True, product_type='FG')
+    rm_qs = Product.objects.filter(is_active=True, product_type='RM')
     all_products = Product.objects.filter(is_active=True)
     low_stock_count = all_products.filter(stock_qty__lte=models.F('min_level')).count()
+
+    fg_count = fg_qs.count()
+    rm_count = rm_qs.count()
+
+    # 🌟 ดึงข้อมูลมาโชว์เป็นพรีวิวแค่ 5 รายการแรก 🌟
+    fg_products = fg_qs.order_by('code')[:5]
+    rm_products = rm_qs.order_by('code')[:5]
 
     recent_docs = InventoryDoc.objects.all().order_by('-doc_no')[:10]
 
     return render(request, 'inventory/dashboard.html', {
         'fg_products': fg_products,
         'rm_products': rm_products,
+        'fg_count': fg_count,       # ส่งยอดรวม FG ไปหน้าเว็บ
+        'rm_count': rm_count,       # ส่งยอดรวม RM ไปหน้าเว็บ
         'low_stock_count': low_stock_count,
         'recent_docs': recent_docs
+    })
+
+# ==========================================
+# 🌟 ฟังก์ชันใหม่: หน้ารายการสินค้าทั้งหมด (แยกหน้า FG / RM) 🌟
+# ==========================================
+from django.core.paginator import Paginator
+
+@login_required
+def product_list(request):
+    # รับค่าว่าต้องการดู FG หรือ RM (ค่าเริ่มต้นคือ FG)
+    p_type = request.GET.get('type', 'FG')
+    search_query = request.GET.get('q', '')
+
+    products = Product.objects.filter(is_active=True, product_type=p_type).order_by('code')
+
+    if search_query:
+        products = products.filter(
+            Q(code__icontains=search_query) |
+            Q(name__icontains=search_query) |
+            Q(category__name__icontains=search_query)
+        )
+
+    # แบ่งหน้าเพจ หน้าละ 15 รายการ
+    paginator = Paginator(products, 15)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    title = '📦 คลังสินค้าสำเร็จรูป (FG)' if p_type == 'FG' else '🧱 คลังวัตถุดิบ (RM)'
+
+    return render(request, 'inventory/product_list.html', {
+        'page_obj': page_obj,
+        'p_type': p_type,
+        'title': title,
+        'search_query': search_query
     })
 
 @login_required
@@ -40,7 +83,7 @@ def document_list_out(request):
 
 def document_list_base(request, doc_type, title):
     search_query = request.GET.get('q', '')
-    product_type = request.GET.get('product_type', '') 
+    product_type = request.GET.get('product_type', '')
     date_start = request.GET.get('start', '')
     date_end = request.GET.get('end', '')
 
@@ -88,7 +131,7 @@ def stock_in(request):
             move.created_by = request.user
             move.save()
             messages.success(request, f"✅ เปิดใบรับของ {doc.doc_no} สำเร็จ!")
-            return redirect('inventory_dashboard') 
+            return redirect('inventory_dashboard')
     else:
         form = StockInForm()
     return render(request, 'inventory/stock_form.html', {'form': form, 'title': '📥 รับสินค้าเข้า (เปิดใบรับ GR)', 'btn_color': 'success', 'btn_icon': 'fa-download'})
@@ -129,7 +172,7 @@ def product_create(request):
         form = ProductForm(request.POST, request.FILES)
         if form.is_valid():
             product = form.save(commit=False)
-            product.product_type = p_type 
+            product.product_type = p_type
             product.save()
             messages.success(request, f"✅ สร้าง '{product.name}' เรียบร้อย")
             return redirect('inventory_dashboard')
@@ -224,7 +267,7 @@ def po_receive_process(request, po_id):
     if request.method == 'POST':
         reference_doc = request.POST.get('reference_doc', '')
         note = request.POST.get('note', '')
-        
+
         items_to_receive = []
         has_error = False
 
@@ -275,7 +318,7 @@ def po_receive_process(request, po_id):
             po.refresh_from_db()
             all_completed = True
             any_received = False
-            
+
             for item in po.items.all():
                 if float(item.received_qty) > 0:
                     any_received = True
@@ -289,10 +332,10 @@ def po_receive_process(request, po_id):
             po.save()
 
             messages.success(request, f"✅ รับสินค้าจาก PO: {po.code} สำเร็จ! (เลขที่ใบรับ: {doc.doc_no})")
-            
+
             # 🌟 เปลี่ยนให้เด้งไปหน้า Print อัตโนมัติ แทนที่จะกลับไปหน้ารายการ 🌟
             return redirect('print_document', doc_no=doc.doc_no)
-            
+
         elif not items_to_receive and not has_error:
             messages.warning(request, "⚠️ กรุณาระบุจำนวนสินค้าที่ต้องการรับอย่างน้อย 1 รายการ")
 

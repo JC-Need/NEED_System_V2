@@ -5,12 +5,13 @@ from django.utils import timezone
 from django.db.models import Max, Count, Q
 from django.db import transaction
 from django.http import JsonResponse
-from django.core.paginator import Paginator # 🌟 Import ระบบแบ่งหน้า
+from django.core.paginator import Paginator
 import datetime
-import calendar # 🌟 Import สำหรับคำนวณวันสิ้นเดือน
+import calendar
 import json
 
-from .models import ProductionOrder, BOM, Branch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
+# 🌟 Import โมเดลตารางต่างๆ มาให้ครบถ้วน 🌟
+from .models import ProductionOrder, ProductionOrderMaterial, BOM, Branch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
 from master_data.models import CompanyInfo
 from inventory.models import Product, InventoryDoc, StockMovement
 from purchasing.models import PurchaseOrder, PurchaseOrderItem, PurchasePreparation
@@ -21,13 +22,11 @@ from .forms import BOMForm, BOMItemFormSet
 # ==========================================
 @login_required
 def production_list(request):
-    # 🌟 1. ตั้งค่าเริ่มต้น: ช่วงวันที่ของเดือนปัจจุบัน 🌟
     today = datetime.date.today()
     default_start = today.replace(day=1).strftime('%Y-%m-%d')
     last_day = calendar.monthrange(today.year, today.month)[1]
     default_end = today.replace(day=last_day).strftime('%Y-%m-%d')
 
-    # รับค่าจากกล่องค้นหา (ถ้าไม่มีให้ใช้ Default)
     start_date = request.GET.get('start_date', default_start)
     end_date = request.GET.get('end_date', default_end)
     search_q = request.GET.get('q', '')
@@ -36,7 +35,6 @@ def production_list(request):
 
     orders = ProductionOrder.objects.all().order_by('-id')
 
-    # 🌟 2. กรองข้อมูลตามช่วงวันที่ และ คำค้นหา 🌟
     if start_date and end_date:
         orders = orders.filter(start_date__gte=start_date, start_date__lte=end_date)
 
@@ -47,27 +45,22 @@ def production_list(request):
     if search_team:
         orders = orders.filter(production_team_id=search_team)
 
-    # 🌟 3. แยกกลุ่มข้อมูล 🌟
     active_qs = orders.filter(is_closed=False)
     closed_qs = orders.filter(is_closed=True)
 
-    # 🌟 4. ระบบแบ่งหน้า (Pagination) กลุ่ม Active 🌟
-    active_paginator = Paginator(active_qs, 10) # 10 รายการต่อหน้า
+    active_paginator = Paginator(active_qs, 10)
     active_page_num = request.GET.get('active_page', 1)
     active_orders = active_paginator.get_page(active_page_num)
 
-    # 🌟 5. ระบบแบ่งหน้า (Pagination) กลุ่ม Closed 🌟
-    closed_paginator = Paginator(closed_qs, 10) # 10 รายการต่อหน้า
+    closed_paginator = Paginator(closed_qs, 10)
     closed_page_num = request.GET.get('closed_page', 1)
     closed_orders = closed_paginator.get_page(closed_page_num)
 
-    # 🌟 6. สร้าง QueryString ไว้แปะตอนเปลี่ยนหน้า (เพื่อให้การค้นหาไม่หลุด) 🌟
     url_params = request.GET.copy()
     if 'active_page' in url_params: del url_params['active_page']
     if 'closed_page' in url_params: del url_params['closed_page']
     filter_string = url_params.urlencode()
 
-    # ดึงข้อมูลตัวเลือก Dropdown
     prod_statuses = ProductionStatus.objects.all().order_by('name')
     prod_teams = ProductionTeam.objects.all().order_by('name')
     deliv_statuses = DeliveryStatus.objects.all().order_by('name')
@@ -82,16 +75,14 @@ def production_list(request):
         'deliv_statuses': deliv_statuses,
         'transporters': transporters,
         'salespersons': salespersons,
-        # ส่งค่ากลับไปให้หน้าเว็บ
         'start_date': start_date,
         'end_date': end_date,
         'search_q': search_q,
         'search_salesperson': search_salesperson,
         'search_team': search_team,
-        'filter_string': filter_string, # ส่ง QueryString ไปใช้ใน Template
+        'filter_string': filter_string,
     })
 
-# --- (ฟังก์ชันอื่นๆ ด้านล่าง คงไว้เหมือนเดิมทั้งหมดครับ) ---
 @login_required
 def production_create(request):
     boms = BOM.objects.select_related('product').all()
@@ -147,28 +138,35 @@ def production_process(request, pk):
     if order.status == 'COMPLETED':
         messages.warning(request, "⚠️ รายการนี้ผลิตเสร็จและรับเข้าคลังไปแล้ว!")
         return redirect('production_list')
-    bom = BOM.objects.filter(product=order.product).first()
-    if not bom:
-        messages.error(request, "❌ ไม่พบสูตรผลิตสำหรับสินค้านี้")
-        return redirect('production_list')
+    
+    job_materials = order.materials.all()
+    if not job_materials:
+        messages.error(request, "❌ ไม่พบรายการวัตถุดิบในใบสั่งผลิตนี้ กรุณาดึงสูตรมาตรฐานหรือเพิ่มวัตถุดิบก่อนกดตัดสต็อก")
+        return redirect('production_detail', pk=order.pk)
+
     shortage = []
-    for item in bom.items.all():
-        required_qty = float(item.quantity) * order.quantity
+    for item in job_materials:
+        required_qty = float(item.quantity)
         if float(item.raw_material.stock_qty) < required_qty:
             shortage.append(f"{item.raw_material.name} (ขาด {required_qty - float(item.raw_material.stock_qty):.2f})")
+    
     if shortage:
         err_msg = " / ".join(shortage)
-        messages.error(request, f"❌ ไม่สามารถผลิตได้! วัตถุดิบไม่พอ: {err_msg}")
-        return redirect('production_list')
-    doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบผลิต {order.product.name} จำนวน {order.quantity}", created_by=request.user)
-    for item in bom.items.all():
-        StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=float(item.quantity) * order.quantity, movement_type='OUT', created_by=request.user)
+        messages.error(request, f"❌ ไม่สามารถตัดสต็อกได้! วัตถุดิบในคลังไม่พอ: {err_msg}")
+        return redirect('production_detail', pk=order.pk)
+    
+    doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบผลิต {order.product.name} (รวมรายการส่วนเพิ่ม)", created_by=request.user)
+    for item in job_materials:
+        StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=float(item.quantity), movement_type='OUT', created_by=request.user)
+    
     doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code}", created_by=request.user)
     StockMovement.objects.create(doc=doc_in, product=order.product, quantity=order.quantity, movement_type='IN', created_by=request.user)
+    
     order.status = 'COMPLETED'
     order.finish_date = timezone.now().date()
     order.save()
-    messages.success(request, f"🎉 ตัดสต็อกสำเร็จ! หักวัตถุดิบและนำ {order.product.name} ({order.quantity} ชิ้น) เข้าคลังเรียบร้อยแล้ว!")
+    
+    messages.success(request, f"🎉 สำเร็จ! หักวัตถุดิบที่ใช้จริงทั้งหมด และรับ {order.product.name} ({order.quantity} หลัง) เข้าคลังเรียบร้อยแล้ว!")
     return redirect('production_list')
 
 @login_required
@@ -203,10 +201,93 @@ def ppo_prepare(request):
         else: messages.warning(request, "⚠️ กรุณาติ๊กเลือกอย่างน้อย 1 ใบสั่งผลิต (JOB) เพื่อคำนวณวัตถุดิบ")
     return render(request, 'manufacturing/ppo_prepare.html', {'available_jobs': available_jobs, 'ppo_code': ppo_code, 'materials_by_supplier': materials_by_supplier, 'selected_job_ids': [int(i) for i in selected_job_ids]})
 
+# ==========================================
+# 🌟 ฟังก์ชันใหม่: การจัดการหน้างานผลิต 🌟
+# ==========================================
 @login_required
 def production_detail(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
-    return render(request, 'manufacturing/production_detail.html', {'order': order})
+    materials = order.materials.all() 
+    has_bom = BOM.objects.filter(product=order.product).exists() 
+    raw_materials = Product.objects.filter(product_type='RM', is_active=True).order_by('code')
+    
+    return render(request, 'manufacturing/production_detail.html', {
+        'order': order,
+        'materials': materials,
+        'has_bom': has_bom,
+        'raw_materials': raw_materials
+    })
+
+@login_required
+def upload_blueprint(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    if request.method == 'POST' and 'blueprint_file' in request.FILES:
+        order.blueprint_file = request.FILES['blueprint_file']
+        order.save()
+        messages.success(request, f"📎 แนบไฟล์แบบแปลน (Blueprint) สำหรับ {order.code} เรียบร้อยแล้ว")
+    return redirect('production_detail', pk=order.pk)
+
+@login_required
+def load_standard_bom(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    
+    if order.materials.exists():
+        messages.warning(request, "⚠️ มีการดึงรายการสูตรผลิตในใบสั่งผลิตนี้ไปแล้ว")
+        return redirect('production_detail', pk=order.pk)
+        
+    bom = BOM.objects.filter(product=order.product).first()
+    if not bom:
+        messages.error(request, "❌ ไม่พบสูตรผลิตมาตรฐาน (BOM) สำหรับสินค้ารุ่นนี้")
+        return redirect('production_detail', pk=order.pk)
+        
+    for item in bom.items.all():
+        ProductionOrderMaterial.objects.create(
+            production_order=order,
+            raw_material=item.raw_material,
+            quantity=item.quantity * order.quantity,
+            is_additional=False
+        )
+    messages.success(request, "📋 ดึงรายการวัตถุดิบจากสูตรมาตรฐานเรียบร้อยแล้ว!")
+    return redirect('production_detail', pk=order.pk)
+
+@login_required
+def start_production(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    order.status = 'IN_PROGRESS'
+    order.save()
+    messages.success(request, f"🚀 เริ่มการผลิตสำหรับ {order.code} แล้ว! (สถานะฝั่งเซลล์จะเปลี่ยนเป็น 'กำลังผลิต' ทันที)")
+    return redirect('production_list')
+
+@login_required
+def add_additional_material(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    if request.method == 'POST':
+        product_id = request.POST.get('raw_material')
+        qty = float(request.POST.get('quantity', 0))
+        
+        if product_id and qty > 0:
+            rm = get_object_or_404(Product, pk=product_id)
+            ProductionOrderMaterial.objects.create(
+                production_order=order,
+                raw_material=rm,
+                quantity=qty,
+                is_additional=True 
+            )
+            messages.success(request, f"➕ เพิ่มวัตถุดิบส่วนเพิ่ม: {rm.name} จำนวน {qty} ลงในบิลเรียบร้อยแล้ว")
+        else:
+            messages.error(request, "❌ กรุณาเลือกวัตถุดิบและใส่จำนวนให้ถูกต้อง")
+    return redirect('production_detail', pk=order.pk)
+
+@login_required
+def delete_production_material(request, pk):
+    mat = get_object_or_404(ProductionOrderMaterial, pk=pk)
+    order_id = mat.production_order.id
+    if mat.production_order.status != 'COMPLETED':
+        mat.delete()
+        messages.success(request, "🗑️ ลบรายการวัตถุดิบออกจากบิลผลิตเรียบร้อยแล้ว")
+    else:
+        messages.error(request, "❌ ไม่สามารถลบได้เนื่องจากใบสั่งผลิตนี้ดำเนินการเสร็จสิ้นแล้ว")
+    return redirect('production_detail', pk=order_id)
 
 @login_required
 def generate_pos_from_production(request, pk):
@@ -272,13 +353,11 @@ def update_production_board(request, pk):
     if request.method == 'POST':
         order = get_object_or_404(ProductionOrder, pk=pk)
 
-        # รับค่าจาก Popup Modal มาอัปเดตบิล
         order.production_status_id = request.POST.get('production_status') or None
         order.production_team_id = request.POST.get('production_team') or None
         order.delivery_status_id = request.POST.get('delivery_status') or None
         order.transporter_id = request.POST.get('transporter') or None
 
-        # รับค่า สวิตช์ปิดจ๊อบ
         is_closed = request.POST.get('is_closed')
         if is_closed == 'on':
             order.is_closed = True
@@ -352,19 +431,11 @@ def ajax_add_transporter(request):
             return JsonResponse({'success': True, 'id': obj.id, 'name': obj.name})
     return JsonResponse({'success': False})
 
-# ==========================================
-# 🌟 ดึงข้อมูลสินค้าสำเร็จรูป (FG) ตามหมวดหมู่ (AJAX) 🌟
-# ==========================================
 @login_required
 def ajax_get_fg_by_category(request):
     category_id = request.GET.get('category_id')
-    # ดึงเฉพาะ FG ที่เปิดใช้งานอยู่
     products = Product.objects.filter(product_type='FG', is_active=True)
-
-    # ถ้ามีการส่ง ID หมวดหมู่มา ให้กรองเพิ่ม
     if category_id:
         products = products.filter(category_id=category_id)
-
-    # แปลงเป็น List เพื่อส่งกลับไปให้หน้าเว็บ
     product_list = list(products.values('id', 'name', 'code'))
     return JsonResponse({'products': product_list})

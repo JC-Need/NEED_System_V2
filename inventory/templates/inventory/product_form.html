@@ -47,9 +47,16 @@
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            {{ form.image|as_crispy_field }}
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                {{ form.image|as_crispy_field }}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.standard_blueprint|as_crispy_field }}
+                                <small class="text-muted"><i class="fas fa-info-circle"></i> ใช้แนบไฟล์ PDF (เช่น SUP3.pdf) สำหรับส่งให้ฝ่ายผลิต</small>
+                            </div>
                         </div>
+
                         <div class="mb-4">
                             {{ form.is_active|as_crispy_field }}
                         </div>
@@ -88,7 +95,6 @@
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         
-        // 🌟 ฟังก์ชันสร้างปุ่ม + สำหรับเปิด Popup (ใช้กับหมวดหมู่) 🌟
         function addPlusButtonModal(selectId, modalId) {
             const selectEl = document.getElementById(selectId);
             if (selectEl) {
@@ -105,7 +111,6 @@
             }
         }
 
-        // 🌟 ฟังก์ชันสร้างปุ่ม + สำหรับเด้งไปหน้าจอใหม่ (ใช้กับร้านค้า) 🌟
         function addPlusButtonLink(selectId, targetUrl) {
             const selectEl = document.getElementById(selectId);
             if (selectEl) {
@@ -114,7 +119,6 @@
                 selectEl.parentNode.insertBefore(wrapper, selectEl);
                 wrapper.appendChild(selectEl);
                 
-                // เปิดแท็บใหม่ไปหน้าจัดการร้านค้า
                 const btnHTML = `<a href="${targetUrl}" target="_blank" class="btn btn-outline-primary fw-bold d-flex align-items-center" title="ไปหน้าจัดการร้านค้า" style="border-left: 0;"><i class="fas fa-plus"></i></a>`;
                 wrapper.insertAdjacentHTML('beforeend', btnHTML);
                 
@@ -123,13 +127,9 @@
             }
         }
 
-        // เสกปุ่มให้ช่อง Category (ใช้แบบ Popup ด่วน)
         addPlusButtonModal('id_category', '#categoryModal');
-        
-        // เสกปุ่มให้ช่อง Supplier (ใช้แบบลิงก์เปิดหน้าใหม่)
         addPlusButtonLink('id_supplier', '/master_data/suppliers/');
 
-        // 🌟 ฟังก์ชัน AJAX บันทึกหมวดหมู่แบบด่วน 🌟
         const btnSaveCat = document.getElementById('btnSaveCategory');
         if(btnSaveCat) {
             btnSaveCat.addEventListener('click', function() {
@@ -148,7 +148,7 @@
                         const select = document.getElementById('id_category');
                         select.add(new Option(data.name, data.id, true, true));
                         bootstrap.Modal.getInstance(document.getElementById('categoryModal')).hide();
-                        document.getElementById('newCategoryName').value = ''; 
+                        document.getElementById('newCategoryName').value = '';
                     } else {
                         alert('เกิดข้อผิดพลาด: ' + data.error);
                     }
@@ -156,7 +156,6 @@
             });
         }
 
-        // โค้ดจัดการตัวเลข (ลูกน้ำ) เดิมของคุณลูกค้า
         const numberInputs = document.querySelectorAll('.number-input');
         numberInputs.forEach(input => {
             input.addEventListener('focus', function() {

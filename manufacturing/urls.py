@@ -13,6 +13,15 @@ urlpatterns = [
     path('production/<int:pk>/generate-pos/', views.generate_pos_from_production, name='generate_pos_from_production'),
     path('prepare-purchase/', views.ppo_prepare, name='ppo_prepare'),
 
+    # 🌟 เส้นทางสำหรับกระบวนการสั่งผลิต (หน้า Detail) 🌟
+    path('production/<int:pk>/upload-blueprint/', views.upload_blueprint, name='upload_blueprint'),
+    path('production/<int:pk>/load-bom/', views.load_standard_bom, name='load_standard_bom'),
+    path('production/<int:pk>/start/', views.start_production, name='start_production'),
+    
+    # 🌟 เส้นทางสำหรับจัดการวัตถุดิบส่วนเพิ่ม 🌟
+    path('production/<int:pk>/add-material/', views.add_additional_material, name='add_additional_material'),
+    path('production/material/<int:pk>/delete/', views.delete_production_material, name='delete_production_material'),
+
     # ระบบสูตรผลิต (BOM)
     path('bom/', views.bom_list, name='bom_list'),
     path('bom/create/', views.bom_create, name='bom_create'),

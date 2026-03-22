@@ -50,16 +50,18 @@ class ProductForm(forms.ModelForm):
 
     class Meta:
         model = Product
-        # ✅ เพิ่ม 'supplier' เข้าไปใน fields
-        fields = ['product_type', 'code', 'name', 'category', 'supplier', 'cost_price', 'sell_price', 'min_level', 'image', 'is_active']
+        # 🌟 [เพิ่มใหม่] นำ standard_blueprint เข้ามาอยู่ในฟอร์ม 🌟
+        fields = ['product_type', 'code', 'name', 'category', 'supplier', 'cost_price', 'sell_price', 'min_level', 'image', 'standard_blueprint', 'is_active']
         widgets = {
             'product_type': forms.Select(attrs={'class': 'form-select'}),
             'code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เว้นว่างเพื่อสร้างรหัสอัตโนมัติ'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'category': forms.Select(attrs={'class': 'form-select select2'}),
-            'supplier': forms.Select(attrs={'class': 'form-select select2'}), # ✅ เพิ่ม Widget ให้ Supplier
+            'supplier': forms.Select(attrs={'class': 'form-select select2'}),
             'min_level': forms.NumberInput(attrs={'class': 'form-control', 'value': 5}),
             'image': forms.FileInput(attrs={'class': 'form-control'}),
+            # 🌟 [เพิ่มใหม่] ตกแต่งช่องรับไฟล์แปลนให้สวยงาม 🌟
+            'standard_blueprint': forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf,image/*'}), 
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 

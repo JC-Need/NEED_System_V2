@@ -3,13 +3,14 @@ from . import views
 
 urlpatterns = [
     path('', views.inventory_dashboard, name='inventory_dashboard'),
-    
+    path('products/', views.product_list, name='product_list'),
+
     path('documents/in/', views.document_list_in, name='document_list_in'),
     path('documents/out/', views.document_list_out, name='document_list_out'),
 
     path('stock/in/', views.stock_in, name='stock_in'),
     path('stock/out/', views.stock_out, name='stock_out'),
-    
+
     path('product/new/', views.product_create, name='product_create'),
     path('product/edit/<int:pk>/', views.product_update, name='product_update'),
     path('product/delete/<int:pk>/', views.product_delete, name='product_delete'),

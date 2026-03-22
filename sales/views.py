@@ -295,7 +295,6 @@ def record_deposit(request, qt_id):
             return redirect(next_url)
 
     return redirect('quotation_edit', qt_id=qt.id)
-
 @login_required
 def create_job_order(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
@@ -315,6 +314,11 @@ def create_job_order(request, qt_id):
         customer_name=qt.customer_name,
         note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}"
     )
+
+    # 🌟 [เพิ่มใหม่] ตรวจสอบว่าสินค้ามีแบบแปลนมาตรฐานไหม ถ้ามีให้ก๊อปปี้ลง Job Order อัตโนมัติ 🌟
+    if first_item.product and first_item.product.standard_blueprint:
+        job.blueprint_file = first_item.product.standard_blueprint
+        job.save()
 
     messages.success(request, f"🏭 ส่งข้อมูลเปิดใบสั่งผลิต (Job Order: {job.code}) ให้แผนกปฏิบัติการเรียบร้อยแล้ว!")
     return redirect('quotation_list')

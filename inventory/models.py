@@ -40,6 +40,10 @@ class Product(models.Model):
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ซัพพลายเออร์หลัก")
     
     image = models.ImageField(upload_to='products/', blank=True, null=True, verbose_name="รูปสินค้า")
+    
+    # 🌟 [เพิ่มใหม่] ช่องเก็บไฟล์แบบแปลนมาตรฐานสำหรับแผนกผลิต 🌟
+    standard_blueprint = models.FileField(upload_to='standard_blueprints/', blank=True, null=True, verbose_name="ไฟล์แบบแปลนมาตรฐาน (PDF/รูปภาพ)")
+    
     is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -49,7 +53,6 @@ class Product(models.Model):
     def save(self, *args, **kwargs):
         if not self.code:
             today = datetime.date.today()
-            # 🌟 ปรับให้รหัสสินค้าใช้ปี พ.ศ. ด้วย เพื่อความเข้ากันได้ของระบบ 🌟
             thai_year = (today.year + 543) % 100
             year_month = f"{thai_year:02d}{today.strftime('%m')}"
             
@@ -81,7 +84,6 @@ class InventoryDoc(models.Model):
     doc_no = models.CharField(max_length=50, unique=True, blank=True, verbose_name="เลขที่เอกสาร")
     doc_type = models.CharField(max_length=2, choices=DOC_TYPES, verbose_name="ประเภทเอกสาร")
     
-    # สะพานเชื่อมกลับไปหาใบสั่งซื้อ (PO)
     po_reference = models.ForeignKey('purchasing.PurchaseOrder', on_delete=models.SET_NULL, null=True, blank=True, related_name='receipt_docs', verbose_name="อ้างอิงใบสั่งซื้อ (PO)")
     
     reference = models.CharField(max_length=100, blank=True, verbose_name="อ้างอิงอื่นๆ (เช่น ทะเบียนรถ, ใบส่งของ)")
@@ -92,7 +94,6 @@ class InventoryDoc(models.Model):
     def save(self, *args, **kwargs):
         if not self.doc_no:
             today = datetime.date.today()
-            # 🌟 ปรับให้เลขใบรับสินค้า (GR/GI) ใช้ปี พ.ศ. และรัน 3 หลัก 🌟
             thai_year = (today.year + 543) % 100
             year_month = f"{thai_year:02d}{today.strftime('%m')}"
             
