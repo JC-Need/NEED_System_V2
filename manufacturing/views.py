@@ -290,6 +290,12 @@ def delete_production_material(request, pk):
     return redirect('production_detail', pk=order_id)
 
 @login_required
+def blueprint_viewer(request, pk):
+    """ฟังก์ชันสำหรับเปิดหน้าต่างดูแบบแปลนแบบมีแถบรายละเอียด JOB (เปิดแท็บใหม่)"""
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    return render(request, 'manufacturing/blueprint_viewer.html', {'order': order})
+
+@login_required
 def generate_pos_from_production(request, pk):
     messages.info(request, "ฟังก์ชันนี้กำลังอยู่ระหว่างการพัฒนาเพิ่มเติม")
     return redirect('ppo_prepare')

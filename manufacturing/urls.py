@@ -22,6 +22,9 @@ urlpatterns = [
     path('production/<int:pk>/add-material/', views.add_additional_material, name='add_additional_material'),
     path('production/material/<int:pk>/delete/', views.delete_production_material, name='delete_production_material'),
 
+    # 🌟 เส้นทางสำหรับหน้าต่างดูแบบแปลนอัจฉริยะ (แยกหน้า) 🌟
+    path('production/<int:pk>/blueprint-viewer/', views.blueprint_viewer, name='blueprint_viewer'),
+
     # ระบบสูตรผลิต (BOM)
     path('bom/', views.bom_list, name='bom_list'),
     path('bom/create/', views.bom_create, name='bom_create'),

@@ -6,15 +6,19 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
             <h4 class="fw-bold mb-1 text-dark">
-                <i class="fas fa-clipboard-list text-primary me-2"></i>แฟ้มใบสั่งผลิต: <span class="font-monospace text-danger">{{ order.code }}</span>
+                <i class="fas fa-clipboard-list text-primary me-2"></i>ใบสั่งผลิต (JOB): <span class="font-monospace text-danger">{{ order.code }}</span>
             </h4>
-            <p class="text-muted mb-0"><i class="far fa-calendar-alt me-1"></i> วันที่สั่งผลิต: {{ order.start_date|date:"d/m/Y" }}</p>
+            <p class="text-muted mb-0">
+                {% if order.status == 'PLANNED' %}<span class="badge bg-primary rounded-pill px-3 shadow-sm">วางแผนผลิต</span>
+                {% elif order.status == 'IN_PROGRESS' %}<span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm">กำลังผลิต</span>
+                {% elif order.status == 'COMPLETED' %}<span class="badge bg-success rounded-pill px-3 shadow-sm">ผลิตเสร็จสิ้น</span>{% endif %}
+            </p>
         </div>
         <div class="d-flex gap-2">
             <a href="{% url 'production_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
                 <i class="fas fa-arrow-left me-1"></i> กลับกระดาน
             </a>
-            
+
             {% if order.status == 'PLANNED' %}
             <form action="{% url 'start_production' order.id %}" method="POST" class="d-inline">
                 {% csrf_token %}
@@ -22,10 +26,6 @@
                     <i class="fas fa-play-circle me-1"></i> ยืนยันเริ่มผลิต (Start)
                 </button>
             </form>
-            {% elif order.status == 'IN_PROGRESS' %}
-                <button class="btn btn-warning text-dark rounded-pill px-4 fw-bold shadow-sm border" disabled><i class="fas fa-tools me-1"></i> กำลังผลิต...</button>
-            {% elif order.status == 'COMPLETED' %}
-                <button class="btn btn-success rounded-pill px-4 fw-bold shadow-sm border" disabled><i class="fas fa-check-circle me-1"></i> ผลิตเสร็จสิ้น</button>
             {% endif %}
         </div>
     </div>
@@ -34,96 +34,97 @@
         <div class="card-body p-0">
             <div class="row g-0">
                 <div class="col-md-4 p-4 border-end bg-light bg-opacity-50">
-                    <h6 class="text-muted small fw-bold mb-3 text-uppercase"><i class="fas fa-address-book me-2"></i>ข้อมูลลูกค้า & อ้างอิง</h6>
-                    
-                    <div class="d-flex align-items-center mb-3 bg-white p-3 rounded-3 shadow-sm border">
-                        <div class="bg-primary bg-opacity-10 p-3 rounded-circle me-3">
-                            <i class="fas fa-user-tie text-primary fa-lg"></i>
-                        </div>
-                        <div>
-                            <p class="mb-0 small text-muted">ชื่อลูกค้า</p>
-                            <h6 class="mb-0 fw-bold text-dark">{{ order.customer_name|default:"ลูกค้าทั่วไป (ไม่ระบุชื่อ)" }}</h6>
-                        </div>
+                    <h6 class="text-muted small fw-bold mb-3 text-uppercase"><i class="fas fa-address-card text-info me-2"></i>ข้อมูลโปรเจกต์ & ลูกค้า</h6>
+
+                    <div class="mb-3">
+                        <span class="text-muted small">ชื่อลูกค้า:</span>
+                        <h6 class="fw-bold text-dark mb-0">{{ order.customer_name|default:"ลูกค้าทั่วไป (ไม่ระบุชื่อ)" }}</h6>
                     </div>
-                    
-                    <div class="d-flex align-items-center bg-white p-3 rounded-3 shadow-sm border">
-                        <div class="bg-secondary bg-opacity-10 p-3 rounded-circle me-3">
-                            <i class="fas fa-file-invoice text-secondary fa-lg"></i>
-                        </div>
-                        <div>
-                            <p class="mb-0 small text-muted">อ้างอิงใบเสนอราคา</p>
-                            <h6 class="mb-0 fw-bold text-dark">
-                                {% if order.quotation_ref %}
-                                    <a href="{% url 'quotation_edit' order.quotation_ref.id %}" target="_blank" class="text-decoration-none">{{ order.quotation_ref.code }} <i class="fas fa-external-link-alt ms-1 small"></i></a>
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </h6>
-                        </div>
+                    <div class="mb-3">
+                        <span class="text-muted small">พนักงานขาย (Sales):</span>
+                        <h6 class="fw-bold text-dark mb-0"><i class="fas fa-user-tie text-primary me-1"></i> {{ order.salesperson.name|default:"ไม่ระบุ" }}</h6>
+                    </div>
+                    <div>
+                        <span class="text-muted small">อ้างอิงใบเสนอราคา:</span>
+                        <h6 class="fw-bold text-dark mb-0">
+                            {% if order.quotation_ref %}
+                                <a href="{% url 'quotation_edit' order.quotation_ref.id %}" target="_blank" class="text-decoration-none"><i class="fas fa-file-invoice me-1"></i> {{ order.quotation_ref.code }}</a>
+                            {% else %} - {% endif %}
+                        </h6>
                     </div>
                 </div>
 
-                <div class="col-md-5 p-4 border-end">
-                    <h6 class="text-muted small fw-bold mb-3 text-uppercase"><i class="fas fa-box-open me-2"></i>สินค้าที่สั่งทำ (Finished Good)</h6>
-                    <div class="d-flex align-items-start mt-3">
-                        {% if order.product.image %}
-                            <img src="{{ order.product.image.url }}" class="rounded-4 shadow-sm me-4 border" style="width: 100px; height: 100px; object-fit: cover;">
-                        {% else %}
-                            <div class="bg-light rounded-4 shadow-sm me-4 d-flex align-items-center justify-content-center border border-dashed" style="width: 100px; height: 100px;">
-                                <i class="fas fa-image text-muted fa-3x opacity-25"></i>
-                            </div>
-                        {% endif %}
-                        <div class="pt-1">
-                            <span class="badge bg-dark text-white rounded-pill mb-2 px-3 shadow-sm fs-6 font-monospace">{{ order.product.code }}</span>
-                            <h4 class="fw-bold text-primary mb-1">{{ order.product.name }}</h4>
-                            <p class="mb-0 text-muted"><i class="fas fa-tags me-1"></i>หมวดหมู่: {{ order.product.category.name|default:"-" }}</p>
-                        </div>
+                <div class="col-md-4 p-4 border-end">
+                    <h6 class="text-muted small fw-bold mb-3 text-uppercase"><i class="fas fa-hard-hat text-warning me-2"></i>ส่วนการผลิต (Production)</h6>
+
+                    <div class="mb-3">
+                        <span class="text-muted small">ทีมที่ผลิต:</span>
+                        <h6 class="fw-bold text-dark mb-0">
+                            {% if order.production_team %}
+                                <i class="fas fa-users-cog text-warning me-1"></i> {{ order.production_team.name }}
+                            {% else %}
+                                <span class="text-danger small"><i class="fas fa-exclamation-circle"></i> ยังไม่ระบุทีมช่าง</span>
+                            {% endif %}
+                        </h6>
+                    </div>
+                    <div class="mb-3">
+                        <span class="text-muted small">วันที่เริ่มงาน:</span>
+                        <h6 class="fw-bold text-dark mb-0"><i class="far fa-calendar-check text-secondary me-1"></i> {{ order.start_date|date:"d/m/Y"|default:"-" }}</h6>
+                    </div>
+                    <div>
+                        <span class="text-muted small">กำหนดงานเสร็จ (Target):</span>
+                        <h6 class="fw-bold text-danger mb-0"><i class="fas fa-flag-checkered me-1"></i> {{ order.delivery_date|date:"d/m/Y"|default:"ยังไม่กำหนด" }}</h6>
                     </div>
                 </div>
 
-                <div class="col-md-3 p-4 d-flex flex-column justify-content-center align-items-center bg-success bg-opacity-10">
-                    <p class="text-success small fw-bold mb-1 text-uppercase"><i class="fas fa-sort-numeric-up-alt me-1"></i>จำนวนที่ผลิต</p>
-                    <h1 class="display-3 fw-bold text-success mb-0" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">{{ order.quantity }}</h1>
-                    <span class="badge bg-success rounded-pill px-4 py-2 mt-2 fs-6">หน่วย/หลัง</span>
+                <div class="col-md-4 p-4 d-flex flex-column justify-content-center align-items-center bg-primary bg-opacity-10">
+                    <h1 class="display-4 fw-bold text-dark mb-1 font-monospace" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">{{ order.product.code }}</h1>
+                    <h6 class="fw-bold text-primary mb-3 text-center">{{ order.product.name }}</h6>
+
+                    <p class="text-primary small fw-bold mb-0 text-uppercase">จำนวนผลิต</p>
+                    <div class="d-flex align-items-baseline text-primary">
+                        <h2 class="fw-bold mb-0 me-2">{{ order.quantity }}</h2>
+                        <span class="fw-bold">หลัง</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="row g-4">
-        <div class="col-lg-4">
+        <div class="col-lg-5">
             <div class="card border-0 shadow-sm rounded-4 mb-4 h-100">
-                <div class="card-header bg-white py-3 border-bottom">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark"><i class="fas fa-file-pdf text-danger me-2"></i>แบบแปลนสั่งทำ (Blueprint)</h6>
                 </div>
                 <div class="card-body p-4 text-center d-flex flex-column justify-content-center">
-                    
+
                     {% if order.blueprint_file %}
                         <div class="mb-4">
                             <div class="position-relative d-inline-block">
                                 <i class="fas fa-file-pdf fa-5x text-danger mb-3 shadow-sm bg-white rounded-circle p-4 border border-danger border-opacity-25"></i>
                                 <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success border border-light border-2">Ready</span>
                             </div>
-                            <h6 class="fw-bold text-dark text-truncate px-3 mt-2" title="{{ order.blueprint_file.name }}">
+                            <h6 class="fw-bold text-dark text-truncate px-3 mt-3" title="{{ order.blueprint_file.name }}">
                                 {{ order.blueprint_file.name }}
                             </h6>
-                            <a href="{{ order.blueprint_file.url }}" target="_blank" class="btn btn-outline-danger rounded-pill fw-bold px-4 mt-2 shadow-sm w-100">
-                                <i class="fas fa-external-link-alt me-1"></i> เปิดดูแบบแปลน
+                            <a href="{% url 'blueprint_viewer' order.id %}" target="_blank" class="btn btn-danger rounded-pill fw-bold px-4 mt-3 shadow-sm w-100 py-2">
+                                <i class="fas fa-external-link-alt me-2"></i> เปิดดูแบบแปลน (หน้าต่างใหม่)
                             </a>
                         </div>
                     {% else %}
-                        <div class="p-4 mb-4 bg-light rounded-4 border border-dashed">
-                            <i class="fas fa-file-image fa-3x text-muted opacity-25 mb-3"></i>
-                            <p class="text-muted small fw-bold mb-0">ยังไม่มีไฟล์แบบแปลน</p>
-                            <small class="text-muted opacity-75">กรุณาอัปโหลดไฟล์ด้านล่าง</small>
+                        <div class="p-5 mb-4 bg-light rounded-4 border border-dashed text-center d-flex flex-column justify-content-center h-100">
+                            <i class="fas fa-file-pdf fa-4x text-muted opacity-25 mb-3"></i>
+                            <h6 class="text-muted fw-bold mb-1">ยังไม่มีไฟล์แบบแปลน</h6>
+                            <small class="text-muted opacity-75">กรุณาแนบไฟล์ PDF เพื่อให้ช่างดูแบบ</small>
                         </div>
                     {% endif %}
-                    
-                    <hr class="my-2 border-secondary opacity-25">
-                    
+
+                    <hr class="mt-auto mb-3 border-secondary opacity-25">
+
                     <form action="{% url 'upload_blueprint' order.id %}" method="POST" enctype="multipart/form-data" class="text-start mt-2">
                         {% csrf_token %}
-                        <label class="small fw-bold text-muted mb-2"><i class="fas fa-upload me-1"></i>อัปโหลดแปลนใหม่ (แนบทับของเดิม)</label>
+                        <label class="small fw-bold text-muted mb-2"><i class="fas fa-upload me-1"></i>แนบไฟล์แปลนใหม่ (เซฟทับของเดิม)</label>
                         <div class="input-group input-group-sm shadow-sm rounded-pill overflow-hidden">
                             <input type="file" name="blueprint_file" class="form-control border-0 bg-light" accept=".pdf,image/*" required>
                             <button type="submit" class="btn btn-dark fw-bold px-3 border-0">อัปโหลด</button>
@@ -133,11 +134,11 @@
             </div>
         </div>
 
-        <div class="col-lg-8">
+        <div class="col-lg-7">
             <div class="card border-0 shadow-sm rounded-4 h-100">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark"><i class="fas fa-cubes text-info me-2"></i>รายการวัตถุดิบที่ต้องใช้ (BOM)</h6>
-                    
+
                     {% if not materials and has_bom %}
                     <form action="{% url 'load_standard_bom' order.id %}" method="POST" class="d-inline">
                         {% csrf_token %}
@@ -158,9 +159,9 @@
                         {% csrf_token %}
                         <div class="col-md-7">
                             <select name="raw_material" class="form-select form-select-sm select2 w-100" required>
-                                <option value="">-- ค้นหาและเพิ่มวัตถุดิบพิเศษ / ของแถม --</option>
+                                <option value="">-- ค้นหาของสั่งเพิ่มพิเศษ / ของแถม --</option>
                                 {% for rm in raw_materials %}
-                                    <option value="{{ rm.id }}">{{ rm.code }} : {{ rm.name }} (คงเหลือ: {{ rm.stock_qty }})</option>
+                                    <option value="{{ rm.id }}">{{ rm.code }} : {{ rm.name }} (เหลือ: {{ rm.stock_qty }})</option>
                                 {% endfor %}
                             </select>
                         </div>
@@ -173,15 +174,15 @@
                     </form>
                 </div>
                 {% endif %}
-                
+
                 <div class="table-responsive">
                     <table class="table table-hover align-middle mb-0">
                         <thead class="bg-light text-secondary small text-uppercase border-bottom">
                             <tr>
-                                <th class="ps-4 py-3 border-0" width="10%">ลำดับ</th>
-                                <th class="py-3 border-0" width="40%">รหัส / ชื่อวัตถุดิบ</th>
-                                <th class="py-3 text-center border-0" width="20%">ประเภทรายการ</th>
-                                <th class="pe-4 py-3 text-end border-0" width="30%">จำนวนที่ใช้</th>
+                                <th class="ps-4 py-3 border-0" width="10%">#</th>
+                                <th class="py-3 border-0" width="45%">รหัส / ชื่อวัตถุดิบ</th>
+                                <th class="py-3 text-center border-0" width="20%">ประเภท</th>
+                                <th class="pe-4 py-3 text-end border-0" width="25%">จำนวนที่ใช้</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -194,14 +195,14 @@
                                 </td>
                                 <td class="text-center">
                                     {% if mat.is_additional %}
-                                        <span class="badge bg-warning text-dark border border-warning rounded-pill px-3 shadow-sm">สั่งเพิ่มพิเศษ</span>
+                                        <span class="badge bg-warning text-dark border border-warning rounded-pill px-2 shadow-sm">สั่งเพิ่มพิเศษ</span>
                                     {% else %}
-                                        <span class="badge bg-light text-secondary border rounded-pill px-3">แบบมาตรฐาน</span>
+                                        <span class="badge bg-light text-secondary border rounded-pill px-2">แบบมาตรฐาน</span>
                                     {% endif %}
                                 </td>
                                 <td class="pe-4 text-end">
                                     <span class="fw-bold text-primary fs-5 me-3">{{ mat.quantity|floatformat:2 }}</span>
-                                    
+
                                     {% if order.status != 'COMPLETED' %}
                                         <form action="{% url 'delete_production_material' mat.id %}" method="POST" class="d-inline">
                                             {% csrf_token %}
@@ -215,24 +216,20 @@
                             {% empty %}
                             <tr>
                                 <td colspan="4" class="text-center py-5 text-muted">
-                                    <i class="fas fa-box-open fa-4x mb-3 opacity-25 text-info"></i>
-                                    <h5 class="fw-bold text-dark">ยังไม่มีรายการวัตถุดิบในงานนี้</h5>
-                                    {% if has_bom %}
-                                        <p class="text-muted small">กรุณากดปุ่ม <span class="badge bg-info text-dark">ดึงสูตรมาตรฐาน</span> ที่มุมขวาบน 👆<br>หรือค้นหาเพิ่มเองได้จากช่องด้านบนเลยค่ะ</p>
-                                    {% else %}
-                                        <p class="text-danger small">โปรดให้แอดมินตั้งค่า BOM ให้สินค้าตัวนี้ในคลังสินค้าก่อนทำการผลิต</p>
-                                    {% endif %}
+                                    <i class="fas fa-cubes fa-3x mb-3 opacity-25 text-info"></i>
+                                    <h6 class="fw-bold text-dark">ยังไม่มีรายการวัตถุดิบ</h6>
+                                    <p class="text-muted small">กรุณากดปุ่มดึงสูตรมาตรฐาน หรือเพิ่มวัตถุดิบเองด้านบน</p>
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                
-                <div class="card-footer bg-light py-3 border-0 rounded-bottom-4">
+
+                <div class="card-footer bg-light py-3 border-0 rounded-bottom-4 mt-auto">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="text-muted small">
-                            <span class="fw-bold text-dark"><i class="fas fa-comment-dots text-primary me-1"></i> หมายเหตุงาน:</span> 
+                            <span class="fw-bold text-dark"><i class="fas fa-comment-dots text-primary me-1"></i> หมายเหตุงาน:</span>
                             {{ order.note|default:"ไม่มีระบุ" }}
                         </div>
                         {% if materials %}
