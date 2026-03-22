@@ -169,14 +169,20 @@
                                             {% if item.payment_method == 'TRANSFER' %}
                                                 <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
                                                 {% if item.transfer_slip %}
-                                                    <img src="{{ item.transfer_slip.url }}" class="slip-thumbnail" loading="lazy" onclick="showSlipModal('{{ item.transfer_slip.url }}')" title="คลิกเพื่อขยายรูปสลิป">
+                                                    <img src="{{ item.transfer_slip.url }}" class="slip-thumbnail" loading="lazy" 
+                                                         data-bs-toggle="modal" data-bs-target="#slipModal" 
+                                                         onclick="document.getElementById('slipImageFull').src='{{ item.transfer_slip.url }}'" 
+                                                         title="คลิกเพื่อขยายรูปสลิป">
                                                 {% endif %}
                                             {% elif item.payment_method == 'CASH' %}
                                                 <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
                                             {% elif item.payment_method == 'CHECK' %}
                                                 <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
                                                 {% if item.check_slip %}
-                                                    <img src="{{ item.check_slip.url }}" class="slip-thumbnail" loading="lazy" onclick="showSlipModal('{{ item.check_slip.url }}')" title="คลิกเพื่อขยายรูปเช็ค">
+                                                    <img src="{{ item.check_slip.url }}" class="slip-thumbnail" loading="lazy" 
+                                                         data-bs-toggle="modal" data-bs-target="#slipModal" 
+                                                         onclick="document.getElementById('slipImageFull').src='{{ item.check_slip.url }}'" 
+                                                         title="คลิกเพื่อขยายรูปเช็ค">
                                                 {% endif %}
                                             {% else %}
                                                 <span class="text-muted small">-</span>
@@ -185,7 +191,8 @@
                                     {% else %}
                                         {% if not item.total_amount and item.status != 'PAID' %}
                                             {% if not 'บัญชี' in user.employee.department.name|default:'' and not 'Accounting' in user.employee.department.name|default:'' %}
-                                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold" onclick="openPaymentModal('{{ item.id }}', '{{ item.code }}', '{{ item.balance_amount|default:0 }}')">
+                                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold" 
+                                                        data-bs-toggle="modal" data-bs-target="#paymentModal{{ item.id }}">
                                                     <i class="fas fa-hand-holding-usd me-1"></i> บันทึกรับเงิน
                                                 </button>
                                             {% else %}
@@ -229,6 +236,71 @@
                                     {% endif %}
                                 </td>
                             </tr>
+
+                            {% if not item.total_amount and item.status != 'PAID' %}
+                            <div class="modal fade" id="paymentModal{{ item.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content border-0 rounded-4 shadow-lg">
+                                        <div class="modal-header bg-primary border-0">
+                                            <h5 class="modal-title fw-bold text-white"><i class="fas fa-hand-holding-usd me-2"></i>บันทึกรับชำระเงิน</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{% url 'record_invoice_payment' item.id %}" enctype="multipart/form-data">
+                                            {% csrf_token %}
+                                            <div class="modal-body p-4">
+                                                <div class="alert alert-primary py-2 small mb-4">
+                                                    เอกสารอ้างอิง: <strong>{{ item.code }}</strong><br>
+                                                    ยอดที่ต้องชำระ: <strong class="text-danger fs-6">{{ item.balance_amount|default:0|floatformat:2|intcomma }}</strong> บาท
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
+                                                    <input type="text" name="payment_date" class="form-control datepicker" value="{% now 'Y-m-d' %}" required>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted">ช่องทางรับเงิน</label>
+                                                    <select name="payment_method" id="paymentMethodSelect{{ item.id }}" class="form-select" onchange="togglePaymentFields('{{ item.id }}')">
+                                                        <option value="TRANSFER">โอนเงินเข้าบัญชี</option>
+                                                        <option value="CASH">เงินสด</option>
+                                                        <option value="CHECK">เช็คธนาคาร</option>
+                                                    </select>
+                                                </div>
+
+                                                <div id="transferFields{{ item.id }}">
+                                                    <div class="mb-2">
+                                                        <label class="form-label fw-bold text-muted">อัปโหลดสลิป</label>
+                                                        <input type="file" name="transfer_slip" class="form-control" accept="image/*">
+                                                    </div>
+                                                </div>
+
+                                                <div id="checkFields{{ item.id }}" class="d-none">
+                                                    <div class="row g-2 mb-2">
+                                                        <div class="col-6">
+                                                            <label class="form-label fw-bold text-muted">ธนาคาร</label>
+                                                            <input type="text" name="check_bank" class="form-control" placeholder="เช่น กสิกรไทย">
+                                                        </div>
+                                                        <div class="col-6">
+                                                            <label class="form-label fw-bold text-muted">เลขที่เช็ค</label>
+                                                            <input type="text" name="check_number" class="form-control" placeholder="ระบุเลขที่เช็ค">
+                                                        </div>
+                                                    </div>
+                                                    <div class="mb-2">
+                                                        <label class="form-label fw-bold text-muted">อัปโหลดหน้าเช็ค</label>
+                                                        <input type="file" name="check_slip" class="form-control" accept="image/*">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer bg-light border-0">
+                                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ยืนยันบันทึกรับชำระเงิน? (ยอดนี้จะรอการตรวจสอบจากฝ่ายบัญชีอีกครั้ง)')">บันทึกยอดรับชำระ</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+
                             {% empty %}
                                 <tr><td colspan="9" class="text-center py-5 text-muted"><i class="fas fa-inbox fa-3x mb-3 opacity-25"></i><br>ไม่พบรายการ</td></tr>
                             {% endfor %}
@@ -269,97 +341,19 @@
     </div>
 </div>
 
-<div class="modal fade" id="paymentModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 rounded-4 shadow-lg">
-            <div class="modal-header bg-primary border-0">
-                <h5 class="modal-title fw-bold text-white"><i class="fas fa-hand-holding-usd me-2"></i>บันทึกรับชำระเงิน</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <form id="invoicePaymentForm" method="POST" action="" enctype="multipart/form-data">
-                {% csrf_token %}
-                <div class="modal-body p-4">
-                    <div class="alert alert-primary py-2 small mb-4">
-                        เอกสารอ้างอิง: <strong id="modalInvoiceCode"></strong><br>
-                        ยอดที่ต้องชำระ: <strong id="modalBalanceAmount" class="text-danger fs-6"></strong> บาท
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
-                        <input type="text" name="payment_date" class="form-control datepicker" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label fw-bold text-muted">ช่องทางรับเงิน</label>
-                        <select name="payment_method" id="paymentMethodSelect" class="form-select" onchange="togglePaymentFields()">
-                            <option value="TRANSFER">โอนเงินเข้าบัญชี</option>
-                            <option value="CASH">เงินสด</option>
-                            <option value="CHECK">เช็คธนาคาร</option>
-                        </select>
-                    </div>
-
-                    <div id="transferFields">
-                        <div class="mb-2">
-                            <label class="form-label fw-bold text-muted">อัปโหลดสลิป</label>
-                            <input type="file" name="transfer_slip" class="form-control" accept="image/*">
-                        </div>
-                    </div>
-
-                    <div id="checkFields" class="d-none">
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <label class="form-label fw-bold text-muted">ธนาคาร</label>
-                                <input type="text" name="check_bank" class="form-control" placeholder="เช่น กสิกรไทย">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label fw-bold text-muted">เลขที่เช็ค</label>
-                                <input type="text" name="check_number" class="form-control" placeholder="ระบุเลขที่เช็ค">
-                            </div>
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label fw-bold text-muted">อัปโหลดหน้าเช็ค</label>
-                            <input type="file" name="check_slip" class="form-control" accept="image/*">
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer bg-light border-0">
-                    <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
-                    <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ยืนยันบันทึกรับชำระเงิน? (ยอดนี้จะรอการตรวจสอบจากฝ่ายบัญชีอีกครั้ง)')">บันทึกยอดรับชำระ</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
     document.addEventListener("DOMContentLoaded", function() {
-        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true, defaultDate: "today" });
     });
 
-    function showSlipModal(imageUrl) {
-        document.getElementById('slipImageFull').src = imageUrl;
-        var slipModal = new bootstrap.Modal(document.getElementById('slipModal'));
-        slipModal.show();
-    }
-
-    function openPaymentModal(invId, invCode, balanceAmount) {
-        document.getElementById('modalInvoiceCode').innerText = invCode;
-        
-        let amount = parseFloat(String(balanceAmount).replace(/,/g, '')) || 0;
-        document.getElementById('modalBalanceAmount').innerText = amount.toLocaleString('en-US', {minimumFractionDigits: 2});
-        
-        document.getElementById('invoicePaymentForm').action = "/sales/invoice/record-payment/" + invId + "/";
-        var myModal = new bootstrap.Modal(document.getElementById('paymentModal'));
-        myModal.show();
-    }
-
-    function togglePaymentFields() {
-        var method = document.getElementById('paymentMethodSelect').value;
-        document.getElementById('transferFields').classList.add('d-none');
-        document.getElementById('checkFields').classList.add('d-none');
-        if (method === 'TRANSFER') document.getElementById('transferFields').classList.remove('d-none');
-        else if (method === 'CHECK') document.getElementById('checkFields').classList.remove('d-none');
+    // โค้ดเหลือแค่นี้เลยค่ะ คลีนมากๆ
+    function togglePaymentFields(itemId) {
+        var method = document.getElementById('paymentMethodSelect' + itemId).value;
+        document.getElementById('transferFields' + itemId).classList.add('d-none');
+        document.getElementById('checkFields' + itemId).classList.add('d-none');
+        if (method === 'TRANSFER') document.getElementById('transferFields' + itemId).classList.remove('d-none');
+        else if (method === 'CHECK') document.getElementById('checkFields' + itemId).classList.remove('d-none');
     }
 </script>
 {% endblock %}

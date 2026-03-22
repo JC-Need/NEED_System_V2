@@ -348,7 +348,7 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
-                        <input type="text" name="deposit_date" class="form-control datepicker" required>
+                        <input type="text" name="deposit_date" class="form-control datepicker" value="{% now 'Y-m-d' %}" required>
                     </div>
 
                     <div class="mb-3">
@@ -375,7 +375,6 @@
 </div>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
-
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
@@ -409,8 +408,14 @@
             else this.value = val;
         });
 
-        // --- เปิดใช้งานปฏิทิน Flatpickr ---
-        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+        // 🌟 เพิ่ม defaultDate: "today" เพื่อให้ชัวร์ว่า Flatpickr จะเลือกวันปัจจุบันเสมอ 🌟
+        flatpickr(".datepicker", { 
+            dateFormat: "Y-m-d", 
+            altInput: true, 
+            altFormat: "d/m/Y", 
+            allowInput: true,
+            defaultDate: "today"
+        });
 
         // --- ระบบคำนวณยอด Real-time ---
         const baseItemTotal = {{ item_total|default:0 }};

@@ -92,48 +92,68 @@ def is_sales_authorized(user):
 
     return False
 
+from datetime import timedelta
+
 @login_required
 def sales_dashboard(request):
     if not is_sales_authorized(request.user):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงภาพรวมฝ่ายขาย")
         return redirect('dashboard')
 
-    today = timezone.now().date()
     target_employees, scope_title = get_target_employees(request.user)
 
-    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees)
-    inv_qs = get_sales_queryset(Invoice, request.user, target_employees)
-    qt_qs = get_sales_queryset(Quotation, request.user, target_employees)
+    # 🌟 รับค่าช่วงเวลาจาก URL (ถ้าไม่มีให้ใช้วันนี้เป็นค่าเริ่มต้น) 🌟
+    today = timezone.now().date()
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
 
-    pos_today = pos_qs.filter(created_at__date=today, status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    inv_today = inv_qs.filter(date=today, status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
-    total_sales_today = pos_today + inv_today
+    start_date = parse_date(start_date_str) if start_date_str else today
+    end_date = parse_date(end_date_str) if end_date_str else today
 
-    count_pos = pos_qs.filter(created_at__date=today).count()
-    count_inv = inv_qs.filter(date=today).count()
-    total_orders = count_pos + count_inv
+    # 🌟 กรองข้อมูลตามช่วงเวลาที่เลือก 🌟
+    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+    inv_qs = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
+    qt_qs = get_sales_queryset(Quotation, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
 
+    pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
+    total_sales_amount = pos_total + inv_total
+
+    total_orders = pos_qs.count() + inv_qs.count()
     pending_approval_quotes = qt_qs.filter(status='DRAFT').count()
     pending_closing_quotes = qt_qs.filter(status='APPROVED').count()
 
-    current_month = today.month
-    top_seller = POSOrder.objects.filter(created_at__month=current_month, employee__in=target_employees)\
-        .values('employee__first_name', 'employee__photo')\
-        .annotate(total=Sum('total_amount'))\
-        .order_by('-total').first()
+    # 🌟 คำนวณกราฟแยกตามทีม (ตามช่วงเวลาที่เลือก) 🌟
+    pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
+    inv_team = inv_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('grand_total'))
+
+    team_sales_dict = {}
+    for p in pos_team:
+        dept = p['employee__department__name'] or 'ไม่ระบุทีม'
+        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(p['total'] or 0)
+    for i in inv_team:
+        dept = i['employee__department__name'] or 'ไม่ระบุทีม'
+        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(i['total'] or 0)
+
+    sorted_teams = sorted(team_sales_dict.items(), key=lambda x: x[1], reverse=True)
+    chart_labels = [x[0] for x in sorted_teams]
+    chart_data = [x[1] for x in sorted_teams]
 
     recent_pos = list(pos_qs.order_by('-created_at')[:10])
     recent_inv = list(inv_qs.order_by('-created_at')[:10])
     combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
 
     context = {
-        'total_sales_today': total_sales_today,
+        'total_sales_today': total_sales_amount,
         'total_orders': total_orders,
         'pending_approval_quotes': pending_approval_quotes,
         'pending_closing_quotes': pending_closing_quotes,
-        'top_seller': top_seller,
+        'chart_labels': json.dumps(chart_labels),
+        'chart_data': json.dumps(chart_data),
         'recent_sales': combined_sales,
         'scope_title': scope_title,
+        'start_date': start_date.strftime('%Y-%m-%d'), # ส่งค่ากลับไปโชว์ที่หน้าเว็บ
+        'end_date': end_date.strftime('%Y-%m-%d'),
     }
     return render(request, 'sales/dashboard.html', context)
 
@@ -787,3 +807,75 @@ def record_invoice_payment(request, inv_id):
         messages.success(request, f"💰 บันทึกรับชำระเงินสำหรับเอกสาร {inv.code} เรียบร้อยแล้ว (รอการตรวจสอบยอดจากฝ่ายบัญชี)")
 
     return redirect('invoice_list')
+
+# ==========================================
+# 🌟 ฟังก์ชันสำหรับ Silent Update (AJAX) Dashboard 🌟
+# ==========================================
+@login_required
+def api_dashboard_data(request):
+    if not is_sales_authorized(request.user):
+        return JsonResponse({'error': 'Unauthorized'}, status=403)
+
+    target_employees, _ = get_target_employees(request.user)
+
+    # 🌟 รับค่าช่วงเวลาจาก AJAX 🌟
+    today = timezone.now().date()
+    start_date_str = request.GET.get('start_date')
+    end_date_str = request.GET.get('end_date')
+
+    start_date = parse_date(start_date_str) if start_date_str else today
+    end_date = parse_date(end_date_str) if end_date_str else today
+
+    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
+    inv_qs = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
+    qt_qs = get_sales_queryset(Quotation, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
+
+    pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
+    total_sales_amount = float(pos_total + inv_total)
+
+    total_orders = pos_qs.count() + inv_qs.count()
+    pending_approval_quotes = qt_qs.filter(status='DRAFT').count()
+    pending_closing_quotes = qt_qs.filter(status='APPROVED').count()
+
+    pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
+    inv_team = inv_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('grand_total'))
+
+    team_sales_dict = {}
+    for p in pos_team:
+        dept = p['employee__department__name'] or 'ไม่ระบุทีม'
+        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(p['total'] or 0)
+    for i in inv_team:
+        dept = i['employee__department__name'] or 'ไม่ระบุทีม'
+        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(i['total'] or 0)
+
+    sorted_teams = sorted(team_sales_dict.items(), key=lambda x: x[1], reverse=True)
+    chart_labels = [x[0] for x in sorted_teams]
+    chart_data = [x[1] for x in sorted_teams]
+
+    recent_pos = list(pos_qs.order_by('-created_at')[:10])
+    recent_inv = list(inv_qs.order_by('-created_at')[:10])
+    combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
+
+    recent_sales_data = []
+    for item in combined_sales:
+        is_pos = 'POS' in item.code
+        recent_sales_data.append({
+            'time': item.created_at.strftime('%H:%M') if item.created_at.date() == timezone.now().date() else item.created_at.strftime('%d/%m/%Y'),
+            'code': item.code,
+            'is_pos': is_pos,
+            'employee_name': item.employee.first_name if item.employee else '-',
+            'employee_photo': item.employee.photo.url if item.employee and item.employee.photo else None,
+            'employee_initial': item.employee.first_name[0] if item.employee and item.employee.first_name else '-',
+            'amount': float(item.total_amount) if hasattr(item, 'total_amount') else float(item.grand_total)
+        })
+
+    return JsonResponse({
+        'total_sales_today': total_sales_amount,
+        'total_orders': total_orders,
+        'pending_approval_quotes': pending_approval_quotes,
+        'pending_closing_quotes': pending_closing_quotes,
+        'recent_sales': recent_sales_data,
+        'chart_labels': chart_labels,
+        'chart_data': chart_data
+    })

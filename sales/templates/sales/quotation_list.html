@@ -7,6 +7,7 @@
     .flatpickr-input { background-color: #fff !important; cursor: pointer; }
     .btn-white { background-color: #fff; }
     .btn-white:hover { background-color: #f8f9fa; }
+    
     /* ปุ่มอนุมัติ */
     .btn-approve {
         background-color: #2ecc71; color: white; border: none; font-size: 0.8rem; padding: 5px 12px; transition: all 0.2s;
@@ -18,6 +19,18 @@
         background-color: #6f42c1; color: white; border: none; font-size: 0.8rem; padding: 5px 12px; transition: all 0.2s;
     }
     .btn-convert:hover { background-color: #5a32a3; transform: translateY(-1px); box-shadow: 0 4px 6px rgba(111, 66, 193, 0.3); color: white; }
+
+    /* 🌟 เพิ่ม CSS จัดการเคอร์เซอร์ (Cursor) และไฮไลท์แถวของตาราง 🌟 */
+    .table-hover tbody tr {
+        transition: background-color 0.2s ease;
+    }
+    .table-hover tbody tr:hover {
+        background-color: #f4f7f9 !important; /* ไฮไลท์สีฟ้าเทาอ่อนๆ เวลาเอาเมาส์ชี้ */
+        cursor: pointer !important; /* บังคับเคอร์เซอร์เป็นรูปลูกศรมือ (Pointer) */
+    }
+    .table-hover tbody tr td {
+        cursor: pointer !important; /* ป้องกันการเปลี่ยนเป็นรูปตัว I (I-beam) เวลากวาดเมาส์โดนตัวหนังสือ */
+    }
 </style>
 
 <div class="container-fluid py-4 px-4">

@@ -16,7 +16,7 @@ urlpatterns = [
     path('quotation/delete-item/<int:item_id>/', views.delete_item, name='delete_item'),
     path('quotation/print/<int:qt_id>/', views.quotation_print, name='quotation_print'),
     path('quotation/approve/<int:qt_id>/', views.quotation_approve, name='quotation_approve'),
-    path('quotation/cancel/<int:qt_id>/', views.quotation_cancel, name='quotation_cancel'), 
+    path('quotation/cancel/<int:qt_id>/', views.quotation_cancel, name='quotation_cancel'),
     path('quotation/clone/<int:qt_id>/', views.quotation_clone, name='quotation_clone'),
 
     path('deposit/', views.deposit_list, name='deposit_list'),
@@ -26,13 +26,14 @@ urlpatterns = [
 
     path('invoice/', views.invoice_list, name='invoice_list'),
     path('invoice/print/<int:inv_id>/', views.invoice_print, name='invoice_print'),
-    
+
     # 🌟 เพิ่ม Endpoint นี้ สำหรับบันทึกรับชำระเงินส่วนที่เหลือ 🌟
     path('invoice/record-payment/<int:inv_id>/', views.record_invoice_payment, name='record_invoice_payment'),
-    
+
     path('confirm-payment/<str:doc_type>/<int:doc_id>/', views.confirm_payment, name='confirm_payment'),
 
     path('api/customer-search/', views.api_search_customer, name='api_search_customer'),
     path('api/customer-create/', views.api_create_customer, name='api_create_customer'),
     path('export/excel/', views.export_sales_excel, name='export_sales_excel'),
+    path('api/dashboard-data/', views.api_dashboard_data, name='api_dashboard_data'),
 ]
