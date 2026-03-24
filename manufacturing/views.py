@@ -10,7 +10,6 @@ import datetime
 import calendar
 import json
 
-# 🌟 Import โมเดลตารางต่างๆ มาให้ครบถ้วน 🌟
 from .models import ProductionOrder, ProductionOrderMaterial, BOM, Branch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
 from master_data.models import CompanyInfo
 from inventory.models import Product, InventoryDoc, StockMovement
@@ -33,13 +32,22 @@ def production_list(request):
     search_salesperson = request.GET.get('salesperson', '')
     search_team = request.GET.get('team', '')
 
-    orders = ProductionOrder.objects.all().order_by('-id')
+    orders = ProductionOrder.objects.select_related(
+        'product', 'quotation_ref', 'salesperson', 
+        'production_team', 'production_status', 
+        'delivery_status', 'transporter'
+    ).all().order_by('-id')
 
     if start_date and end_date:
         orders = orders.filter(start_date__gte=start_date, start_date__lte=end_date)
 
     if search_q:
-        orders = orders.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q))
+        orders = orders.filter(
+            Q(code__icontains=search_q) |
+            Q(customer_name__icontains=search_q) |
+            Q(quotation_ref__code__icontains=search_q)
+        )
+        
     if search_salesperson:
         orders = orders.filter(salesperson_id=search_salesperson)
     if search_team:
@@ -67,6 +75,34 @@ def production_list(request):
     transporters = Transporter.objects.all().order_by('name')
     salespersons = Salesperson.objects.all().order_by('name')
 
+    # 🌟 ตรวจสอบสิทธิ์การกดปุ่ม + (เฉพาะผู้จัดการแผนกผลิต/วางแผน) 🌟
+    can_add_master_data = False
+    if request.user.is_superuser:
+        can_add_master_data = True
+    else:
+        current_emp = getattr(request.user, 'employee', None)
+        is_manager = False
+        is_planner = False
+        
+        # 1. เช็กจาก Group ของระบบ
+        user_groups = list(request.user.groups.values_list('name', flat=True))
+        if any('Manager' in g for g in user_groups): is_manager = True
+        if any('Planner' in g or 'Production' in g for g in user_groups): is_planner = True
+        
+        # 2. เช็กจากตำแหน่งงาน (Employee)
+        if current_emp:
+            rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+            job_title = current_emp.position.title.lower() if current_emp.position else ""
+            dept_name = current_emp.department.name if current_emp.department else ""
+            
+            if rank in ['manager', 'director'] or 'manager' in job_title:
+                is_manager = True
+            if 'วางแผน' in dept_name or 'ผลิต' in dept_name:
+                is_planner = True
+                
+        if is_manager and is_planner:
+            can_add_master_data = True
+
     return render(request, 'manufacturing/production_list.html', {
         'active_orders': active_orders,
         'closed_orders': closed_orders,
@@ -81,20 +117,29 @@ def production_list(request):
         'search_salesperson': search_salesperson,
         'search_team': search_team,
         'filter_string': filter_string,
+        'can_add_master_data': can_add_master_data, # 🌟 ส่งสิทธิ์ไปที่หน้าเว็บ
     })
+
+@login_required
+def planner_board(request):
+    orders = ProductionOrder.objects.filter(status='PLANNED', is_closed=False).order_by('-id')
+    return render(request, 'manufacturing/planner_board.html', {'orders': orders})
+
+@login_required
+def inventory_board(request):
+    orders = ProductionOrder.objects.filter(status='WAITING_INVENTORY', is_closed=False).order_by('status', '-id')
+    return render(request, 'manufacturing/inventory_board.html', {'orders': orders})
 
 @login_required
 def production_create(request):
     boms = BOM.objects.select_related('product').all()
     fg_with_bom = [bom.product for bom in boms]
-
     branches = Branch.objects.all().order_by('name')
     salespersons = Salesperson.objects.select_related('branch').all().order_by('name')
 
     if request.method == 'POST':
         product_id = request.POST.get('product')
         note = request.POST.get('note', '')
-
         start_date = request.POST.get('start_date')
         delivery_date = request.POST.get('delivery_date')
         branch_id = request.POST.get('branch')
@@ -103,11 +148,10 @@ def production_create(request):
 
         if product_id:
             product = get_object_or_404(Product, id=product_id)
-
             order = ProductionOrder(
                 product=product,
                 quantity=1,
-                status='PLANNED',
+                status='PLANNED', # สถานะ "รอตรวจสอบแบบแปลน"
                 note=note,
                 customer_name=customer_name,
                 responsible_person=getattr(request.user, 'employee', None)
@@ -119,8 +163,7 @@ def production_create(request):
             if salesperson_id: order.salesperson_id = salesperson_id
 
             order.save()
-
-            messages.success(request, f"✅ สร้างใบสั่งผลิต {order.code} สำเร็จ! (สำหรับบ้าน 1 หลัง)")
+            messages.success(request, f"✅ สร้างใบสั่งผลิต {order.code} สำเร็จ! (สถานะ: รอตรวจสอบแบบแปลน)")
             return redirect('production_list')
         else:
             messages.error(request, "❌ กรุณาเลือกแบบบ้านที่ต้องการผลิต")
@@ -131,47 +174,23 @@ def production_create(request):
         'salespersons': salespersons
     })
 
+# 🌟 จังหวะที่ 1: แพลนเนอร์กดยืนยันเริ่มผลิต 🌟
 @login_required
-@transaction.atomic
-def production_process(request, pk):
+def start_production(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
-    if order.status == 'COMPLETED':
-        messages.warning(request, "⚠️ รายการนี้ผลิตเสร็จและรับเข้าคลังไปแล้ว!")
-        return redirect('production_list')
-    
-    job_materials = order.materials.all()
-    if not job_materials:
-        messages.error(request, "❌ ไม่พบรายการวัตถุดิบในใบสั่งผลิตนี้ กรุณาดึงสูตรมาตรฐานหรือเพิ่มวัตถุดิบก่อนกดตัดสต็อก")
+    if not order.materials.exists():
+        messages.warning(request, "⚠️ กรุณาดึงรายการวัตถุดิบ (BOM) ก่อนกดยืนยันแผนการผลิต!")
         return redirect('production_detail', pk=order.pk)
 
-    shortage = []
-    for item in job_materials:
-        required_qty = float(item.quantity)
-        if float(item.raw_material.stock_qty) < required_qty:
-            shortage.append(f"{item.raw_material.name} (ขาด {required_qty - float(item.raw_material.stock_qty):.2f})")
-    
-    if shortage:
-        err_msg = " / ".join(shortage)
-        messages.error(request, f"❌ ไม่สามารถตัดสต็อกได้! วัตถุดิบในคลังไม่พอ: {err_msg}")
-        return redirect('production_detail', pk=order.pk)
-    
-    doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบผลิต {order.product.name} (รวมรายการส่วนเพิ่ม)", created_by=request.user)
-    for item in job_materials:
-        StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=float(item.quantity), movement_type='OUT', created_by=request.user)
-    
-    doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code}", created_by=request.user)
-    StockMovement.objects.create(doc=doc_in, product=order.product, quantity=order.quantity, movement_type='IN', created_by=request.user)
-    
-    order.status = 'COMPLETED'
-    order.finish_date = timezone.now().date()
+    order.status = 'WAITING_MATERIALS' # เปลี่ยนเป็น "รอสั่งซื้อวัตถุดิบ"
     order.save()
-    
-    messages.success(request, f"🎉 สำเร็จ! หักวัตถุดิบที่ใช้จริงทั้งหมด และรับ {order.product.name} ({order.quantity} หลัง) เข้าคลังเรียบร้อยแล้ว!")
+    messages.success(request, f"🚀 ยืนยันแผนงาน {order.code} แล้ว! งานถูกส่งไปที่ฝ่ายจัดซื้อ")
     return redirect('production_list')
 
+# 🌟 จังหวะที่ 2: จัดซื้อกด PPO (เปลี่ยนสถานะอัตโนมัติ) 🌟
 @login_required
 def ppo_prepare(request):
-    available_jobs = ProductionOrder.objects.filter(status__in=['PLANNED', 'IN_PROGRESS'], is_materials_ordered=False).order_by('code')
+    available_jobs = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False).order_by('code')
     ppo_code = ""
     materials_by_supplier = {}
     selected_job_ids = []
@@ -197,13 +216,74 @@ def ppo_prepare(request):
                         materials_by_supplier[sup_id]['items'][mat_id]['qty'] += total_needed
                         materials_by_supplier[sup_id]['items'][mat_id]['total'] = materials_by_supplier[sup_id]['items'][mat_id]['qty'] * materials_by_supplier[sup_id]['items'][mat_id]['cost']
             for sup_id in materials_by_supplier: materials_by_supplier[sup_id]['items'] = list(materials_by_supplier[sup_id]['items'].values())
-            jobs.update(is_materials_ordered=True)
-        else: messages.warning(request, "⚠️ กรุณาติ๊กเลือกอย่างน้อย 1 ใบสั่งผลิต (JOB) เพื่อคำนวณวัตถุดิบ")
+            
+            # 🌟 อัปเดตสถานะ JOB เป็น "รอวัตถุดิบพร้อมผลิต" 🌟
+            jobs.update(is_materials_ordered=True, status='WAITING_INVENTORY')
+        else: 
+            messages.warning(request, "⚠️ กรุณาติ๊กเลือกอย่างน้อย 1 ใบสั่งผลิต (JOB) เพื่อคำนวณวัตถุดิบ")
     return render(request, 'manufacturing/ppo_prepare.html', {'available_jobs': available_jobs, 'ppo_code': ppo_code, 'materials_by_supplier': materials_by_supplier, 'selected_job_ids': [int(i) for i in selected_job_ids]})
 
-# ==========================================
-# 🌟 ฟังก์ชันใหม่: การจัดการหน้างานผลิต 🌟
-# ==========================================
+# 🌟 จังหวะที่ 3: คลังสินค้าเช็กของครบ กดตัดสต็อก (GI) 🌟
+@login_required
+@transaction.atomic
+def materials_ready(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    job_materials = order.materials.all()
+    if not job_materials:
+        messages.error(request, "❌ ไม่พบรายการวัตถุดิบในใบสั่งผลิตนี้")
+        return redirect('inventory_board')
+
+    shortage = []
+    for item in job_materials:
+        required_qty = float(item.quantity)
+        if float(item.raw_material.stock_qty) < required_qty:
+            shortage.append(f"{item.raw_material.name} (ขาด {required_qty - float(item.raw_material.stock_qty):.2f})")
+    
+    if shortage:
+        err_msg = " / ".join(shortage)
+        messages.error(request, f"❌ ไม่สามารถตัดสต็อกได้! วัตถุดิบในคลังไม่พอ: {err_msg}")
+        return redirect('inventory_board')
+    
+    # ทำการเบิกวัตถุดิบออก (GI)
+    doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบเตรียมผลิต {order.product.name}", created_by=request.user)
+    for item in job_materials:
+        StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=float(item.quantity), movement_type='OUT', created_by=request.user)
+        item.raw_material.stock_qty -= item.quantity
+        item.raw_material.save()
+    
+    # 🌟 ข้ามสถานะไปที่ "งานอยู่ระหว่างผลิต" ทันที 🌟
+    order.status = 'IN_PROGRESS'
+    order.save()
+    messages.success(request, f"✅ ตัดสต็อกสำเร็จ! สถานะเปลี่ยนเป็น 'งานอยู่ระหว่างผลิต' แล้ว")
+    return redirect('inventory_board')
+
+# 🌟 (ถูกแทนที่ด้วยกระบวนการเบิกคลังด้านบนแล้ว ฟังก์ชันนี้ไม่ได้ใช้)
+@login_required
+def start_actual_production(request, pk):
+    return redirect('production_list')
+
+# 🌟 จังหวะที่ 4: งานเสร็จรับเข้าคลัง (GR) 🌟
+@login_required
+@transaction.atomic
+def production_process(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    if order.status == 'COMPLETED':
+        messages.warning(request, "⚠️ รายการนี้ผลิตเสร็จและรับเข้าคลังไปแล้ว!")
+        return redirect('production_list')
+    
+    doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code}", created_by=request.user)
+    StockMovement.objects.create(doc=doc_in, product=order.product, quantity=order.quantity, movement_type='IN', created_by=request.user)
+    
+    order.product.stock_qty += order.quantity
+    order.product.save()
+
+    order.status = 'COMPLETED'
+    order.finish_date = timezone.now().date()
+    order.save()
+    
+    messages.success(request, f"🎉 สำเร็จ! รับ {order.product.name} ({order.quantity} หลัง) เข้าคลังเรียบร้อยแล้ว!")
+    return redirect('production_list')
+
 @login_required
 def production_detail(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
@@ -217,6 +297,13 @@ def production_detail(request, pk):
         'has_bom': has_bom,
         'raw_materials': raw_materials
     })
+
+@login_required
+def print_bom(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    materials = order.materials.all()
+    company = CompanyInfo.objects.first()
+    return render(request, 'manufacturing/print_bom.html', {'order': order, 'materials': materials, 'company': company})
 
 @login_required
 def upload_blueprint(request, pk):
@@ -251,14 +338,6 @@ def load_standard_bom(request, pk):
     return redirect('production_detail', pk=order.pk)
 
 @login_required
-def start_production(request, pk):
-    order = get_object_or_404(ProductionOrder, pk=pk)
-    order.status = 'IN_PROGRESS'
-    order.save()
-    messages.success(request, f"🚀 เริ่มการผลิตสำหรับ {order.code} แล้ว! (สถานะฝั่งเซลล์จะเปลี่ยนเป็น 'กำลังผลิต' ทันที)")
-    return redirect('production_list')
-
-@login_required
 def add_additional_material(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
     if request.method == 'POST':
@@ -275,7 +354,7 @@ def add_additional_material(request, pk):
             )
             messages.success(request, f"➕ เพิ่มวัตถุดิบส่วนเพิ่ม: {rm.name} จำนวน {qty} ลงในบิลเรียบร้อยแล้ว")
         else:
-            messages.error(request, "❌ กรุณาเลือกวัตถุดิบและใส่จำนวนให้ถูกต้อง")
+             messages.error(request, "❌ กรุณาเลือกวัตถุดิบและใส่จำนวนให้ถูกต้อง")
     return redirect('production_detail', pk=order.pk)
 
 @login_required
@@ -291,7 +370,6 @@ def delete_production_material(request, pk):
 
 @login_required
 def blueprint_viewer(request, pk):
-    """ฟังก์ชันสำหรับเปิดหน้าต่างดูแบบแปลนแบบมีแถบรายละเอียด JOB (เปิดแท็บใหม่)"""
     order = get_object_or_404(ProductionOrder, pk=pk)
     return render(request, 'manufacturing/blueprint_viewer.html', {'order': order})
 
@@ -351,9 +429,6 @@ def bom_edit(request, pk):
         formset = BOMItemFormSet(instance=bom)
     return render(request, 'manufacturing/bom_form.html', {'form': form, 'formset': formset, 'title': f'แก้ไขสูตรผลิต: {bom.product.code}'})
 
-# ==========================================
-# 🌟 AJAX Views และ อัปเดตกระดานงานผลิต 🌟
-# ==========================================
 @login_required
 def update_production_board(request, pk):
     if request.method == 'POST':

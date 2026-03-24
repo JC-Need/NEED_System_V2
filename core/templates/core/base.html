@@ -72,15 +72,33 @@
                         </ul>
                     </li>
 
-                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Inventory_Team" %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'inventory_dashboard' %}"><i class="fas fa-boxes me-1"></i> คลังสินค้า</a>
+                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Inventory_Team" or request.user.groups.all.0.name == "Inventory" %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-boxes me-1"></i> คลังสินค้า
+                        </a>
+                        <ul class="dropdown-menu border-0 shadow-lg">
+                            <li><a class="dropdown-item" href="{% url 'inventory_dashboard' %}"><i class="fas fa-chart-line me-2 text-success"></i> แดชบอร์ดคลังสินค้า</a></li>
+                            <li><a class="dropdown-item" href="{% url 'inventory_board' %}"><i class="fas fa-clipboard-check me-2 text-warning"></i> กระดานเบิกวัตถุดิบ (จัดของ)</a></li>
+                        </ul>
                     </li>
                     {% endif %}
 
-                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Purchasing_Team" %}
+                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Purchasing_Team" or request.user.groups.all.0.name == "Purchasing" %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'purchasing_dashboard' %}"><i class="fas fa-shopping-cart me-1"></i> จัดซื้อ (PO)</a>
+                    </li>
+                    {% endif %}
+
+                    {% if request.user.is_superuser or request.user.groups.all.0.name == "Production_Team" or request.user.groups.all.0.name == "Production" or request.user.groups.all.0.name == "Executive" %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="productionDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-industry me-1"></i> ระบบผลิต
+                        </a>
+                        <ul class="dropdown-menu border-0 shadow-lg">
+                            <li><a class="dropdown-item" href="{% url 'planner_board' %}"><i class="fas fa-clipboard-list me-2 text-info"></i> กระดานวางแผนการผลิต</a></li>
+                            <li><a class="dropdown-item" href="{% url 'production_list' %}"><i class="fas fa-tools me-2 text-primary"></i> กระดานควบคุมงานผลิต (ช่าง)</a></li>
+                        </ul>
                     </li>
                     {% endif %}
 

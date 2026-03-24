@@ -2,11 +2,15 @@ from django.contrib import admin
 from django.contrib import messages
 from django.utils.html import format_html
 from django.urls import reverse
-# 🌟 เพิ่ม Branch และ Salesperson เข้ามาใน Import
-from .models import BOM, BOMItem, ProductionOrder, Branch, Salesperson
+
+# 🌟 เพิ่มตาราง 4 สถานะใหม่ เข้ามาใน Import 🌟
+from .models import (
+    BOM, BOMItem, ProductionOrder, Branch, Salesperson,
+    ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
+)
 
 # ==========================================
-# 🌟 เพิ่มเมนูจัดการ สาขา และ พนักงานขาย (ใหม่) 🌟
+# 🌟 เพิ่มเมนูจัดการ สาขา และ พนักงานขาย 🌟
 # ==========================================
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
@@ -20,7 +24,15 @@ class SalespersonAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 # ==========================================
-# ส่วน BOMAdmin เดิม
+# 🌟 เพิ่มเมนูจัดการสถานะหน้าตารางกระดานผลิต (ใหม่) 🌟
+# ==========================================
+admin.site.register(ProductionStatus)
+admin.site.register(ProductionTeam)
+admin.site.register(DeliveryStatus)
+admin.site.register(Transporter)
+
+# ==========================================
+# ส่วน BOMAdmin เดิมของคุณลูกค้า
 # ==========================================
 class BOMItemInline(admin.TabularInline):
     model = BOMItem

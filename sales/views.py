@@ -111,19 +111,23 @@ def sales_dashboard(request):
 
     pos_qs = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
     inv_qs = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
-    qt_qs = get_sales_queryset(Quotation, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
 
     pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
     total_sales_amount = pos_total + inv_total
 
-    total_orders = pos_qs.count() + inv_qs.count()
-    pending_approval_quotes = qt_qs.filter(status='DRAFT').count()
-    pending_closing_quotes = qt_qs.filter(status='APPROVED').count()
+    pos_today = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date=today)
+    inv_today = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today)
+    total_orders_today = pos_today.count() + inv_today.count()
+    
+    qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
 
-    pending_production_quotes = get_sales_queryset(Quotation, request.user, target_employees).filter(
-        is_deposit_paid=True,
-        production_orders__isnull=True
+    pending_approval_quotes = qt_all_qs.filter(status='DRAFT').count()
+    pending_closing_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
+    in_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
+
+    pending_production_quotes = qt_all_qs.filter(
+        status='APPROVED', is_deposit_paid=True, production_orders__isnull=True
     ).count()
 
     pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
@@ -147,9 +151,10 @@ def sales_dashboard(request):
 
     context = {
         'total_sales_today': total_sales_amount,
-        'total_orders': total_orders,
+        'total_orders_today': total_orders_today,
         'pending_approval_quotes': pending_approval_quotes,
         'pending_closing_quotes': pending_closing_quotes,
+        'in_production_quotes': in_production_quotes,
         'pending_production_quotes': pending_production_quotes,
         'chart_labels': json.dumps(chart_labels),
         'chart_data': json.dumps(chart_data),
@@ -176,19 +181,23 @@ def api_dashboard_data(request):
 
     pos_qs = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
     inv_qs = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
-    qt_qs = get_sales_queryset(Quotation, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
 
     pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
     total_sales_amount = float(pos_total + inv_total)
 
-    total_orders = pos_qs.count() + inv_qs.count()
-    pending_approval_quotes = qt_qs.filter(status='DRAFT').count()
-    pending_closing_quotes = qt_qs.filter(status='APPROVED').count()
+    pos_today = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date=today)
+    inv_today = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today)
+    total_orders_today = pos_today.count() + inv_today.count()
+    
+    qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
 
-    pending_production_quotes = get_sales_queryset(Quotation, request.user, target_employees).filter(
-        is_deposit_paid=True,
-        production_orders__isnull=True
+    pending_approval_quotes = qt_all_qs.filter(status='DRAFT').count()
+    pending_closing_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
+    in_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
+
+    pending_production_quotes = qt_all_qs.filter(
+        status='APPROVED', is_deposit_paid=True, production_orders__isnull=True
     ).count()
 
     pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
@@ -225,9 +234,10 @@ def api_dashboard_data(request):
 
     return JsonResponse({
         'total_sales_today': total_sales_amount,
-        'total_orders': total_orders,
+        'total_orders_today': total_orders_today,
         'pending_approval_quotes': pending_approval_quotes,
         'pending_closing_quotes': pending_closing_quotes,
+        'in_production_quotes': in_production_quotes,
         'pending_production_quotes': pending_production_quotes,
         'recent_sales': recent_sales_data,
         'chart_labels': chart_labels,
@@ -469,6 +479,10 @@ def quotation_list(request):
     if status_filter:
         if status_filter == 'PENDING_PRODUCTION':
             queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True)
+        elif status_filter == 'PENDING_CLOSING':  # รอปิดการขาย
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=False)
+        elif status_filter == 'IN_PRODUCTION':    # ระหว่างผลิต
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True)
         else:
             queryset = queryset.filter(status=status_filter)
 
@@ -526,6 +540,11 @@ def quotation_create(request):
             last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             qt.code = f"{prefix}-{seq:03d}"
+            
+            # 🌟 จุดสำคัญ: ตั้งค่าเริ่มต้นหมายเหตุ (Note) หากยังไม่มีข้อมูล 🌟
+            if not qt.note:
+                qt.note = "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"
+
             qt.save()
             messages.success(request, f"ร่างใบเสนอราคา {qt.code} เรียบร้อย กรุณาเพิ่มรายการสินค้า")
             return redirect('quotation_edit', qt_id=qt.id)
@@ -533,14 +552,11 @@ def quotation_create(request):
         form = QuotationForm(initial={'date': datetime.date.today(), 'valid_until': datetime.date.today() + datetime.timedelta(days=15)})
     return render(request, 'sales/quotation_form.html', {'form': form})
 
-# ==========================================
-# 🌟 [อัปเกรด] ผูกระบบ Upsale แบบมี Category Filter 🌟
-# ==========================================
+
 @login_required
 def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     
-    # 🌟 1. ดึงข้อมูลสินค้าหลักทั้งหมด 🌟
     main_categories = Category.objects.all()
     products = Product.objects.filter(is_active=True, product_type='FG')
     
@@ -554,7 +570,6 @@ def quotation_edit(request, qt_id):
             'category_id': getattr(p, 'category_id', None)
         })
 
-    # 🌟 2. ดึงข้อมูลแคตตาล็อก Upsale 🌟
     upsale_categories = UpsaleCategory.objects.filter(is_active=True)
     upsale_catalogs = UpsaleCatalog.objects.filter(is_active=True)
     
@@ -567,7 +582,6 @@ def quotation_edit(request, qt_id):
             'category_id': u.category_id
         })
 
-    # คำนวณยอด
     main_item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
     upsale_total = sum(u.total_price for u in qt.upsales.all())
     item_total = main_item_total + upsale_total
@@ -695,7 +709,8 @@ def quotation_clone(request, qt_id):
         tax_amount=old_qt.tax_amount,
         grand_total=old_qt.grand_total,
         status='DRAFT',
-        note=old_qt.note,
+        # 🌟 จุดสำคัญ: ดึงหมายเหตุเดิมมา แต่ถ้าว่างเปล่าให้ใส่ค่าเริ่มต้น 🌟
+        note=old_qt.note if old_qt.note else "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง",
     )
 
     for item in old_qt.items.all():

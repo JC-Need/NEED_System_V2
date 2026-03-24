@@ -28,7 +28,8 @@
     .menu-btn:hover { transform: translateY(-5px); box-shadow: 0 20px 40px rgba(0,0,0,0.08); border-color: white; }
     .menu-icon-box {
         width: 70px; height: 70px; border-radius: 50%; background: #f8f9fa;
-        display: flex; align-items: center; justify-content: center; margin-bottom: 20px; transition: all 0.3s; }
+        display: flex; align-items: center; justify-content: center; margin-bottom: 20px; transition: all 0.3s;
+    }
     .menu-icon { font-size: 1.8rem; color: #b2bec3; transition: all 0.3s; }
     .menu-btn:hover .menu-icon-box { background: var(--gold-grad); box-shadow: 0 10px 20px rgba(197, 160, 89, 0.3); }
     .menu-btn:hover .menu-icon { color: white; }
@@ -62,7 +63,7 @@
 
         {% if user.is_superuser or user.groups.all.0.name == 'Accounting' or user.groups.all.0.name == 'Executive' %}
         <div class="col-md-3 col-sm-6">
-             <div class="stat-card">
+            <div class="stat-card">
                 <div class="stat-label">กำไรสุทธิ</div>
                 <div class="stat-value text-success">{{ profit_month|intcomma }}</div>
                 <div class="mt-2"><span class="badge bg-success bg-opacity-10 text-success rounded-pill">Monthly Profit</span></div>
@@ -83,13 +84,13 @@
         
         <div class="col-md-3 col-sm-6">
             <div class="stat-card">
-                 <div class="stat-label">รอรับของ</div>
+                <div class="stat-label">รอรับของ</div>
                 <div class="stat-value text-warning">{{ pending_po_count }}</div>
                 <div class="mt-2"><span class="badge bg-warning bg-opacity-10 text-warning rounded-pill">Pending PO</span></div>
                 <i class="fas fa-truck-loading stat-icon-bg text-warning"></i>
             </div>
         </div>
-         {% endif %}
+        {% endif %}
     </div>
 
     <div class="section-header">
@@ -118,7 +119,7 @@
         {% endif %}
 
         {% if user.is_superuser or user.groups.all.0.name == 'Sales' or user.groups.all.0.name == 'Executive' %}
-         <div class="col-6 col-md-3 col-lg-3">
+        <div class="col-6 col-md-3 col-lg-3">
             <a href="{% url 'sales_dashboard' %}" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-cash-register menu-icon"></i></div>
                 <div class="menu-title">ฝ่ายขาย</div>
@@ -135,6 +136,14 @@
                 <div class="menu-desc">สต็อก / บาร์โค้ด</div>
             </a>
         </div>
+        
+        <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'inventory_board' %}" class="menu-btn">
+                <div class="menu-icon-box" style="background: #d1e7dd;"><i class="fas fa-boxes menu-icon text-success"></i></div>
+                <div class="menu-title">เบิกวัตถุดิบ (GI)</div>
+                <div class="menu-desc">จัดของ / ตัดสต็อกให้ช่าง</div>
+            </a>
+        </div>
         {% endif %}
 
         {% if user.is_superuser or user.groups.all.0.name == 'Purchasing' or user.groups.all.0.name == 'Executive' %}
@@ -149,10 +158,18 @@
 
         {% if user.is_superuser or user.groups.all.0.name == 'Production' or user.groups.all.0.name == 'Executive' %}
         <div class="col-6 col-md-3 col-lg-3">
+            <a href="{% url 'planner_board' %}" class="menu-btn">
+                <div class="menu-icon-box" style="background: #e0f7fa;"><i class="fas fa-clipboard-list menu-icon text-info"></i></div>
+                <div class="menu-title">วางแผนการผลิต</div>
+                <div class="menu-desc">เช็ก BOM / ยืนยันแผน</div>
+            </a>
+        </div>
+        
+        <div class="col-6 col-md-3 col-lg-3">
             <a href="{% url 'production_list' %}" class="menu-btn">
                 <div class="menu-icon-box"><i class="fas fa-cogs menu-icon"></i></div>
-                <div class="menu-title">ฝ่ายผลิต</div>
-                <div class="menu-desc">สั่งผลิต / เบิกของ</div>
+                <div class="menu-title">ฝ่ายผลิต (ช่าง)</div>
+                <div class="menu-desc">รับงาน / อัปเดตหน้างาน</div>
             </a>
         </div>
         {% endif %}
@@ -179,7 +196,7 @@
     
     <div class="mt-4 pt-3 border-top">
          <a href="https://jcneedhistory.pythonanywhere.com" target="_blank" class="text-muted text-decoration-none small">
-            <i class="fas fa-history me-1"></i> เข้าสู่โปรเจ็คเก่า (Legacy System)
+             <i class="fas fa-history me-1"></i> เข้าสู่โปรเจ็คเก่า (Legacy System)
         </a>
     </div>
 

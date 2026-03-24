@@ -60,9 +60,12 @@ class BOMItem(models.Model):
 # 2. ใบสั่งผลิต (Production Order - JOB)
 # ==========================================
 class ProductionOrder(models.Model):
+    # 🌟 อัปเดต STATUS_CHOICES ตาม Timeline 4 ขั้นตอนใหม่ 🌟
     STATUS_CHOICES = [
-        ('PLANNED', 'วางแผน'),
-        ('IN_PROGRESS', 'กำลังผลิต'),
+        ('PLANNED', 'รอตรวจสอบแบบแปลน'),
+        ('WAITING_MATERIALS', 'รอสั่งซื้อวัตถุดิบ'),
+        ('WAITING_INVENTORY', 'รอวัตถุดิบพร้อมผลิต'),
+        ('IN_PROGRESS', 'งานอยู่ระหว่างผลิต'),
         ('COMPLETED', 'ผลิตเสร็จแล้ว (เข้าสต็อก)'),
         ('CANCELLED', 'ยกเลิก')
     ]
@@ -71,7 +74,7 @@ class ProductionOrder(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้าที่จะผลิต")
     quantity = models.IntegerField(default=1, verbose_name="จำนวนที่ผลิต (ล็อกที่ 1 เสมอ)")
     
-    # 🌟 [เพิ่มใหม่] สะพานเชื่อมกับฝ่ายขาย และเก็บไฟล์แบบแปลน 🌟
+    # 🌟 สะพานเชื่อมกับฝ่ายขาย และเก็บไฟล์แบบแปลน 🌟
     quotation_ref = models.ForeignKey('sales.Quotation', on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="อ้างอิงใบเสนอราคา/มัดจำ")
     blueprint_file = models.FileField(upload_to='blueprints/%Y/%m/', null=True, blank=True, verbose_name="ไฟล์แบบแปลน (PDF/รูปภาพ)")
     
