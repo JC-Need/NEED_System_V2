@@ -33,7 +33,7 @@
             {% endif %}
             
             {% if qt.status == 'DRAFT' or qt.status == 'APPROVED' %}
-            <a href="{% url 'quotation_cancel' qt.id %}" class="btn btn-outline-danger shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="return confirm('⚠️ คุณแน่ใจหรือไม่ว่าต้องการยกเลิกใบเสนอราคาใบนี้? (หากยกเลิกแล้วจะถือเป็นโมฆะทันที)');">
+            <a href="{% url 'quotation_cancel' qt.id %}" class="btn btn-outline-danger shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="return confirm('⚠️ คุณแน่ใจหรือไม่ว่าต้องการยกเลิกใบเสนอราคาใบนี้?\n(หากยกเลิกแล้วจะถือเป็นโมฆะทันที)');">
                 <i class="fas fa-times-circle me-1"></i> ยกเลิกใบนี้
             </a>
             {% endif %}
@@ -247,12 +247,15 @@
                         {% csrf_token %}
                         <div class="row">
                             <div class="col-lg-7 border-end pe-lg-4 pb-3 pb-lg-0">
+                                <label class="text-primary fw-bold small mb-1"><i class="fas fa-file-invoice-dollar me-1"></i> เงื่อนไขการชำระเงิน (Payment Terms):</label>
+                                <textarea name="payment_terms" class="form-control form-control-sm mb-3" rows="3" {% if qt.status != 'DRAFT' %}readonly{% endif %}>{{ qt.payment_terms|default:"-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง" }}</textarea>
+                                
                                 <label class="text-primary fw-bold small mb-1"><i class="fas fa-pen me-1"></i> หมายเหตุ / เงื่อนไข (Note):</label>
-                                <textarea name="note" class="form-control form-control-sm mb-2" rows="4" {% if qt.status != 'DRAFT' %}readonly{% endif %}>{{ qt.note|default:"-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง" }}</textarea>
+                                <textarea name="note" class="form-control form-control-sm mb-2" rows="2" {% if qt.status != 'DRAFT' %}readonly{% endif %}>{{ qt.note|default:"-ไม่มี-" }}</textarea>
                                 
                                 {% if qt.status == 'DRAFT' %}
-                                <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3">
-                                    <i class="fas fa-sync-alt me-1"></i> บันทึกหมายเหตุ
+                                <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3 mt-1">
+                                    <i class="fas fa-sync-alt me-1"></i> บันทึกหมายเหตุ/เงื่อนไข
                                 </button>
                                 {% endif %}
                             </div>
@@ -318,9 +321,6 @@
         $('.select2').select2({ theme: 'bootstrap4', width: '100%' });
         $('.select2-tags').select2({ theme: 'bootstrap4', width: '100%', tags: true });
 
-        // =====================================
-        // ระบบกรอง 2 จังหวะ: ฝั่งสินค้าหลัก
-        // =====================================
         function populateMainProducts(catId) {
             let html = '<option value="">-- เลือกสินค้า --</option>';
             productsData.forEach(p => {
@@ -348,9 +348,6 @@
             }
         });
 
-        // =====================================
-        // ระบบกรอง 2 จังหวะ: ฝั่ง Upsale (ดึงไปโชว์ในช่องชื่อ)
-        // =====================================
         function populateUpsales(catId) {
             let html = '<option value="">-- พิมพ์หา หรือ เลือกรายการ --</option>';
             upsalesData.forEach(u => {
@@ -362,20 +359,18 @@
         }
         
         populateUpsales('');
-
         $('#upsale_category_selector').change(function() {
             populateUpsales($(this).val());
         });
-
         $('#upsale_item_selector').change(function() {
             var selectedOption = $(this).find(':selected');
             var price = selectedOption.data('price');
             var name = selectedOption.val();
             
             if(name) {
-                $('#input_upsale_desc').val(name); // เติมลงช่อง "ชื่อที่จะโชว์ในบิล"
+                $('#input_upsale_desc').val(name);
                 if(price !== undefined) {
-                    $('#upsale_price').val(formatNumber(price)); // เติมราคา
+                    $('#upsale_price').val(formatNumber(price));
                 }
             } else {
                 $('#input_upsale_desc').val('');
@@ -383,9 +378,6 @@
             }
         });
 
-        // =====================================
-        // 🌟 อัจฉริยะจัดการตัวเลข (Number Formatting) 🌟
-        // =====================================
         function formatNumber(num) {
             if (!num || isNaN(num)) return '';
             return parseFloat(num).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -396,27 +388,25 @@
             return parseFloat(str.toString().replace(/,/g, '')) || 0;
         }
 
-        // จัดการช่องที่ระบุคลาส .number-format ทั้งหมด (ราคา, ค่าส่ง, ส่วนลด)
         $('.number-format').on('blur', function() {
             let val = unformatNumber(this.value);
             if (val === 0 && !$(this).prop('required')) {
-                this.value = ''; // ถ้าไม่ได้บังคับกรอกและเป็น 0 ให้ปล่อยว่าง
+                this.value = '';
             } else {
                 this.value = formatNumber(val);
             }
         }).on('focus', function() {
             let val = unformatNumber(this.value);
-            this.value = val === 0 ? '' : val; // เวลาคลิกเอาลูกน้ำออกเพื่อให้พิมพ์ง่าย
+            this.value = val === 0 ? '' : val;
         }).on('input', function() {
-            this.value = this.value.replace(/[^0-9.]/g, ''); // ห้ามพิมพ์ตัวอักษร
-            calculateLiveTotals(); // คำนวณสดๆ ทันทีที่พิมพ์
+            this.value = this.value.replace(/[^0-9.]/g, '');
+            calculateLiveTotals();
         });
 
         $('.number-only').on('input', function() {
-            this.value = this.value.replace(/[^0-9]/g, ''); // จำนวนใส่ได้แค่ตัวเลข
+            this.value = this.value.replace(/[^0-9]/g, '');
         });
 
-        // ทำให้ตัวเลขมีลูกน้ำตั้งแต่โหลดหน้าเว็บครั้งแรก
         $('.number-format').each(function() {
             if (this.value && this.value !== '0.00') {
                 this.value = formatNumber(unformatNumber(this.value));
@@ -425,9 +415,6 @@
             }
         });
 
-        // =====================================
-        // ระบบคำนวณเงิน Real-time สดๆ บนหน้าจอ
-        // =====================================
         const baseItemTotal = {{ item_total|default:0 }};
         function calculateLiveTotals() {
             let shipping = unformatNumber($('#live_shipping').val());
@@ -444,13 +431,10 @@
             $('#live_grand_total').text('฿' + formatNumber(grandTotal));
         }
 
-        // =====================================
-        // ดักจับก่อนกด Save (เพื่อลอกคราบลูกน้ำออก กัน Database พัง)
-        // =====================================
         $('.smart-form').on('submit', function() {
             $(this).find('.number-format').each(function() {
                 if(this.value) {
-                    this.value = this.value.replace(/,/g, ''); // เอา , ออกทั้งหมดก่อนส่งหลังบ้าน
+                    this.value = this.value.replace(/,/g, '');
                 }
             });
         });

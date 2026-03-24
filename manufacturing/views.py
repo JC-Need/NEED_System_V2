@@ -34,9 +34,8 @@ def production_list(request):
 
     orders = ProductionOrder.objects.select_related(
         'product', 'quotation_ref', 'salesperson', 
-        'production_team', 'production_status', 
-        'delivery_status', 'transporter'
-    ).all().order_by('-id')
+        'production_team', 'delivery_status', 'transporter'
+    ).prefetch_related('completed_departments').all().order_by('-id')
 
     if start_date and end_date:
         orders = orders.filter(start_date__gte=start_date, start_date__lte=end_date)
@@ -69,13 +68,13 @@ def production_list(request):
     if 'closed_page' in url_params: del url_params['closed_page']
     filter_string = url_params.urlencode()
 
-    prod_statuses = ProductionStatus.objects.all().order_by('name')
+    prod_statuses = ProductionStatus.objects.all().order_by('sequence', 'id')
     prod_teams = ProductionTeam.objects.all().order_by('name')
     deliv_statuses = DeliveryStatus.objects.all().order_by('name')
     transporters = Transporter.objects.all().order_by('name')
     salespersons = Salesperson.objects.all().order_by('name')
+    total_departments_count = prod_statuses.count()
 
-    # 🌟 ตรวจสอบสิทธิ์การกดปุ่ม + (เฉพาะผู้จัดการแผนกผลิต/วางแผน) 🌟
     can_add_master_data = False
     if request.user.is_superuser:
         can_add_master_data = True
@@ -84,12 +83,10 @@ def production_list(request):
         is_manager = False
         is_planner = False
         
-        # 1. เช็กจาก Group ของระบบ
         user_groups = list(request.user.groups.values_list('name', flat=True))
         if any('Manager' in g for g in user_groups): is_manager = True
         if any('Planner' in g or 'Production' in g for g in user_groups): is_planner = True
         
-        # 2. เช็กจากตำแหน่งงาน (Employee)
         if current_emp:
             rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
             job_title = current_emp.position.title.lower() if current_emp.position else ""
@@ -117,7 +114,8 @@ def production_list(request):
         'search_salesperson': search_salesperson,
         'search_team': search_team,
         'filter_string': filter_string,
-        'can_add_master_data': can_add_master_data, # 🌟 ส่งสิทธิ์ไปที่หน้าเว็บ
+        'can_add_master_data': can_add_master_data,
+        'total_departments_count': total_departments_count,
     })
 
 @login_required
@@ -128,6 +126,18 @@ def planner_board(request):
 @login_required
 def inventory_board(request):
     orders = ProductionOrder.objects.filter(status='WAITING_INVENTORY', is_closed=False).order_by('status', '-id')
+    
+    for order in orders:
+        shortage = []
+        for item in order.materials.all():
+            required_qty = float(item.quantity)
+            stock_qty = float(item.raw_material.stock_qty)
+            if stock_qty < required_qty:
+                shortage.append(f"{item.raw_material.name} (ขาดอีก {required_qty - stock_qty:.2f})")
+        
+        order.has_shortage = len(shortage) > 0
+        order.shortage_list = ", ".join(shortage)
+
     return render(request, 'manufacturing/inventory_board.html', {'orders': orders})
 
 @login_required
@@ -151,7 +161,7 @@ def production_create(request):
             order = ProductionOrder(
                 product=product,
                 quantity=1,
-                status='PLANNED', # สถานะ "รอตรวจสอบแบบแปลน"
+                status='PLANNED',
                 note=note,
                 customer_name=customer_name,
                 responsible_person=getattr(request.user, 'employee', None)
@@ -174,7 +184,6 @@ def production_create(request):
         'salespersons': salespersons
     })
 
-# 🌟 จังหวะที่ 1: แพลนเนอร์กดยืนยันเริ่มผลิต 🌟
 @login_required
 def start_production(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
@@ -182,12 +191,11 @@ def start_production(request, pk):
         messages.warning(request, "⚠️ กรุณาดึงรายการวัตถุดิบ (BOM) ก่อนกดยืนยันแผนการผลิต!")
         return redirect('production_detail', pk=order.pk)
 
-    order.status = 'WAITING_MATERIALS' # เปลี่ยนเป็น "รอสั่งซื้อวัตถุดิบ"
+    order.status = 'WAITING_MATERIALS'
     order.save()
     messages.success(request, f"🚀 ยืนยันแผนงาน {order.code} แล้ว! งานถูกส่งไปที่ฝ่ายจัดซื้อ")
     return redirect('production_list')
 
-# 🌟 จังหวะที่ 2: จัดซื้อกด PPO (เปลี่ยนสถานะอัตโนมัติ) 🌟
 @login_required
 def ppo_prepare(request):
     available_jobs = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False).order_by('code')
@@ -217,13 +225,11 @@ def ppo_prepare(request):
                         materials_by_supplier[sup_id]['items'][mat_id]['total'] = materials_by_supplier[sup_id]['items'][mat_id]['qty'] * materials_by_supplier[sup_id]['items'][mat_id]['cost']
             for sup_id in materials_by_supplier: materials_by_supplier[sup_id]['items'] = list(materials_by_supplier[sup_id]['items'].values())
             
-            # 🌟 อัปเดตสถานะ JOB เป็น "รอวัตถุดิบพร้อมผลิต" 🌟
             jobs.update(is_materials_ordered=True, status='WAITING_INVENTORY')
         else: 
             messages.warning(request, "⚠️ กรุณาติ๊กเลือกอย่างน้อย 1 ใบสั่งผลิต (JOB) เพื่อคำนวณวัตถุดิบ")
     return render(request, 'manufacturing/ppo_prepare.html', {'available_jobs': available_jobs, 'ppo_code': ppo_code, 'materials_by_supplier': materials_by_supplier, 'selected_job_ids': [int(i) for i in selected_job_ids]})
 
-# 🌟 จังหวะที่ 3: คลังสินค้าเช็กของครบ กดตัดสต็อก (GI) 🌟
 @login_required
 @transaction.atomic
 def materials_ready(request, pk):
@@ -244,25 +250,24 @@ def materials_ready(request, pk):
         messages.error(request, f"❌ ไม่สามารถตัดสต็อกได้! วัตถุดิบในคลังไม่พอ: {err_msg}")
         return redirect('inventory_board')
     
-    # ทำการเบิกวัตถุดิบออก (GI)
     doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบเตรียมผลิต {order.product.name}", created_by=request.user)
     for item in job_materials:
         StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=float(item.quantity), movement_type='OUT', created_by=request.user)
-        item.raw_material.stock_qty -= item.quantity
+        
+        # 🌟 [แก้ไขตรงนี้] บังคับครอบด้วย float() ทั้งสองฝั่ง ป้องกัน Decimal vs Float Error 🌟
+        item.raw_material.stock_qty = float(item.raw_material.stock_qty) - float(item.quantity)
+        
         item.raw_material.save()
     
-    # 🌟 ข้ามสถานะไปที่ "งานอยู่ระหว่างผลิต" ทันที 🌟
     order.status = 'IN_PROGRESS'
     order.save()
     messages.success(request, f"✅ ตัดสต็อกสำเร็จ! สถานะเปลี่ยนเป็น 'งานอยู่ระหว่างผลิต' แล้ว")
     return redirect('inventory_board')
 
-# 🌟 (ถูกแทนที่ด้วยกระบวนการเบิกคลังด้านบนแล้ว ฟังก์ชันนี้ไม่ได้ใช้)
 @login_required
 def start_actual_production(request, pk):
     return redirect('production_list')
 
-# 🌟 จังหวะที่ 4: งานเสร็จรับเข้าคลัง (GR) 🌟
 @login_required
 @transaction.atomic
 def production_process(request, pk):
@@ -434,7 +439,9 @@ def update_production_board(request, pk):
     if request.method == 'POST':
         order = get_object_or_404(ProductionOrder, pk=pk)
 
-        order.production_status_id = request.POST.get('production_status') or None
+        selected_depts = request.POST.getlist('completed_departments')
+        order.completed_departments.set(selected_depts)
+
         order.production_team_id = request.POST.get('production_team') or None
         order.delivery_status_id = request.POST.get('delivery_status') or None
         order.transporter_id = request.POST.get('transporter') or None
@@ -445,7 +452,7 @@ def update_production_board(request, pk):
             messages.success(request, f"✅ ปิดจ๊อบ {order.code} เรียบร้อยแล้ว! (ย้ายไปแท็บประวัติ)")
         else:
             order.is_closed = False
-            messages.success(request, f"✅ อัปเดตสถานะงาน {order.code} เรียบร้อยแล้ว!")
+            messages.success(request, f"✅ อัปเดตความคืบหน้า {order.code} เรียบร้อยแล้ว!")
 
         order.save()
 
@@ -478,7 +485,7 @@ def ajax_add_prod_status(request):
         data = json.loads(request.body)
         name = data.get('name')
         if name:
-            obj, _ = ProductionStatus.objects.get_or_create(name=name)
+            obj, _ = ProductionStatus.objects.get_or_create(name=name, defaults={'sequence': 99})
             return JsonResponse({'success': True, 'id': obj.id, 'name': obj.name})
     return JsonResponse({'success': False})
 

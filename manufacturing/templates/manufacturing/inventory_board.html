@@ -40,7 +40,7 @@
             </thead>
             <tbody>
                 {% for order in orders %}
-                <tr class="{% if order.status == 'READY_TO_PRODUCE' %}table-ready{% endif %}">
+                <tr class="{% if order.status != 'WAITING_INVENTORY' %}table-ready{% endif %}">
                     <td>
                         <span class="info-label">เลขที่ JOB</span>
                         <div class="fw-bold text-dark font-monospace mb-2" style="font-size: 1.1rem;">{{ order.code }}</div>
@@ -57,28 +57,41 @@
                     </td>
                     <td class="align-middle">
                         <span class="info-label">สถานะปัจจุบัน</span>
-                        {% if order.status == 'WAITING_MATERIALS' %}
+                        
+                        {% if order.status == 'WAITING_INVENTORY' %}
                             <span class="badge bg-warning text-dark border border-warning rounded-pill px-3 py-2 shadow-sm"><i class="fas fa-hourglass-half me-1"></i> รวบรวมวัตถุดิบ / รอของมาส่ง</span>
-                        {% elif order.status == 'READY_TO_PRODUCE' %}
+                        {% else %}
                             <span class="badge bg-success text-white border border-success rounded-pill px-3 py-2 shadow-sm"><i class="fas fa-check-circle me-1"></i> เบิกตัดสต็อกเรียบร้อยแล้ว</span>
                         {% endif %}
                     </td>
                     <td class="text-end pe-4 align-middle">
-                        {% if order.status == 'WAITING_MATERIALS' %}
-                            <form action="{% url 'materials_ready' order.id %}" method="POST" class="d-inline">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-success shadow-sm rounded-pill fw-bold px-4 py-2" onclick="return confirm('⚠️ ตรวจสอบของลงตะกร้าครบแล้วใช่หรือไม่?\n\nระบบจะทำการ ตัดสต็อกวัตถุดิบ (GI) ออกจากคลังทันที และส่งงานไปที่กระดานช่างผลิต');">
-                                    <i class="fas fa-box-open me-1"></i> วัตถุดิบพร้อมผลิต (เบิกของ)
+                        
+                        {% if order.status == 'WAITING_INVENTORY' %}
+                            {% if order.has_shortage %}
+                                <button class="btn btn-secondary shadow-sm rounded-pill fw-bold px-4 py-2" disabled>
+                                    <i class="fas fa-exclamation-triangle me-1"></i> วัตถุดิบไม่พอเบิก
                                 </button>
-                            </form>
-                            <a href="{% url 'print_bom' order.id %}" target="_blank" class="btn btn-outline-secondary shadow-sm rounded-circle ms-2" style="width: 40px; height: 40px; padding: 7px;" title="พิมพ์รายการจัดของ (BOM)">
-                                <i class="fas fa-print"></i>
-                            </a>
+                                <div class="small text-danger mt-2 fw-bold"><i class="fas fa-info-circle"></i> {{ order.shortage_list }}</div>
+                                <a href="{% url 'print_bom' order.id %}" target="_blank" class="btn btn-outline-secondary shadow-sm rounded-circle ms-2 mt-1" style="width: 40px; height: 40px; padding: 7px;" title="พิมพ์รายการจัดของ (BOM)">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            {% else %}
+                                <form action="{% url 'materials_ready' order.id %}" method="POST" class="d-inline">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-success shadow-sm rounded-pill fw-bold px-4 py-2" onclick="return confirm('⚠️ ตรวจสอบของลงตะกร้าครบแล้วใช่หรือไม่?\n\nระบบจะทำการ ตัดสต็อกวัตถุดิบ (GI) ออกจากคลังทันที และส่งงานไปที่กระดานช่างผลิต');">
+                                        <i class="fas fa-box-open me-1"></i> วัตถุดิบพร้อมผลิต (เบิกของ)
+                                    </button>
+                                </form>
+                                <a href="{% url 'print_bom' order.id %}" target="_blank" class="btn btn-outline-secondary shadow-sm rounded-circle ms-2" style="width: 40px; height: 40px; padding: 7px;" title="พิมพ์รายการจัดของ (BOM)">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            {% endif %}
                         {% else %}
                             <button class="btn btn-light text-success fw-bold rounded-pill px-4 py-2 border" disabled>
                                 <i class="fas fa-check me-1"></i> ส่งมอบของให้ช่างแล้ว
                             </button>
                         {% endif %}
+                        
                     </td>
                 </tr>
                 {% empty %}

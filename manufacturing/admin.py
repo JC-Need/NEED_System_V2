@@ -3,7 +3,6 @@ from django.contrib import messages
 from django.utils.html import format_html
 from django.urls import reverse
 
-# 🌟 เพิ่มตาราง 4 สถานะใหม่ เข้ามาใน Import 🌟
 from .models import (
     BOM, BOMItem, ProductionOrder, Branch, Salesperson,
     ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
@@ -24,15 +23,22 @@ class SalespersonAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 # ==========================================
-# 🌟 เพิ่มเมนูจัดการสถานะหน้าตารางกระดานผลิต (ใหม่) 🌟
+# 🌟 เพิ่มเมนูจัดการสถานะหน้าตารางกระดานผลิต 🌟
 # ==========================================
-admin.site.register(ProductionStatus)
+
+# 👇 ทำให้สามารถกรอกตัวเลขลำดับ (sequence) ได้ง่ายๆ จากหน้าแรก 👇
+@admin.register(ProductionStatus)
+class ProductionStatusAdmin(admin.ModelAdmin):
+    list_display = ('name', 'sequence')
+    list_editable = ('sequence',) # เปิดให้แก้เลข 1,2,3 ได้เลย
+    ordering = ('sequence', 'id')
+
 admin.site.register(ProductionTeam)
 admin.site.register(DeliveryStatus)
 admin.site.register(Transporter)
 
 # ==========================================
-# ส่วน BOMAdmin เดิมของคุณลูกค้า
+# ส่วน BOMAdmin
 # ==========================================
 class BOMItemInline(admin.TabularInline):
     model = BOMItem
@@ -46,7 +52,7 @@ class BOMAdmin(admin.ModelAdmin):
     search_fields = ('product__name',)
 
 # ==========================================
-# ส่วน Action และ ProductionOrder เดิมของคุณลูกค้า
+# ส่วน Action และ ProductionOrder 
 # ==========================================
 @admin.action(description='✅ ยืนยันผลิตเสร็จ (ตัดวัตถุดิบ + เพิ่มสินค้า)')
 def action_complete_production(modeladmin, request, queryset):
@@ -81,15 +87,12 @@ def action_complete_production(modeladmin, request, queryset):
 
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(admin.ModelAdmin):
-    # 🌟 เพิ่มสาขาและเซลส์ เข้ามาโชว์ในตารางด้วย
     list_display = ('code', 'product', 'quantity', 'status', 'start_date', 'branch', 'salesperson', 'print_button')
     list_filter = ('status', 'start_date', 'branch')
     search_fields = ('code', 'product__name', 'customer_name')
     actions = [action_complete_production]
 
-    # ✅ ฟังก์ชันสร้างปุ่มพิมพ์ (สีม่วง)
     def print_button(self, obj):
         url = reverse('production_print', args=[obj.id])
         return format_html(f'<a href="{url}" target="_blank" class="button" style="background-color:#6f42c1; color:white; padding:5px 10px; border-radius:5px; text-decoration:none;">🖨️ ใบสั่งผลิต</a>')
-    
     print_button.short_description = 'เอกสาร'

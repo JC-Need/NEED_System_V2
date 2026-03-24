@@ -11,12 +11,10 @@
         box-shadow: none; border-color: transparent;
     }
     .search-capsule {
-        border: 1px solid #e2e8f0;
-    }
+        border: 1px solid #e2e8f0; }
     
     .badge-pulse {
-        animation: pulse-animation 2s infinite;
-    }
+        animation: pulse-animation 2s infinite; }
     @keyframes pulse-animation {
         0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
         70% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
@@ -52,7 +50,7 @@
                 </span>
                 {% else %}
                 <span id="badge-pending-production" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light border-2 d-none">
-                    0
+                 0
                 </span>
                 {% endif %}
             </a>
@@ -74,10 +72,10 @@
                 <div class="col-md-7 col-lg-7">
                     <div class="input-group search-capsule rounded-pill overflow-hidden shadow-sm">
                         <span class="input-group-text bg-white border-0 text-muted ps-4"><i class="far fa-calendar-alt"></i></span>
-                        <input type="text" id="filter_start" class="form-control border-0 text-center datepicker fw-bold text-primary" placeholder="เริ่มต้น" value="{{ start_date }}">
+                         <input type="text" id="filter_start" class="form-control border-0 text-center datepicker fw-bold text-primary" placeholder="เริ่มต้น" value="{{ start_date }}">
                         <span class="input-group-text bg-white border-0 text-muted px-1">-</span>
                         <input type="text" id="filter_end" class="form-control border-0 text-center datepicker fw-bold text-primary" placeholder="สิ้นสุด" value="{{ end_date }}">
-                        <button type="button" class="btn btn-success fw-bold px-4 text-uppercase" onclick="fetchDashboardData(true)" style="letter-spacing: 1px;">
+                         <button type="button" class="btn btn-success fw-bold px-4 text-uppercase" onclick="fetchDashboardData(true)" style="letter-spacing: 1px;">
                             <i class="fas fa-search me-1"></i> ค้นหา
                         </button>
                     </div>
@@ -97,19 +95,19 @@
                             <h2 id="val-total-sales" class="fw-bold display-6 mb-0 mt-2">฿{{ total_sales_today|default:"0"|floatformat:2|intcomma }}</h2>
                         </div>
                         <div class="bg-white bg-opacity-25 p-3 rounded-circle">
-                            <i class="fas fa-coins fa-2x text-white"></i>
+                           <i class="fas fa-coins fa-2x text-white"></i>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
+         </div>
 
         <div class="col-lg-2 col-md-3 col-6">
             <div class="card border-0 shadow-sm h-100 rounded-4 bg-white">
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <div class="me-1">
-                            <h6 class="text-muted text-uppercase fw-bold mb-1 lh-sm" style="font-size: 0.7rem;">ใบขายวันนี้<br>&nbsp;</h6>
+                            <h6 class="text-secondary fw-bold mb-1 lh-sm" style="font-size: 0.85rem;">ใบขายวันนี้<br>&nbsp;</h6>
                             <h4 id="val-total-orders" class="fw-bold mb-0 text-dark">{{ total_orders_today|default:"0"|intcomma }} <small class="text-muted" style="font-size: 0.65rem;">บิล</small></h4>
                         </div>
                         <div class="bg-success bg-opacity-10 p-2 rounded-circle">
@@ -120,7 +118,7 @@
                         ตรวจสอบบิล <i class="fas fa-arrow-right ms-1"></i>
                     </a>
                 </div>
-            </div>
+             </div>
         </div>
 
         <div class="col-lg-2 col-md-3 col-6">
@@ -128,7 +126,7 @@
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <div class="me-1">
-                            <h6 class="text-muted text-uppercase fw-bold mb-1 lh-sm" style="font-size: 0.7rem;">ใบเสนอราคา<br>(รออนุมัติ)</h6>
+                            <h6 class="text-secondary fw-bold mb-1 lh-sm" style="font-size: 0.85rem;">ใบเสนอราคา<br>(รออนุมัติ)</h6>
                             <h4 id="val-pending-approval" class="fw-bold mb-0 text-dark">{{ pending_approval_quotes|default:"0"|intcomma }} <small class="text-muted" style="font-size: 0.65rem;">ใบ</small></h4>
                         </div>
                         <div class="bg-info bg-opacity-10 p-2 rounded-circle">
@@ -138,7 +136,7 @@
                     <a href="{% url 'quotation_list' %}?status=DRAFT" class="btn btn-sm btn-outline-info rounded-pill w-100 mt-2 fw-bold" style="font-size: 0.75rem;">
                         เช็คสถานะ <i class="fas fa-arrow-right ms-1"></i>
                     </a>
-                </div>
+                 </div>
             </div>
         </div>
 
@@ -147,7 +145,7 @@
                 <div class="card-body p-3">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <div class="me-1">
-                            <h6 class="text-muted text-uppercase fw-bold mb-1 lh-sm" style="font-size: 0.7rem;">ใบเสนอราคา<br>(รอปิดการขาย)</h6>
+                            <h6 class="text-secondary fw-bold mb-1 lh-sm" style="font-size: 0.85rem;">ใบเสนอราคา<br>(รอปิดการขาย)</h6>
                             <h4 id="val-pending-closing" class="fw-bold mb-0 text-dark">{{ pending_closing_quotes|default:"0"|intcomma }} <small class="text-muted" style="font-size: 0.65rem;">ใบ</small></h4>
                         </div>
                         <div class="bg-warning bg-opacity-10 p-2 rounded-circle">
@@ -164,9 +162,9 @@
         <div class="col-lg-2 col-md-3 col-6">
             <div class="card border-0 shadow-sm h-100 rounded-4 bg-white">
                 <div class="card-body p-3">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
+                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <div class="me-1">
-                            <h6 class="text-muted text-uppercase fw-bold mb-1 lh-sm" style="font-size: 0.7rem;">ใบเสนอราคา<br>(ระหว่างผลิต)</h6>
+                            <h6 class="text-secondary fw-bold mb-1 lh-sm" style="font-size: 0.85rem;">ใบเสนอราคา<br>(ระหว่างผลิต)</h6>
                             <h4 id="val-in-production" class="fw-bold mb-0 text-dark">{{ in_production_quotes|default:"0"|intcomma }} <small class="text-muted" style="font-size: 0.65rem;">ใบ</small></h4>
                         </div>
                         <div class="p-2 rounded-circle" style="background-color: rgba(111, 66, 193, 0.1);">
@@ -183,7 +181,7 @@
     </div>
 
     <div class="row g-4">
-        <div class="col-lg-8">
+         <div class="col-lg-8">
             <div class="card border-0 shadow-sm rounded-4 h-100">
                 <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                     <h6 class="fw-bold mb-0"><i class="fas fa-history me-2 text-primary"></i>รายการขาย (Live Feed)</h6>
@@ -192,53 +190,53 @@
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0">
-                            <thead class="bg-light text-muted small text-uppercase">
+                             <thead class="bg-light text-muted small text-uppercase">
                                 <tr>
                                     <th class="ps-4">เวลา</th>
-                                    <th>เลขที่เอกสาร</th>
+                                     <th>เลขที่เอกสาร</th>
                                     <th>พนักงาน</th>
-                                    <th>ยอดเงิน</th>
+                                     <th>ยอดเงิน</th>
                                     <th>สถานะ</th>
                                 </tr>
                             </thead>
-                            <tbody id="val-recent-sales">
+                             <tbody id="val-recent-sales">
                                 {% for item in recent_sales %}
                                 <tr>
-                                    <td class="ps-4 text-muted small">
+                                     <td class="ps-4 text-muted small">
                                         {% if item.created_at.date == today %}{{ item.created_at|date:"H:i" }}{% else %}{{ item.created_at|date:"d/m/Y" }}{% endif %}
-                                    </td>
+                                     </td>
                                     <td>
                                         <span class="fw-bold text-dark">{{ item.code }}</span>
                                         {% if 'POS' in item.code %}
                                             <span class="badge bg-warning text-dark border ms-1" style="font-size: 0.6rem;">หน้าร้าน</span>
-                                        {% else %}
+                                         {% else %}
                                             <span class="badge bg-info text-dark border ms-1" style="font-size: 0.6rem;">ใบกำกับ</span>
-                                        {% endif %}
+                                         {% endif %}
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center">
                                             {% if item.employee.photo %}
-                                                <img src="{{ item.employee.photo.url }}" class="rounded-circle me-2" style="width: 25px; height: 25px; object-fit: cover;">
+                                                 <img src="{{ item.employee.photo.url }}" class="rounded-circle me-2" style="width: 25px; height: 25px; object-fit: cover;">
                                             {% else %}
                                                 <div class="bg-secondary rounded-circle me-2 d-flex align-items-center justify-content-center text-white" style="width: 25px; height: 25px; font-size: 10px;">{{ item.employee.first_name|slice:":1" }}</div>
                                             {% endif %}
                                             <span class="small">{{ item.employee.first_name }}</span>
                                         </div>
                                     </td>
-                                    <td class="fw-bold text-success">
+                                     <td class="fw-bold text-success">
                                         {% if 'POS' in item.code %}
                                             +{{ item.total_amount|intcomma }}
                                         {% else %}
                                             +{{ item.grand_total|intcomma }}
-                                        {% endif %}
+                                          {% endif %}
                                     </td>
-                                    <td><span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2">สำเร็จ</span></td>
+                                     <td><span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2">สำเร็จ</span></td>
                                 </tr>
                                 {% empty %}
-                                <tr><td colspan="5" class="text-center py-4 text-muted">ยังไม่มีรายการขายในช่วงเวลานี้</td></tr>
+                                 <tr><td colspan="5" class="text-center py-4 text-muted">ยังไม่มีรายการขายในช่วงเวลานี้</td></tr>
                                 {% endfor %}
                             </tbody>
-                        </table>
+                         </table>
                     </div>
                 </div>
             </div>
@@ -246,7 +244,7 @@
 
         <div class="col-lg-4">
             <div class="card border-0 shadow-sm rounded-4 h-100 bg-white">
-                <div class="card-body p-4">
+                 <div class="card-body p-4">
                     <h6 class="text-uppercase text-dark fw-bold mb-1"><i class="fas fa-chart-bar me-2 text-primary"></i>ยอดขายแยกตามทีม</h6>
                     <p class="text-muted small mb-4">เปรียบเทียบผลงาน Sales Team (ตามช่วงเวลา)</p>
                     <div style="height: 300px; width: 100%;">
@@ -271,7 +269,7 @@
         teamChart = new Chart(ctx, {
             type: 'bar',
             data: {
-                labels: {{ chart_labels|safe }},
+                 labels: {{ chart_labels|safe }},
                 datasets: [{
                     label: 'ยอดขาย (บาท)',
                     data: {{ chart_data|safe }},
@@ -280,17 +278,17 @@
                     borderWidth: 1,
                     borderRadius: 6,
                     barPercentage: 0.6
-                }]
+               }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    y: { beginAtZero: true, grid: { borderDash: [5, 5], color: '#f0f0f0' }, ticks: { callback: function(value) { return '฿' + value.toLocaleString(); }, font: { family: 'Sarabun', size: 11 } } },
+                     y: { beginAtZero: true, grid: { borderDash: [5, 5], color: '#f0f0f0' }, ticks: { callback: function(value) { return '฿' + value.toLocaleString(); }, font: { family: 'Sarabun', size: 11 } } },
                     x: { grid: { display: false }, ticks: { font: { family: 'Sarabun', size: 12, weight: 'bold' } } }
                 },
                 plugins: {
-                    legend: { display: false },
+                     legend: { display: false },
                     tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', titleFont: { family: 'Sarabun', size: 13 }, bodyFont: { family: 'Sarabun', size: 14, weight: 'bold' }, padding: 10, callbacks: { label: function(context) { return 'ยอดขาย: ฿' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2}); } } }
                 }
             }
@@ -354,10 +352,8 @@
                 document.getElementById('val-total-orders').innerHTML = (data.total_orders_today || 0).toLocaleString() + ' <small class="text-muted" style="font-size: 0.65rem;">บิล</small>';
                 document.getElementById('val-pending-approval').innerHTML = (data.pending_approval_quotes || 0).toLocaleString() + ' <small class="text-muted" style="font-size: 0.65rem;">ใบ</small>';
                 document.getElementById('val-pending-closing').innerHTML = (data.pending_closing_quotes || 0).toLocaleString() + ' <small class="text-muted" style="font-size: 0.65rem;">ใบ</small>';
-                
                 let valInProd = document.getElementById('val-in-production');
                 if (valInProd) valInProd.innerHTML = (data.in_production_quotes || 0).toLocaleString() + ' <small class="text-muted" style="font-size: 0.65rem;">ใบ</small>';
-
                 let badgeProd = document.getElementById('badge-pending-production');
                 if (badgeProd) {
                     badgeProd.innerText = data.pending_production_quotes;
@@ -374,7 +370,8 @@
                 if (data.recent_sales.length > 0) {
                     data.recent_sales.forEach(item => {
                         let badge = item.is_pos ? '<span class="badge bg-warning text-dark border ms-1" style="font-size: 0.6rem;">หน้าร้าน</span>' : '<span class="badge bg-info text-dark border ms-1" style="font-size: 0.6rem;">ใบกำกับ</span>';
-                        let empHtml = item.employee_photo ? `<img src="${item.employee_photo}" class="rounded-circle me-2" style="width: 25px; height: 25px; object-fit: cover;">` : `<div class="bg-secondary rounded-circle me-2 d-flex align-items-center justify-content-center text-white" style="width: 25px; height: 25px; font-size: 10px;">${item.employee_initial}</div>`;
+                        let empHtml = item.employee_photo ? 
+                        `<img src="${item.employee_photo}" class="rounded-circle me-2" style="width: 25px; height: 25px; object-fit: cover;">` : `<div class="bg-secondary rounded-circle me-2 d-flex align-items-center justify-content-center text-white" style="width: 25px; height: 25px; font-size: 10px;">${item.employee_initial}</div>`;
                         feedHtml += `<tr><td class="ps-4 text-muted small">${item.time}</td><td><span class="fw-bold text-dark">${item.code}</span> ${badge}</td><td><div class="d-flex align-items-center">${empHtml}<span class="small">${item.employee_name}</span></div></td><td class="fw-bold text-success">+${item.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td><span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2">สำเร็จ</span></td></tr>`;
                     });
                 } else {

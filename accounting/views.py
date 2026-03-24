@@ -5,7 +5,7 @@ from django.utils import timezone
 from .models import Income, Expense
 
 # นำเข้าโมเดลจากแอปอื่นเพื่อดึงยอด "งานด่วนรอตรวจสอบ"
-from sales.models import POSOrder, Invoice
+from sales.models import POSOrder, Invoice, Quotation
 from purchasing.models import PurchaseOrder
 
 @login_required
@@ -23,6 +23,9 @@ def accounting_dashboard(request):
     net_balance = total_income - total_expense
 
     # 2. นับจำนวนงานด่วนข้ามแผนก (Pending Tasks)
+    # 🌟 [เพิ่มใหม่] ฝ่ายขาย: ใบเสนอราคาที่รับมัดจำแล้วแต่รอตรวจ
+    pending_deposits = Quotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).count()
+    
     # ฝ่ายขาย: บิลที่รอตรวจสอบยอดเงินเข้า
     pending_sales = Invoice.objects.filter(status='PENDING').count() + POSOrder.objects.filter(status='PENDING').count()
     # ฝ่ายจัดซื้อ: PO ที่รอโอนเงิน (เฉพาะที่ผู้จัดการอนุมัติแล้ว)
@@ -43,6 +46,7 @@ def accounting_dashboard(request):
         'total_income': total_income,
         'total_expense': total_expense,
         'net_balance': net_balance,
+        'pending_deposits': pending_deposits, # 🌟 ส่งค่านับจำนวนนี้ไปให้หน้าเว็บ
         'pending_sales': pending_sales,
         'pending_purchases': pending_purchases,
         'recent_transactions': recent_transactions,

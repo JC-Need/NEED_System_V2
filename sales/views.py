@@ -18,7 +18,8 @@ from master_data.models import Customer, CompanyInfo
 from hr.models import Employee
 from .forms import QuotationForm
 
-from manufacturing.models import ProductionOrder
+# 🌟 เพิ่มการดึง Model ProductionStatus เพื่อนับจำนวนแผนกสำหรับทำ Progress Bar 🌟
+from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch as MfgBranch, ProductionStatus
 
 def get_next_document_number():
     now = timezone.now()
@@ -119,7 +120,7 @@ def sales_dashboard(request):
     pos_today = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date=today)
     inv_today = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today)
     total_orders_today = pos_today.count() + inv_today.count()
-    
+
     qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
 
     pending_approval_quotes = qt_all_qs.filter(status='DRAFT').count()
@@ -189,7 +190,7 @@ def api_dashboard_data(request):
     pos_today = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date=today)
     inv_today = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today)
     total_orders_today = pos_today.count() + inv_today.count()
-    
+
     qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
 
     pending_approval_quotes = qt_all_qs.filter(status='DRAFT').count()
@@ -278,7 +279,7 @@ def record_deposit(request, qt_id):
 
         method = request.POST.get('deposit_method', 'TRANSFER')
         date_str = request.POST.get('deposit_date')
-        next_url = request.POST.get('next') 
+        next_url = request.POST.get('next')
 
         if amount > 0:
             qt.deposit_amount = amount
@@ -310,16 +311,34 @@ def create_job_order(request, qt_id):
         messages.warning(request, f"⚠️ ใบเสนอราคา {qt.code} ถูกส่งสั่งผลิตไปแล้ว!")
         return redirect('quotation_list')
 
+    if qt.is_deposit_paid and not qt.is_deposit_verified:
+        messages.error(request, f"❌ ไม่สามารถส่งสั่งผลิตได้ บัญชียังไม่ได้ตรวจสอบสลิปเงินมัดจำของ {qt.code}")
+        return redirect('quotation_list')
+
     first_item = qt.items.filter(product__isnull=False).first()
     if not first_item:
         messages.error(request, "❌ ไม่พบข้อมูลสินค้า (FG) ในใบเสนอราคา ไม่สามารถสร้างใบสั่งผลิตได้")
         return redirect('quotation_list')
 
+    target_date_str = request.POST.get('target_date') if request.method == 'POST' else None
+    target_date = parse_date(target_date_str) if target_date_str else None
+
+    sales_obj = None
+    branch_obj = None
+    if qt.employee:
+        emp_name = f"{qt.employee.first_name} {qt.employee.last_name}".strip()
+        branch_name = qt.employee.department.name if qt.employee.department else "สำนักงานใหญ่"
+        branch_obj, _ = MfgBranch.objects.get_or_create(name=branch_name)
+        sales_obj, _ = MfgSalesperson.objects.get_or_create(name=emp_name, branch=branch_obj)
+
     job = ProductionOrder.objects.create(
         product=first_item.product,
         quotation_ref=qt,
         customer_name=qt.customer_name,
-        note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}"
+        note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}",
+        salesperson=sales_obj,      
+        branch=branch_obj,          
+        delivery_date=target_date   
     )
 
     if first_item.product and first_item.product.standard_blueprint:
@@ -479,9 +498,9 @@ def quotation_list(request):
     if status_filter:
         if status_filter == 'PENDING_PRODUCTION':
             queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True)
-        elif status_filter == 'PENDING_CLOSING':  # รอปิดการขาย
+        elif status_filter == 'PENDING_CLOSING':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=False)
-        elif status_filter == 'IN_PRODUCTION':    # ระหว่างผลิต
+        elif status_filter == 'IN_PRODUCTION':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=True)
         else:
             queryset = queryset.filter(status=status_filter)
@@ -512,14 +531,18 @@ def quotation_list(request):
         if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower():
             is_manager = True
 
+    # 🌟 นับจำนวนแผนกทั้งหมด ส่งไปทำ Progress Bar หน้าเว็บ 🌟
+    total_departments_count = ProductionStatus.objects.count()
+
     return render(request, 'sales/quotation_list.html', {
         'page_obj': page_obj,
         'search_query': search_query,
         'is_manager': is_manager,
         'status_filter': status_filter,
-        'prod_status_filter': prod_status_filter, 
+        'prod_status_filter': prod_status_filter,
         'date_start': date_start,
-        'date_end': date_end
+        'date_end': date_end,
+        'total_departments_count': total_departments_count
     })
 
 @login_required
@@ -540,10 +563,11 @@ def quotation_create(request):
             last = Quotation.objects.filter(code__startswith=prefix).order_by('code').last()
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             qt.code = f"{prefix}-{seq:03d}"
-            
-            # 🌟 จุดสำคัญ: ตั้งค่าเริ่มต้นหมายเหตุ (Note) หากยังไม่มีข้อมูล 🌟
+
+            if not qt.payment_terms:
+                qt.payment_terms = "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"
             if not qt.note:
-                qt.note = "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"
+                qt.note = "-ไม่มี-"
 
             qt.save()
             messages.success(request, f"ร่างใบเสนอราคา {qt.code} เรียบร้อย กรุณาเพิ่มรายการสินค้า")
@@ -556,10 +580,10 @@ def quotation_create(request):
 @login_required
 def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
-    
+
     main_categories = Category.objects.all()
     products = Product.objects.filter(is_active=True, product_type='FG')
-    
+
     products_list = []
     for p in products:
         products_list.append({
@@ -572,7 +596,7 @@ def quotation_edit(request, qt_id):
 
     upsale_categories = UpsaleCategory.objects.filter(is_active=True)
     upsale_catalogs = UpsaleCatalog.objects.filter(is_active=True)
-    
+
     upsales_list = []
     for u in upsale_catalogs:
         upsales_list.append({
@@ -598,7 +622,7 @@ def quotation_edit(request, qt_id):
             qty = int(request.POST.get('quantity', 1))
             price = Decimal(request.POST.get('price', '0').replace(',', ''))
             product_id = request.POST.get('product_id')
-            
+
             product_obj = None
             if product_id:
                 try: product_obj = Product.objects.get(id=product_id)
@@ -631,6 +655,7 @@ def quotation_edit(request, qt_id):
             return redirect('quotation_edit', qt_id=qt.id)
 
         elif 'update_info' in request.POST or 'finish_quote' in request.POST:
+            qt.payment_terms = request.POST.get('payment_terms', '')
             qt.note = request.POST.get('note', '')
             qt.discount = Decimal(request.POST.get('discount', '0') or 0)
             qt.shipping_cost = Decimal(request.POST.get('shipping_cost', '0') or 0)
@@ -644,12 +669,12 @@ def quotation_edit(request, qt_id):
                 return redirect('quotation_edit', qt_id=qt.id)
 
     return render(request, 'sales/quotation_edit.html', {
-        'qt': qt, 
+        'qt': qt,
         'main_categories': main_categories,
         'upsale_categories': upsale_categories,
         'products_json': json.dumps(products_list),
         'upsales_json': json.dumps(upsales_list),
-        'item_total': item_total, 
+        'item_total': item_total,
         'balance_due': balance_due
     })
 
@@ -661,10 +686,10 @@ def calculate_totals(qt):
 
     shipping = qt.shipping_cost if qt.shipping_cost else Decimal(0)
     discount = qt.discount if qt.discount else Decimal(0)
-    
+
     grand_total = (total_goods + shipping) - discount
     if grand_total < 0: grand_total = 0
-    
+
     qt.subtotal = grand_total / Decimal('1.07')
     qt.tax_amount = grand_total - qt.subtotal
     qt.grand_total = grand_total
@@ -709,8 +734,8 @@ def quotation_clone(request, qt_id):
         tax_amount=old_qt.tax_amount,
         grand_total=old_qt.grand_total,
         status='DRAFT',
-        # 🌟 จุดสำคัญ: ดึงหมายเหตุเดิมมา แต่ถ้าว่างเปล่าให้ใส่ค่าเริ่มต้น 🌟
-        note=old_qt.note if old_qt.note else "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง",
+        payment_terms=old_qt.payment_terms if old_qt.payment_terms else "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง",
+        note=old_qt.note if old_qt.note else "-ไม่มี-",
     )
 
     for item in old_qt.items.all():
@@ -718,10 +743,10 @@ def quotation_clone(request, qt_id):
             quotation=new_qt, product=item.product, item_name=item.item_name,
             description=item.description, quantity=item.quantity, unit_price=item.unit_price, amount=item.amount
         )
-        
+
     for upsale in old_qt.upsales.all():
         QuotationUpsale.objects.create(
-            quotation=new_qt, description=upsale.description, 
+            quotation=new_qt, description=upsale.description,
             quantity=upsale.quantity, unit_price=upsale.unit_price, total_price=upsale.total_price
         )
 
@@ -762,11 +787,11 @@ def quotation_cancel(request, qt_id):
 def quotation_print(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     company = CompanyInfo.objects.first()
-    
+
     main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
     upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
     item_total = main_total + upsale_total
-    
+
     return render(request, 'sales/quotation_print.html', {'qt': qt, 'company': company, 'item_total': item_total})
 
 @login_required
@@ -925,7 +950,7 @@ def invoice_print(request, inv_id):
         for item in items:
             item.amount = item.quantity * item.unit_price
             item_total += Decimal(str(item.amount))
-        
+
         for u in qt.upsales.all():
             items.append(u)
             item_total += Decimal(str(u.total_price))
@@ -991,11 +1016,11 @@ def verify_deposit(request, qt_id):
 def deposit_print(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     company = CompanyInfo.objects.first()
-    
+
     main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
     upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
     item_total = main_total + upsale_total
-    
+
     balance_due = qt.grand_total - qt.deposit_amount
     return render(request, 'sales/deposit_print.html', {
         'qt': qt, 'company': company, 'item_total': item_total, 'balance_due': balance_due

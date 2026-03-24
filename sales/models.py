@@ -93,7 +93,11 @@ class Quotation(models.Model):
     is_deposit_verified = models.BooleanField(default=False, verbose_name="บัญชีตรวจสอบมัดจำแล้ว")
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT', verbose_name="สถานะ")
+    
+    # 🌟 เพิ่มช่องเงื่อนไขการชำระเงินแยกจากหมายเหตุ 🌟
+    payment_terms = models.TextField(blank=True, verbose_name="เงื่อนไขการชำระเงิน")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
+    
     created_at = models.DateTimeField(auto_now_add=True)
     approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_quotations', verbose_name="ผู้อนุมัติ")
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่อนุมัติ")
@@ -169,9 +173,6 @@ class Invoice(models.Model):
                     img.save(self.check_slip.path, quality=85, optimize=True)
             except Exception: pass
 
-# ==========================================
-# 🌟 [เพิ่มใหม่] ตารางหมวดหมู่ และแคตตาล็อก Upsale 🌟
-# ==========================================
 class UpsaleCategory(models.Model):
     name = models.CharField(max_length=100, verbose_name="หมวดหมู่รายการเพิ่มเติม")
     is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")

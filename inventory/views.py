@@ -25,6 +25,12 @@ def inventory_dashboard(request):
     fg_count = fg_qs.count()
     rm_count = rm_qs.count()
 
+    # 🌟 [เพิ่มใหม่] นับจำนวนใบสั่งซื้อ (PO) ที่รอรับเข้าคลัง 🌟
+    pending_po_count = PurchaseOrder.objects.filter(
+        status='APPROVED',
+        receipt_status__in=['PENDING', 'PARTIAL']
+    ).count()
+
     # 🌟 ดึงข้อมูลมาโชว์เป็นพรีวิวแค่ 5 รายการแรก 🌟
     fg_products = fg_qs.order_by('code')[:5]
     rm_products = rm_qs.order_by('code')[:5]
@@ -34,10 +40,11 @@ def inventory_dashboard(request):
     return render(request, 'inventory/dashboard.html', {
         'fg_products': fg_products,
         'rm_products': rm_products,
-        'fg_count': fg_count,       # ส่งยอดรวม FG ไปหน้าเว็บ
-        'rm_count': rm_count,       # ส่งยอดรวม RM ไปหน้าเว็บ
+        'fg_count': fg_count,       
+        'rm_count': rm_count,       
         'low_stock_count': low_stock_count,
-        'recent_docs': recent_docs
+        'recent_docs': recent_docs,
+        'pending_po_count': pending_po_count # 🌟 ส่งตัวเลขไปโชว์ที่ป้ายแจ้งเตือนหน้าเว็บ
     })
 
 # ==========================================

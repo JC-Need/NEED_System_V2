@@ -20,7 +20,13 @@ class Salesperson(models.Model):
 # 🌟 ตารางใหม่: สำหรับระบบกระดานติดตามงาน 🌟
 # ==========================================
 class ProductionStatus(models.Model):
-    name = models.CharField(max_length=100, unique=True, verbose_name="สถานะการผลิตหน้างาน")
+    name = models.CharField(max_length=100, unique=True, verbose_name="สถานะการผลิตหน้างาน (แผนก)")
+    # 🌟 เพิ่มช่อง ลำดับการแสดงผล เข้ามา 🌟
+    sequence = models.IntegerField(default=99, verbose_name="ลำดับการแสดงผล")
+
+    class Meta:
+        ordering = ['sequence', 'id'] # 🌟 สั่งให้เรียงตามเลขลำดับ จากน้อยไปมาก
+
     def __str__(self): return self.name
 
 class ProductionTeam(models.Model):
@@ -60,7 +66,6 @@ class BOMItem(models.Model):
 # 2. ใบสั่งผลิต (Production Order - JOB)
 # ==========================================
 class ProductionOrder(models.Model):
-    # 🌟 อัปเดต STATUS_CHOICES ตาม Timeline 4 ขั้นตอนใหม่ 🌟
     STATUS_CHOICES = [
         ('PLANNED', 'รอตรวจสอบแบบแปลน'),
         ('WAITING_MATERIALS', 'รอสั่งซื้อวัตถุดิบ'),
@@ -74,11 +79,9 @@ class ProductionOrder(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้าที่จะผลิต")
     quantity = models.IntegerField(default=1, verbose_name="จำนวนที่ผลิต (ล็อกที่ 1 เสมอ)")
     
-    # 🌟 สะพานเชื่อมกับฝ่ายขาย และเก็บไฟล์แบบแปลน 🌟
     quotation_ref = models.ForeignKey('sales.Quotation', on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="อ้างอิงใบเสนอราคา/มัดจำ")
     blueprint_file = models.FileField(upload_to='blueprints/%Y/%m/', null=True, blank=True, verbose_name="ไฟล์แบบแปลน (PDF/รูปภาพ)")
     
-    # --- ข้อมูลวันที่และการขาย ---
     start_date = models.DateField(default=timezone.now, verbose_name="วันที่เริ่มผลิต")
     finish_date = models.DateField(null=True, blank=True, verbose_name="วันที่เสร็จ (เข้าคลัง)")
     delivery_date = models.DateField(null=True, blank=True, verbose_name="กำหนดจัดส่งสินค้า")
@@ -86,19 +89,15 @@ class ProductionOrder(models.Model):
     salesperson = models.ForeignKey(Salesperson, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="พนักงานขาย")
     customer_name = models.CharField(max_length=200, blank=True, verbose_name="ชื่อลูกค้า / สถานที่ส่ง")
     
-    # --- ข้อมูลควบคุมการผลิต ---
-    production_status = models.ForeignKey(ProductionStatus, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สถานะหน้างาน")
+    completed_departments = models.ManyToManyField(ProductionStatus, blank=True, verbose_name="แผนกที่ดำเนินการเสร็จแล้ว")
     production_team = models.ForeignKey(ProductionTeam, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมช่างผลิต")
     delivery_status = models.ForeignKey(DeliveryStatus, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สถานะจัดส่ง")
     transporter = models.ForeignKey(Transporter, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมขนส่ง")
     
-    # --- ข้อมูลระบบ ---
     responsible_person = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ควบคุมการผลิต")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PLANNED', verbose_name="สถานะระบบ")
     is_materials_ordered = models.BooleanField(default=False, verbose_name="สั่งซื้อวัตถุดิบแล้ว")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
-    
-    # 🌟 เพิ่มข้อมูลสำหรับฟีเจอร์ ปิดจ๊อบ (Archived) 🌟
     is_closed = models.BooleanField(default=False, verbose_name="ปิดจ๊อบแล้ว (งานเสร็จสมบูรณ์)")
 
     class Meta:
@@ -114,7 +113,6 @@ class ProductionOrder(models.Model):
             today = datetime.date.today()
             thai_year = (today.year + 543) % 100
             prefix = f"JOB{thai_year:02d}{today.strftime('%m')}"
-            
             last_order = ProductionOrder.objects.filter(code__startswith=prefix).order_by('code').last()
             if last_order:
                 try: seq = int(last_order.code.replace(prefix, '')) + 1
@@ -123,6 +121,13 @@ class ProductionOrder(models.Model):
                 seq = 1
             self.code = f"{prefix}{seq:03d}"
         super().save(*args, **kwargs)
+
+    @property
+    def progress_percentage(self):
+        total_depts = ProductionStatus.objects.count()
+        if total_depts == 0:
+            return 0
+        return int((self.completed_departments.count() / total_depts) * 100)
 
 # ==========================================
 # 3. รายการวัตถุดิบที่ใช้จริงต่อ 1 งาน (Job Material List)

@@ -3,15 +3,14 @@
 
 {% block content %}
 <style>
-    /* 🌟 เพิ่มลูกเล่นตอนเอาเมาส์ชี้ให้รู้ว่ากดได้ (Hover Effect) 🌟 */
     .task-btn {
         transition: all 0.2s ease-in-out;
         border: 1px solid transparent;
     }
     .task-btn:hover {
-        background-color: #fff8e1; /* เปลี่ยนเป็นสีเหลืองอ่อนๆ */
-        border-color: #ffc107;     /* โชว์ขอบสีเหลือง */
-        transform: translateX(5px); /* ขยับกล่องไปทางขวานิดนึงให้ดูมีมิติ */
+        background-color: #fff8e1;
+        border-color: #ffc107;
+        transform: translateX(5px);
     }
 </style>
 
@@ -62,6 +61,11 @@
                 <div class="card-body p-3">
                     <h6 class="text-warning fw-bold mb-3"><i class="fas fa-bell me-1"></i> งานด่วนรอตรวจสอบ</h6>
                     
+                    <a href="{% url 'deposit_list' %}?status=PENDING" class="d-flex justify-content-between align-items-center mb-2 text-decoration-none p-2 rounded task-btn">
+                        <span class="small fw-bold text-dark"><i class="fas fa-hand-holding-usd text-muted me-1"></i> ตรวจสอบเงินมัดจำ</span>
+                        <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm">{{ pending_deposits }} รายการ</span>
+                    </a>
+
                     <a href="{% url 'invoice_list' %}?status=PENDING" class="d-flex justify-content-between align-items-center mb-2 text-decoration-none p-2 rounded task-btn">
                         <span class="small fw-bold text-dark"><i class="fas fa-file-invoice-dollar text-muted me-1"></i> ตรวจสอบบิลขาย</span>
                         <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm">{{ pending_sales }} รายการ</span>

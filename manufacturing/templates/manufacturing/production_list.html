@@ -22,7 +22,6 @@
     .table-closed td:first-child { border-left: 4px solid #6c757d; }
     .info-label { font-size: 0.75rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; display: block; font-weight: 600; }
 
-    /* 🌟 CSS สำหรับ Tracker 4 ขั้นตอน 🌟 */
     .mini-timeline { border-left: 2px solid #e9ecef; margin-left: 10px; padding-left: 15px; position: relative; }
     .timeline-step { position: relative; margin-bottom: 8px; font-size: 0.75rem; color: #adb5bd; }
     .timeline-step:last-child { margin-bottom: 0; }
@@ -34,6 +33,10 @@
     .timeline-step.completed::before { background: #198754; box-shadow: 0 0 0 1px #198754; }
     .timeline-step.active { color: #0d6efd; font-weight: bold; }
     .timeline-step.active::before { background: #0d6efd; box-shadow: 0 0 0 2px #0d6efd; }
+
+    .progress-rounded { border-radius: 10px; background-color: #e9ecef; box-shadow: inset 0 1px 2px rgba(0,0,0,.1); cursor: pointer; }
+    .popover-header { background-color: #2c3e50; color: white; font-weight: bold; font-family: 'Sarabun', sans-serif; }
+    .popover-body { font-family: 'Sarabun', sans-serif; font-size: 0.85rem; }
 </style>
 
 <div class="container-fluid py-4 px-4">
@@ -132,8 +135,8 @@
                     <tr>
                         <th style="width: 18%;">ข้อมูลเอกสาร</th>
                         <th style="width: 22%;">ลูกค้า & ทีมขาย</th>
-                        <th style="width: 25%;">สินค้า & แบบแปลน</th>
-                        <th style="width: 15%;">สถานะงาน & จัดส่ง</th>
+                        <th style="width: 20%;">สินค้า & แบบแปลน</th>
+                        <th style="width: 20%;">สถานะหน้างาน & ขนส่ง</th>
                         <th style="width: 20%; padding-left: 25px;">ขั้นตอนระบบ</th>
                     </tr>
                 </thead>
@@ -145,10 +148,8 @@
                             <a href="{% url 'production_detail' order.id %}" class="text-decoration-none fw-bold text-primary font-monospace mb-2 d-inline-block" style="font-size: 1.15rem;" title="คลิกเพื่อเปิดรายละเอียดงาน">
                                 <i class="fas fa-external-link-alt small opacity-50 me-1"></i>{{ order.code }}
                             </a>
-                            
                             <span class="info-label">วันที่สั่งผลิต</span>
                             <div class="small text-dark mb-2 fw-bold"><i class="far fa-calendar-alt text-secondary me-1"></i> {{ order.start_date|date:"d/m/Y" }}</div>
-                            
                             {% if order.quotation_ref %}
                             <span class="info-label">อ้างอิง</span>
                             <div class="small text-dark"><i class="fas fa-file-invoice text-secondary me-1"></i> {{ order.quotation_ref.code }}</div>
@@ -158,46 +159,34 @@
                         <td>
                             <span class="info-label">ลูกค้า / บริษัท</span>
                             <div class="fw-bold text-dark mb-3" style="font-size: 0.95rem;">{{ order.customer_name|default:"-"|truncatechars:30 }}</div>
-                            
                             <div class="p-2 bg-light rounded-3 border">
                                 <span class="info-label mb-1">พนักงานขาย</span>
-                                <div class="small text-dark mb-1">
-                                    <i class="fas fa-user-tie text-primary me-1"></i> <span class="fw-bold">{{ order.salesperson.name|default:"ไม่ระบุ" }}</span>
-                                </div>
-                                <div class="small text-secondary" style="font-size: 0.75rem;">
-                                    <i class="fas fa-building me-1"></i> สาขา/ทีม: <span class="fw-bold text-dark">{{ order.salesperson.branch.name|default:"ไม่ระบุ" }}</span>
-                                </div>
+                                <div class="small text-dark mb-1"><i class="fas fa-user-tie text-primary me-1"></i> <span class="fw-bold">{{ order.salesperson.name|default:"ไม่ระบุ" }}</span></div>
+                                <div class="small text-secondary" style="font-size: 0.75rem;"><i class="fas fa-building me-1"></i> สาขา/ทีม: <span class="fw-bold text-dark">{{ order.salesperson.branch.name|default:"ไม่ระบุ" }}</span></div>
                             </div>
                         </td>
 
                         <td>
                             <span class="info-label">แบบบ้านที่สั่งทำ</span>
-                            <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">
-                                <span class="text-primary me-1">[{{ order.product.code }}]</span>{{ order.product.name }}
-                            </div>
-                            
+                            <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;"><span class="text-primary me-1">[{{ order.product.code }}]</span>{{ order.product.name }}</div>
                             <div class="mt-3">
-                                <span class="info-label">ไฟล์แบบแปลน (Blueprint)</span>
+                                <span class="info-label">ไฟล์แบบแปลน</span>
                                 {% if order.blueprint_file %}
-                                    <a href="{{ order.blueprint_file.url }}" target="_blank" class="btn btn-sm btn-danger text-white rounded-pill shadow-sm fw-bold px-3 py-1 mt-1">
-                                        <i class="fas fa-file-pdf me-1"></i> ดูแบบแปลน
-                                    </a>
+                                    <a href="{{ order.blueprint_file.url }}" target="_blank" class="btn btn-sm btn-danger text-white rounded-pill shadow-sm fw-bold px-3 py-1 mt-1"><i class="fas fa-file-pdf me-1"></i> ดูแบบแปลน</a>
                                 {% else %}
-                                    <span class="badge bg-light text-secondary border border-secondary rounded-pill mt-1 px-3 py-1">
-                                        <i class="fas fa-times me-1"></i> ไม่มีแบบแปลน
-                                    </span>
+                                    <span class="badge bg-light text-secondary border border-secondary rounded-pill mt-1 px-3 py-1"><i class="fas fa-times me-1"></i> ไม่มีแบบแปลน</span>
                                 {% endif %}
                             </div>
                         </td>
 
                         <td>
                             <div class="mb-3">
-                                <span class="info-label">ฝ่ายผลิต (หน้างาน)</span>
-                                {% if order.production_status %}
-                                    <span class="badge bg-info text-dark rounded-pill px-3 py-1 shadow-sm mb-1"><i class="fas fa-tools me-1"></i> {{ order.production_status.name }}</span>
-                                {% else %}
-                                    <span class="badge bg-light text-secondary border border-secondary rounded-pill px-3 py-1 mb-1">รออัปเดต</span>
-                                {% endif %}
+                                <span class="info-label">ความคืบหน้างานผลิต</span>
+                                <div class="progress progress-rounded mt-1 mb-1" style="height: 18px;" tabindex="0" data-bs-toggle="popover" title="แผนกที่เสร็จแล้ว" data-bs-content="{% for d in order.completed_departments.all %}<i class='fas fa-check-circle text-success me-1'></i> {{ d.name }}<br>{% empty %}<span class='text-muted'>ยังไม่เริ่มดำเนินการ</span>{% endfor %}" data-bs-html="true">
+                                    <div class="progress-bar {% if order.progress_percentage == 100 %}bg-success{% else %}bg-info text-dark fw-bold{% endif %}" role="progressbar" style="width: {{ order.progress_percentage }}%;">
+                                        {{ order.completed_departments.count }}/{{ total_departments_count }}
+                                    </div>
+                                </div>
                                 <div class="small text-secondary mt-1"><i class="fas fa-users-cog me-1"></i> ช่าง: <span class="fw-bold text-dark">{{ order.production_team.name|default:"ยังไม่ระบุ" }}</span></div>
                             </div>
                             
@@ -229,6 +218,7 @@
                                     </div>
                                 </div>
 
+                                {% if order.status == 'IN_PROGRESS' %}
                                 <div class="dropdown">
                                     <button class="btn btn-sm btn-light border rounded-circle shadow-sm btn-action-menu" type="button" data-bs-toggle="dropdown" style="width: 35px; height: 35px;">
                                         <i class="fas fa-ellipsis-v text-dark"></i>
@@ -237,7 +227,7 @@
                                         <li><h6 class="dropdown-header fw-bold text-primary">เมนูจัดการ</h6></li>
                                         <li>
                                             <button type="button" class="dropdown-item py-2 text-dark rounded-3 fw-bold"
-                                                    onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{{ order.production_status.id|default:'' }}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}')">
+                                                    onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{% for d in order.completed_departments.all %}{{ d.id }}{% if not forloop.last %},{% endif %}{% endfor %}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}')">
                                                 <i class="fas fa-edit text-info me-2" style="width: 20px;"></i> อัปเดตสถานะ
                                             </button>
                                         </li>
@@ -259,6 +249,11 @@
                                         {% endif %}
                                     </ul>
                                 </div>
+                                {% else %}
+                                <button class="btn btn-sm btn-light border rounded-circle shadow-sm" type="button" style="width: 35px; height: 35px; opacity: 0.4; cursor: not-allowed;" title="จะปลดล็อกให้ใช้งานได้เมื่อขั้นตอนอยู่ที่ '4. ลงมือผลิต' เท่านั้น" disabled>
+                                    <i class="fas fa-ellipsis-v text-muted"></i>
+                                </button>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -299,8 +294,8 @@
                     <tr>
                         <th style="width: 18%;">ข้อมูลเอกสาร</th>
                         <th style="width: 22%;">ลูกค้า & ทีมขาย</th>
-                        <th style="width: 25%;">สินค้า & แบบแปลน</th>
-                        <th style="width: 20%;">สถานะงาน & จัดส่ง</th>
+                        <th style="width: 20%;">สินค้า & แบบแปลน</th>
+                        <th style="width: 25%;">สถานะงาน & จัดส่ง</th>
                         <th class="text-end pe-4" style="width: 15%;">จัดการ</th>
                     </tr>
                 </thead>
@@ -312,57 +307,22 @@
                             <a href="{% url 'production_detail' order.id %}" class="text-decoration-none fw-bold text-secondary font-monospace mb-2 d-inline-block" style="font-size: 1.1rem;">
                                 <i class="fas fa-external-link-alt small opacity-50 me-1"></i>{{ order.code }}
                             </a>
-                            
                             <span class="info-label">วันที่ผลิตเสร็จ</span>
                             <div class="small text-dark mb-2 fw-bold"><i class="fas fa-flag-checkered text-success me-1"></i> {{ order.finish_date|date:"d/m/Y"|default:"-" }}</div>
-                            
-                            {% if order.quotation_ref %}
-                            <span class="info-label">อ้างอิง</span>
-                            <div class="small text-dark"><i class="fas fa-file-invoice text-muted me-1"></i> {{ order.quotation_ref.code }}</div>
-                            {% endif %}
                         </td>
-
                         <td>
                             <span class="info-label">ลูกค้า / บริษัท</span>
                             <div class="fw-bold text-dark mb-3" style="font-size: 0.95rem;">{{ order.customer_name|default:"-"|truncatechars:30 }}</div>
-                            
-                            <div class="p-2 bg-light rounded-3 border">
-                                <span class="info-label mb-1">พนักงานขาย</span>
-                                <div class="small text-dark mb-1">
-                                    <i class="fas fa-user-tie text-secondary me-1"></i> <span class="fw-bold">{{ order.salesperson.name|default:"ไม่ระบุ" }}</span>
-                                </div>
-                                <div class="small text-secondary" style="font-size: 0.75rem;">
-                                    <i class="fas fa-building me-1"></i> สาขา/ทีม: <span class="fw-bold text-dark">{{ order.salesperson.branch.name|default:"ไม่ระบุ" }}</span>
-                                </div>
-                            </div>
                         </td>
-
                         <td>
                             <span class="info-label">แบบบ้านที่สั่งทำ</span>
-                            <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;">
-                                <span class="text-secondary me-1">[{{ order.product.code }}]</span>{{ order.product.name }}
-                            </div>
-                            
-                            <div class="mt-3">
-                                <span class="info-label">ไฟล์แบบแปลน (Blueprint)</span>
-                                {% if order.blueprint_file %}
-                                    <a href="{{ order.blueprint_file.url }}" target="_blank" class="btn btn-sm btn-danger text-white rounded-pill shadow-sm fw-bold px-3 py-1 mt-1">
-                                        <i class="fas fa-file-pdf me-1"></i> ดูแบบแปลน
-                                    </a>
-                                {% else %}
-                                    <span class="badge bg-light text-secondary border border-secondary rounded-pill mt-1 px-3 py-1">
-                                        <i class="fas fa-times me-1"></i> ไม่มีแบบแปลน
-                                    </span>
-                                {% endif %}
-                            </div>
+                            <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;"><span class="text-secondary me-1">[{{ order.product.code }}]</span>{{ order.product.name }}</div>
                         </td>
 
                         <td>
                             <div class="mb-3">
-                                <span class="info-label">ฝ่ายผลิต (หน้างาน)</span>
-                                {% if order.production_status %}
-                                    <span class="badge bg-light text-dark border border-secondary rounded-pill px-3 py-1 mb-1 shadow-sm"><i class="fas fa-tools me-1"></i> {{ order.production_status.name }}</span>
-                                {% endif %}
+                                <span class="info-label">ความคืบหน้างานผลิต</span>
+                                <span class="badge bg-success text-white rounded-pill px-3 py-1 mb-1 shadow-sm"><i class="fas fa-check-double me-1"></i> ปิดจ๊อบสมบูรณ์</span>
                                 <div class="small text-secondary mt-1"><i class="fas fa-users-cog me-1"></i> ช่าง: <span class="fw-bold text-dark">{{ order.production_team.name|default:"-" }}</span></div>
                             </div>
                             
@@ -377,26 +337,14 @@
 
                         <td class="text-end pe-4">
                             <div class="mb-3 d-flex justify-content-end">
-                                <span class="badge bg-dark text-white rounded-pill px-3 py-1 shadow-sm"><i class="fas fa-lock me-1"></i> ปิดจ๊อบแล้ว</span>
+                                <span class="badge bg-dark text-white rounded-pill px-3 py-1 shadow-sm"><i class="fas fa-lock me-1"></i> ประวัติงาน</span>
                             </div>
 
                             <div class="d-flex justify-content-end gap-2 align-items-center">
                                 <button type="button" class="btn btn-sm btn-outline-secondary shadow-sm rounded-pill fw-bold px-3 py-2 d-flex align-items-center"
-                                        onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{{ order.production_status.id|default:'' }}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}')">
+                                        onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{% for d in order.completed_departments.all %}{{ d.id }}{% if not forloop.last %},{% endif %}{% endfor %}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}')">
                                     <i class="fas fa-search me-1"></i> ดูข้อมูล
                                 </button>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-light border rounded-circle shadow-sm btn-action-menu" type="button" data-bs-toggle="dropdown" style="width: 35px; height: 35px;">
-                                        <i class="fas fa-ellipsis-v text-dark"></i>
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 rounded-4 p-2 mt-1">
-                                        <li>
-                                            <a href="{% url 'production_print' order.id %}" target="_blank" class="dropdown-item py-2 text-dark rounded-3 fw-bold">
-                                                <i class="fas fa-print text-secondary me-2" style="width: 20px;"></i> พิมพ์ใบงาน
-                                            </a>
-                                        </li>
-                                    </ul>
-                                </div>
                             </div>
                         </td>
                     </tr>
@@ -406,30 +354,7 @@
                 </tbody>
             </table>
         </div>
-
-        {% if closed_orders.has_other_pages %}
-        <div class="mt-2 mb-4">
-            <nav>
-                <ul class="pagination pagination-sm justify-content-center mb-0">
-                    {% if closed_orders.has_previous %}
-                        <li class="page-item"><a class="page-link shadow-sm fw-bold" href="?closed_page={{ closed_orders.previous_page_number }}&{{ filter_string }}">ก่อนหน้า</a></li>
-                    {% endif %}
-                    {% for num in closed_orders.paginator.page_range %}
-                        {% if closed_orders.number == num %}
-                            <li class="page-item active"><span class="page-link shadow-sm fw-bold">{{ num }}</span></li>
-                        {% elif num > closed_orders.number|add:'-3' and num < closed_orders.number|add:'3' %}
-                            <li class="page-item"><a class="page-link shadow-sm fw-bold" href="?closed_page={{ num }}&{{ filter_string }}">{{ num }}</a></li>
-                        {% endif %}
-                    {% endfor %}
-                    {% if closed_orders.has_next %}
-                        <li class="page-item"><a class="page-link shadow-sm fw-bold" href="?closed_page={{ closed_orders.next_page_number }}&{{ filter_string }}">ถัดไป</a></li>
-                    {% endif %}
-                </ul>
-            </nav>
-        </div>
-        {% endif %}
       </div>
-
     </div>
 </div>
 
@@ -449,23 +374,27 @@
                     <div class="row g-4">
                         <div class="col-md-6 border-end">
                             <h6 class="fw-bold text-dark mb-3"><i class="fas fa-hammer text-info me-2"></i>ส่วนการผลิต (Production)</h6>
+                            
                             <div class="mb-3">
-                                <label class="small fw-bold text-secondary">สถานะหน้างาน</label>
-                                <div class="input-group">
-                                    <select name="production_status" id="modalProdStatus" class="form-select shadow-sm text-dark">
-                                        <option value="">-- ไม่ระบุ --</option>
-                                        {% for ps in prod_statuses %}
-                                            <option value="{{ ps.id }}">{{ ps.name }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    
-                                    {% if can_add_master_data %}
-                                    <button type="button" class="btn btn-outline-info" onclick="quickAdd('prod_status')"><i class="fas fa-plus"></i></button>
-                                    {% endif %}
+                                <label class="small fw-bold text-secondary mb-2">แผนกที่ดำเนินการเสร็จแล้ว (Checklist)</label>
+                                <div class="border rounded-3 p-3 bg-light" style="max-height: 250px; overflow-y: auto;">
+                                    {% for ps in prod_statuses %}
+                                    <div class="form-check mb-2 custom-checkbox">
+                                        <input class="form-check-input" type="checkbox" name="completed_departments" value="{{ ps.id }}" id="dept_{{ ps.id }}" style="transform: scale(1.2); margin-top: 0.2rem; cursor: pointer;">
+                                        <label class="form-check-label small ms-2 fw-bold text-dark" for="dept_{{ ps.id }}" style="cursor: pointer;">
+                                            {{ ps.name }}
+                                        </label>
+                                    </div>
+                                    {% empty %}
+                                    <div class="text-muted small text-center py-3">ยังไม่มีข้อมูลแผนกในระบบ</div>
+                                    {% endfor %}
                                 </div>
+                                {% if can_add_master_data %}
+                                <button type="button" class="btn btn-sm btn-outline-info mt-2 w-100 fw-bold" onclick="quickAdd('prod_status')"><i class="fas fa-plus"></i> เพิ่มรายชื่อแผนกใหม่</button>
+                                {% endif %}
                             </div>
 
-                            <div class="mb-3">
+                            <div class="mb-3 mt-4">
                                 <label class="small fw-bold text-secondary">ทีมช่างที่รับผิดชอบ</label>
                                 <div class="input-group">
                                     <select name="production_team" id="modalProdTeam" class="form-select shadow-sm text-dark">
@@ -474,7 +403,6 @@
                                             <option value="{{ pt.id }}">{{ pt.name }}</option>
                                         {% endfor %}
                                     </select>
-                                    
                                     {% if can_add_master_data %}
                                     <button type="button" class="btn btn-outline-info" onclick="quickAdd('prod_team')"><i class="fas fa-plus"></i></button>
                                     {% endif %}
@@ -493,7 +421,6 @@
                                             <option value="{{ ds.id }}">{{ ds.name }}</option>
                                         {% endfor %}
                                     </select>
-                                    
                                     {% if can_add_master_data %}
                                     <button type="button" class="btn btn-outline-warning" onclick="quickAdd('deliv_status')"><i class="fas fa-plus"></i></button>
                                     {% endif %}
@@ -509,7 +436,6 @@
                                             <option value="{{ t.id }}">{{ t.name }}</option>
                                         {% endfor %}
                                     </select>
-                                    
                                     {% if can_add_master_data %}
                                     <button type="button" class="btn btn-outline-warning" onclick="quickAdd('transporter')"><i class="fas fa-plus"></i></button>
                                     {% endif %}
@@ -550,13 +476,27 @@
             dateFormat: "Y-m-d",
             locale: "th"
         });
+
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl, {trigger: 'hover focus'})
+        });
     });
 
-    function openUpdateModal(jobId, jobCode, pStatus, pTeam, dStatus, transp, isClosed) {
+    function openUpdateModal(jobId, jobCode, completedDeptsStr, pTeam, dStatus, transp, isClosed) {
         document.getElementById('updateJobId').value = jobId;
         document.getElementById('displayJobCode').innerText = jobCode;
 
-        document.getElementById('modalProdStatus').value = pStatus;
+        document.querySelectorAll('input[name="completed_departments"]').forEach(cb => cb.checked = false);
+        
+        if(completedDeptsStr) {
+            const depts = completedDeptsStr.split(',');
+            depts.forEach(id => {
+                const cb = document.getElementById('dept_' + id);
+                if(cb) cb.checked = true;
+            });
+        }
+
         document.getElementById('modalProdTeam').value = pTeam;
         document.getElementById('modalDelivStatus').value = dStatus;
         document.getElementById('modalTransporter').value = transp;
@@ -568,7 +508,7 @@
 
     function quickAdd(type) {
         let title, url, selectId;
-        if(type === 'prod_status') { title = "เพิ่มสถานะการผลิตใหม่:"; url = "{% url 'ajax_add_prod_status' %}"; selectId = 'modalProdStatus'; }
+        if(type === 'prod_status') { title = "เพิ่มแผนกผลิตใหม่:"; url = "{% url 'ajax_add_prod_status' %}"; selectId = 'modalProdStatus'; }
         if(type === 'prod_team') { title = "เพิ่มชื่อทีมช่างใหม่:"; url = "{% url 'ajax_add_prod_team' %}"; selectId = 'modalProdTeam'; }
         if(type === 'deliv_status') { title = "เพิ่มสถานะการจัดส่งใหม่:"; url = "{% url 'ajax_add_delivery_status' %}"; selectId = 'modalDelivStatus'; }
         if(type === 'transporter') { title = "เพิ่มชื่อทีมขนส่งใหม่:"; url = "{% url 'ajax_add_transporter' %}"; selectId = 'modalTransporter'; }
@@ -584,8 +524,12 @@
         .then(res => res.json())
         .then(data => {
             if(data.success) {
-                const select = document.getElementById(selectId);
-                select.add(new Option(data.name, data.id, true, true));
+                if(type === 'prod_status') {
+                    location.reload();
+                } else {
+                    const select = document.getElementById(selectId);
+                    select.add(new Option(data.name, data.id, true, true));
+                }
             } else {
                 alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
             }

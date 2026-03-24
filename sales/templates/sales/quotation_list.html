@@ -29,6 +29,12 @@
     
     .filter-select { font-size: 0.85rem; padding-left: 5px; }
     .filter-input { font-size: 0.85rem; }
+
+    /* 🌟 CSS เพิ่มเติมสำหรับแถบความคืบหน้า (Progress Bar) 🌟 */
+    .info-label { font-size: 0.75rem; color: #6c757d; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; display: block; font-weight: 600; }
+    .progress-rounded { border-radius: 10px; background-color: #e9ecef; box-shadow: inset 0 1px 2px rgba(0,0,0,.1); cursor: pointer; }
+    .popover-header { background-color: #2c3e50; color: white; font-weight: bold; font-family: 'Sarabun', sans-serif; }
+    .popover-body { font-family: 'Sarabun', sans-serif; font-size: 0.85rem; }
 </style>
 
 <div class="container-fluid py-4 px-4">
@@ -114,13 +120,13 @@
                     <table class="table table-hover align-middle mb-0">
                         <thead class="bg-light text-secondary small text-uppercase fw-bold border-bottom">
                             <tr>
-                                <th class="ps-4 py-3">เลขที่เอกสาร</th>
-                                <th class="py-3">วันที่</th>
-                                <th class="py-3">ลูกค้า</th>
-                                <th class="py-3 text-primary">พนักงานขาย</th>
-                                <th class="text-end py-3">ยอดสุทธิ</th>
-                                <th class="text-center py-3">สถานะ</th>
-                                <th class="text-end pe-4 py-3">จัดการ</th>
+                                <th class="ps-4 py-3" style="width: 15%;">เลขที่เอกสาร</th>
+                                <th class="py-3" style="width: 10%;">วันที่</th>
+                                <th class="py-3" style="width: 20%;">ลูกค้า</th>
+                                <th class="py-3 text-primary" style="width: 15%;">พนักงานขาย</th>
+                                <th class="text-end py-3" style="width: 10%;">ยอดสุทธิ</th>
+                                <th class="text-center py-3" style="width: 20%;">สถานะ (เอกสาร & ผลิต)</th>
+                                <th class="text-end pe-4 py-3" style="width: 10%;">จัดการ</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -141,21 +147,55 @@
                                 <td class="text-end fw-bold {% if qt.status == 'CANCELLED' %}text-muted text-decoration-line-through{% else %}text-success{% endif %}">
                                     {{ qt.grand_total|floatformat:2|intcomma }}
                                 </td>
+                                
                                 <td class="text-center">
-                                    {% if qt.status == 'APPROVED' %}
-                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3">อนุมัติแล้ว</span>
-                                    {% elif qt.status == 'CONVERTED' %}
-                                        <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill px-3">เปิดบิลแล้ว</span>
-                                    {% elif qt.status == 'REJECTED' %}
-                                        <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3">ไม่อนุมัติ</span>
-                                    {% elif qt.status == 'CANCELLED' %}
-                                        <span class="badge bg-danger text-white rounded-pill px-3 shadow-sm">ยกเลิก</span>
-                                    {% else %}
-                                        <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill px-3">รออนุมัติ</span>
-                                    {% endif %}
+                                    <div class="mb-2">
+                                        {% if qt.status == 'APPROVED' %}
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3">อนุมัติแล้ว</span>
+                                        {% elif qt.status == 'CONVERTED' %}
+                                            <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill px-3">เปิดบิลแล้ว</span>
+                                        {% elif qt.status == 'REJECTED' %}
+                                            <span class="badge bg-danger bg-opacity-10 text-danger border border-danger border-opacity-25 rounded-pill px-3">ไม่อนุมัติ</span>
+                                        {% elif qt.status == 'CANCELLED' %}
+                                            <span class="badge bg-danger text-white rounded-pill px-3 shadow-sm">ยกเลิก</span>
+                                        {% else %}
+                                            <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 rounded-pill px-3">รออนุมัติ</span>
+                                        {% endif %}
+                                    </div>
+
+                                    {% with job=qt.production_orders.first %}
+                                        {% if job %}
+                                            <div class="mt-2 pt-2 border-top">
+                                                {% if job.status == 'PLANNED' %}
+                                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-3 shadow-sm d-inline-flex align-items-center justify-content-center" title="{{ job.code }}"><i class="fas fa-search me-1"></i> 1. ตรวจสอบแปลน</span>
+                                                {% elif job.status == 'WAITING_MATERIALS' %}
+                                                    <span class="badge bg-info text-dark border border-info border-opacity-50 rounded-pill px-3 shadow-sm d-inline-flex align-items-center justify-content-center" title="{{ job.code }}"><i class="fas fa-shopping-cart me-1"></i> 2. จัดซื้อสั่งของ</span>
+                                                {% elif job.status == 'READY_TO_PRODUCE' %}
+                                                    <span class="badge bg-secondary text-white border border-secondary border-opacity-50 rounded-pill px-3 shadow-sm d-inline-flex align-items-center justify-content-center" title="{{ job.code }}"><i class="fas fa-boxes me-1"></i> 3. เตรียมวัตถุดิบ</span>
+                                                {% elif job.status == 'IN_PROGRESS' %}
+                                                    <span class="badge bg-warning text-dark border border-warning border-opacity-50 rounded-pill px-3 shadow-sm d-inline-flex align-items-center justify-content-center" title="{{ job.code }}"><i class="fas fa-tools me-1"></i> 4. ลงมือผลิต</span>
+                                                {% elif job.status == 'COMPLETED' %}
+                                                    <span class="badge bg-success text-white border border-success border-opacity-50 rounded-pill px-3 shadow-sm d-inline-flex align-items-center justify-content-center" title="{{ job.code }}"><i class="fas fa-check-double me-1"></i> ผลิตเสร็จสิ้น</span>
+                                                {% endif %}
+
+                                                {% if job.status in 'IN_PROGRESS,COMPLETED' %}
+                                                    <div class="mt-2 text-start">
+                                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                                            <span class="text-muted" style="font-size: 0.65rem;">ความคืบหน้า</span>
+                                                            <span class="fw-bold text-dark" style="font-size: 0.65rem;">{{ job.progress_percentage }}%</span>
+                                                        </div>
+                                                        <div class="progress progress-rounded" style="height: 10px;" tabindex="0" data-bs-toggle="popover" title="แผนกที่เสร็จแล้ว" data-bs-content="{% for d in job.completed_departments.all %}<i class='fas fa-check-circle text-success me-1'></i> {{ d.name }}<br>{% empty %}<span class='text-muted'>ยังไม่เริ่มดำเนินการ</span>{% endfor %}" data-bs-html="true">
+                                                            <div class="progress-bar {% if job.progress_percentage == 100 %}bg-success{% else %}bg-info text-dark fw-bold{% endif %}" role="progressbar" style="width: {{ job.progress_percentage }}%;"></div>
+                                                        </div>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        {% endif %}
+                                    {% endwith %}
                                 </td>
+
                                 <td class="text-end pe-4">
-                                    <div class="d-flex justify-content-end gap-1">
+                                    <div class="d-flex justify-content-end flex-wrap gap-1">
                                         {% if is_manager and qt.status == 'DRAFT' %}
                                             <a href="{% url 'quotation_approve' qt.id %}" class="btn btn-approve shadow-sm rounded-pill d-flex align-items-center gap-1" title="คลิกเพื่ออนุมัติ" onclick="return confirm('ยืนยันการอนุมัติเอกสารนี้?');">
                                                 <i class="fas fa-check-circle"></i> อนุมัติ
@@ -169,26 +209,28 @@
                                         {% endif %}
 
                                         {% if qt.is_deposit_paid and not qt.production_orders.all %}
-                                            <a href="{% url 'create_job_order' qt.id %}" class="btn btn-produce shadow-sm rounded-pill d-flex align-items-center gap-1" title="ส่งข้อมูลเปิดใบสั่งผลิตให้โรงงาน" onclick="return confirm('ยืนยันส่งข้อมูลเพื่อเปิดใบสั่งผลิต (Job Order) ให้แผนกปฏิบัติการใช่หรือไม่?');">
-                                                <i class="fas fa-industry"></i> สั่งผลิต
-                                            </a>
+                                            {% if qt.is_deposit_verified %}
+                                                <button type="button" class="btn btn-produce shadow-sm rounded-pill d-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#produceModal{{ qt.id }}" title="ส่งข้อมูลเปิดใบสั่งผลิตให้โรงงาน">
+                                                    <i class="fas fa-industry"></i> สั่งผลิต
+                                                </button>
+                                            {% else %}
+                                                <button type="button" class="btn btn-secondary shadow-sm rounded-pill d-flex align-items-center gap-1" style="font-size: 0.8rem; padding: 5px 12px; border: none; font-weight: bold; opacity: 0.7; cursor: not-allowed;" title="รอฝ่ายบัญชีตรวจสอบสลิปมัดจำ" disabled>
+                                                    <i class="fas fa-hourglass-half"></i> รอตรวจมัดจำ
+                                                </button>
+                                            {% endif %}
                                         {% endif %}
 
                                         {% if qt.status == 'APPROVED' %}
                                             {% with job=qt.production_orders.first %}
                                                 {% if job and job.status == 'COMPLETED' %}
-                                                    <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-convert shadow-sm rounded-pill d-flex align-items-center gap-1" title="เปลี่ยนเป็นใบขายสินค้า" onclick="return confirm('โรงงานผลิตเสร็จแล้ว! ต้องการเปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');">
+                                                    <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-convert shadow-sm rounded-pill d-flex align-items-center gap-1 mt-1" title="เปลี่ยนเป็นใบขายสินค้า" onclick="return confirm('โรงงานผลิตเสร็จแล้ว! ต้องการเปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');">
                                                         <i class="fas fa-file-invoice-dollar"></i> เปิดบิล
                                                     </a>
-                                                {% elif job and job.status == 'PLANNED' %}
-                                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 rounded-pill px-3 shadow-sm d-flex align-items-center" title="ใบสั่งผลิตเลขที่ {{ job.code }}"><i class="fas fa-clipboard-list me-1"></i> วางแผนผลิต</span>
-                                                {% elif job and job.status == 'IN_PROGRESS' %}
-                                                    <span class="badge bg-warning text-dark border border-warning border-opacity-50 rounded-pill px-3 shadow-sm d-flex align-items-center" title="ใบสั่งผลิตเลขที่ {{ job.code }}"><i class="fas fa-tools me-1"></i> กำลังผลิต</span>
                                                 {% endif %}
                                             {% endwith %}
                                         {% endif %}
 
-                                        <div class="btn-group shadow-sm rounded-3 ms-1">
+                                        <div class="btn-group shadow-sm rounded-3 ms-1 mt-1">
                                             <a href="{% url 'quotation_edit' qt.id %}" class="btn btn-sm btn-white border text-primary" title="{% if qt.status != 'DRAFT' %}ดูรายละเอียด{% else %}แก้ไข{% endif %}">
                                                 {% if qt.status != 'DRAFT' %}
                                                     <i class="fas fa-eye text-secondary"></i>
@@ -253,13 +295,42 @@
                             </div>
                             {% endif %}
                             
+                            {% if qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.all %}
+                            <div class="modal fade" id="produceModal{{ qt.id }}" tabindex="-1">
+                                <div class="modal-dialog modal-dialog-centered">
+                                    <div class="modal-content border-0 rounded-4 shadow-lg text-start">
+                                        <div class="modal-header bg-info border-0">
+                                            <h5 class="modal-title fw-bold text-dark"><i class="fas fa-industry me-2"></i>กำหนดเป้าหมายสั่งผลิต ({{ qt.code }})</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{% url 'create_job_order' qt.id %}">
+                                            {% csrf_token %}
+                                            <div class="modal-body p-4">
+                                                <div class="mb-3">
+                                                    <label class="form-label fw-bold text-muted">วันที่กำหนดงานเสร็จ (Target Date) <span class="text-danger">*</span></label>
+                                                    <input type="text" name="target_date" class="form-control datepicker" placeholder="เลือกวันที่ (dd/mm/yyyy)" required>
+                                                </div>
+                                                <div class="alert alert-light py-2 small mb-0 border">
+                                                    <i class="fas fa-info-circle me-1"></i> ใบสั่งผลิตจะถูกสร้างและส่งไปยังแผนกวางแผนทันที
+                                                </div>
+                                            </div>
+                                            <div class="modal-footer bg-light border-0">
+                                                <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                                <button type="submit" class="btn btn-info rounded-pill px-4 fw-bold shadow-sm text-dark">ยืนยันส่งสั่งผลิต</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
+
                             {% empty %}
                             <tr><td colspan="7" class="text-center py-5"><h6 class="text-muted fw-bold">ไม่พบเอกสาร</h6></td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                
+                 
                 {% if page_obj.has_other_pages %}
                 <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-center">
                     <nav>
@@ -295,6 +366,12 @@
                 if (val === '0.00' || val === '0') this.value = '';
                 else this.value = val;
             });
+        });
+
+        // 🌟 เปิดใช้งานระบบ Popover (ป๊อปอัปเด้งตอนเอาเมาส์ชี้แถบ) 🌟
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'))
+        var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl, {trigger: 'hover focus'})
         });
     });
 </script>

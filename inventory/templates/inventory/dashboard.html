@@ -2,6 +2,18 @@
 {% load humanize %}
 
 {% block content %}
+<style>
+    /* 🌟 CSS เพิ่มเติมสำหรับทำไฟกระพริบที่ป้ายแจ้งเตือน 🌟 */
+    .badge-pulse {
+        animation: pulse-animation 2s infinite;
+    }
+    @keyframes pulse-animation {
+        0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+        70% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+    }
+</style>
+
 <div class="container-fluid py-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
@@ -9,9 +21,16 @@
             <p class="text-muted mb-0">บริหารจัดการสินค้าสำเร็จรูป (FG) และวัตถุดิบ (RM)</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
-            <a href="{% url 'po_receive_list' %}" class="btn btn-success shadow-sm rounded-pill px-3 fw-bold">
+            
+            <a href="{% url 'po_receive_list' %}" class="btn btn-success shadow-sm rounded-pill px-3 fw-bold position-relative">
                 <i class="fas fa-truck-loading me-1"></i> รับสินค้าจาก PO (GR)
+                {% if pending_po_count > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light border-2 badge-pulse shadow-sm">
+                    {{ pending_po_count }}
+                </span>
+                {% endif %}
             </a>
+            
             <a href="{% url 'bom_list' %}" class="btn shadow-sm rounded-pill px-3 fw-bold text-dark" style="background-color: #e0f7fa; border: 1px solid #b2ebf2;">
                 <i class="fas fa-clipboard-list me-1 text-info"></i> จัดการสูตรผลิต (BOM)
             </a>
@@ -130,7 +149,7 @@
                                     <small class="text-muted">{{ p.category.name|default:"-" }}</small>
                                 </td>
                                 <td class="text-center">
-                                     <span class="fs-5 fw-bold {% if p.stock_qty <= p.min_level %}text-danger{% else %}text-secondary{% endif %}">{{ p.stock_qty|intcomma }}</span>
+                                    <span class="fs-5 fw-bold {% if p.stock_qty <= p.min_level %}text-danger{% else %}text-secondary{% endif %}">{{ p.stock_qty|intcomma }}</span>
                                 </td>
                                 <td class="text-center">
                                     {% if p.stock_qty <= p.min_level %}<span class="badge bg-danger">สั่งซื้อด่วน</span>
