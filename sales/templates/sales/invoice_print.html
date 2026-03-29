@@ -3,7 +3,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>ใบเสร็จรับเงิน {{ inv.code }}</title>
+    <title>ใบแจ้งหนี้/ใบเสร็จรับเงิน {{ inv.code }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -16,8 +16,11 @@
         .company-title { font-size: 20px; font-weight: 700; color: #000; line-height: 1.1; margin-bottom: 2px; }
         .company-subtitle { font-size: 13px; color: #555; font-weight: 500; margin-bottom: 4px; }
         .company-details { font-size: 13px; color: #333; line-height: 1.4; }
-        .doc-title { font-size: 24px; font-weight: 700; color: var(--primary-dark); text-align: right; line-height: 1; margin-top: 5px; }
-        .doc-subtitle { font-size: 11px; color: #777; text-align: right; letter-spacing: 2px; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+        
+        /* 🌟 ปรับขนาดหัวเอกสารให้เล็กลงนิดนึงเพราะข้อความยาวขึ้น 🌟 */
+        .doc-title { font-size: 22px; font-weight: 700; color: var(--primary-dark); text-align: right; line-height: 1.2; margin-top: 5px; }
+        .doc-subtitle { font-size: 11px; color: #777; text-align: right; letter-spacing: 1.5px; text-transform: uppercase; font-weight: 600; margin-bottom: 8px; }
+        
         .doc-no-group { text-align: right; margin-top: 5px; }
         .doc-no-label { font-size: 10px; color: #666; font-weight: 600; text-transform: uppercase; }
         .doc-no-value { font-size: 16px; font-weight: 700; color: #000; }
@@ -37,7 +40,14 @@
         .total-label { text-align: right; padding-right: 15px; color: #555; font-size: 13px; }
         .total-value { text-align: right; font-weight: 600; width: 120px; font-size: 14px; }
         .grand-total-row td { padding-top: 8px; padding-bottom: 8px; font-size: 18px; font-weight: 700; color: #000; }
+        
         .payment-box { font-size: 13px; line-height: 1.4; color: #333; }
+        
+        /* 🌟 สไตล์สำหรับกล่องเลขบัญชีธนาคาร 🌟 */
+        .bank-box { border: 2px solid #e74c3c; border-radius: 8px; padding: 10px; margin-bottom: 15px; background-color: #fff9f9; }
+        .bank-title { font-size: 12px; font-weight: 700; color: #e74c3c; margin-bottom: 5px; }
+        .bank-details { font-size: 13px; font-weight: 600; color: #333; line-height: 1.5; }
+        
         .note-box { font-size: 12px; color: #555; margin-top: 10px; line-height: 1.3; }
 
         .signature-section { margin-top: 40px; }
@@ -47,10 +57,11 @@
         .sig-name { font-size: 11px; position: absolute; bottom: 15px; left: 0; right: 0; }
         .sig-date { font-size: 10px; color: #666; position: absolute; bottom: 0; left: 0; right: 0; }
 
-        /* 🌟 ขยับตรายางบริษัทขึ้นเหนือเส้นประ 🌟 */
+        /* 🌟 ข้อความเงื่อนไขความสมบูรณ์เอกสาร 🌟 */
+        .legal-disclaimer { font-size: 10.5px; color: #6c757d; font-style: italic; line-height: 1.4; border-top: 1px solid #dee2e6; padding-top: 8px; margin-top: 20px; }
+
         .seal-img { position: absolute; bottom: 70px; left: 50%; transform: translateX(-70%) rotate(-15deg); width: 85px; opacity: 0.25; pointer-events: none; z-index: 5; }
 
-        /* 🌟 ย้ายตราประทับชำระเงินมาไว้บนยอดภาษาไทย 🌟 */
         .stamp-paid {
             position: absolute; top: -45px; left: 30px;
             color: #27ae60; border: 4px solid #27ae60; border-radius: 8px;
@@ -86,13 +97,13 @@
                     </div>
                     <div class="company-details ps-1">
                         {{ company.address|default:"10/10 หมู่ 10 ตำบลบางพระ อำเภอศรีราชา จังหวัดชลบุรี 20110" }}<br>
-                        <strong>โทร:</strong> {{ company.phone|default:"033 166 699" }} &nbsp;|&nbsp;
-                        <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"0205563029342" }}
+                        <strong>โทร:</strong> {{ company.phone|default:"033 166 699" }} &nbsp;|&nbsp; <strong>เลขผู้เสียภาษี:</strong> {{ company.tax_id|default:"0205563029342" }}
                     </div>
                 </div>
                 <div class="col-5">
-                    <div class="doc-title">ใบเสร็จรับเงิน</div>
-                    <div class="doc-subtitle">RECEIPT</div>
+                    <div class="doc-title">ใบแจ้งหนี้ / ใบเสร็จรับเงิน</div>
+                    <div class="doc-subtitle">INVOICE / RECEIPT</div>
+                    
                     <div class="doc-no-group mt-3">
                         <div class="doc-no-label">เลขที่เอกสาร / DOC NO.</div>
                         <div class="doc-no-value">{{ inv.code }}</div>
@@ -106,8 +117,7 @@
                     <div class="customer-name">{{ inv.customer_name|default:"ลูกค้าทั่วไป" }}</div>
                     <div class="customer-addr">{{ inv.customer_address|default:"-" }}</div>
                     <div class="customer-meta mt-1">
-                        <strong>โทร:</strong> {{ inv.customer_phone|default:"-" }} &nbsp;&nbsp;
-                        <strong>เลขผู้เสียภาษี:</strong> {{ inv.customer_tax_id|default:"-" }}
+                        <strong>โทร:</strong> {{ inv.customer_phone|default:"-" }} &nbsp;&nbsp; <strong>เลขผู้เสียภาษี:</strong> {{ inv.customer_tax_id|default:"-" }}
                     </div>
                 </div>
                 <div class="col-5 ps-4">
@@ -123,7 +133,7 @@
             </div>
         </div>
 
-        <div style="min-height: 380px;">
+        <div style="min-height: 330px;">
             <table class="premium-table">
                 <thead>
                     <tr>
@@ -146,7 +156,7 @@
                         <td class="text-end fw-bold">{{ item.amount|floatformat:2|intcomma }}</td>
                     </tr>
                     {% endfor %}
-                    {% for i in "1234" %}<tr><td colspan="5" style="height: 25px;"></td></tr>{% endfor %}
+                    {% for i in "123" %}<tr><td colspan="5" style="height: 25px;"></td></tr>{% endfor %}
                 </tbody>
             </table>
         </div>
@@ -158,13 +168,22 @@
                 {% endif %}
 
                 <div class="py-2 px-3 mb-3 bg-light border text-center fw-bold text-dark rounded" style="font-size: 14px;">( <span id="baht-text">...</span> )</div>
-                <div class="payment-box mb-3">
-                    <div class="fw-bold mb-1" style="font-size: 12px; text-transform: uppercase;">ข้อมูลการชำระเงิน (Payment Details):</div>
-                    <div class="ps-2 border-start border-3 border-dark">
-                        {{ note|default:"โอนเงิน / เงินสด" }}
+                
+                <div class="bank-box">
+                    <div class="bank-title"><i class="fas fa-university me-1"></i> ข้อมูลการโอนเงิน (BANK ACCOUNT)</div>
+                    <div class="bank-details">
+                        ธนาคาร: <strong>กสิกรไทย (KBANK)</strong><br>
+                        ชื่อบัญชี: <strong>บริษัท นีด ช็อปปิ้ง จำกัด</strong><br>
+                        เลขบัญชี: <strong style="font-size: 15px;">075-3-824782</strong>
                     </div>
                 </div>
+
+                <div class="payment-box mb-3">
+                    <div class="fw-bold mb-1" style="font-size: 12px; text-transform: uppercase;">ข้อมูลการชำระเงิน (Payment Details):</div>
+                    <div class="ps-2 border-start border-3 border-dark" style="white-space: pre-line;">{{ note|default:"-" }}</div>
+                </div>
             </div>
+            
             <div class="col-5">
                 <table class="total-table">
                     <tr><td class="total-label">รวมราคาสินค้า</td><td class="total-value">{{ item_total|default:subtotal|floatformat:2|intcomma }}</td></tr>
@@ -205,7 +224,11 @@
                 </div>
             </div>
 
-            <div class="col-4"></div>
+            <div class="col-4">
+                <div class="legal-disclaimer">
+                    <b>* หมายเหตุ:</b> เอกสารฉบับนี้จะสมบูรณ์เป็นใบเสร็จรับเงินที่ถูกต้องตามกฎหมาย ก็ต่อเมื่อบริษัทฯ ได้รับเงินฝากโอนเข้าบัญชี หรือเช็คผ่านการเรียกเก็บเงินจากธนาคารเรียบร้อยแล้วเท่านั้น
+                </div>
+            </div>
 
             <div class="col-4 position-relative">
                 <div class="sig-box">

@@ -115,7 +115,7 @@ def sales_dashboard(request):
 
     pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
-    total_sales_amount = pos_total + inv_total
+    total_sales_amount = float(pos_total + inv_total)
 
     pos_today = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date=today)
     inv_today = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today)
@@ -149,6 +149,19 @@ def sales_dashboard(request):
     recent_pos = list(pos_qs.order_by('-created_at')[:10])
     recent_inv = list(inv_qs.order_by('-created_at')[:10])
     combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
+
+    recent_sales_data = []
+    for item in combined_sales:
+        is_pos = 'POS' in item.code
+        recent_sales_data.append({
+            'time': item.created_at.strftime('%H:%M') if item.created_at.date() == timezone.now().date() else item.created_at.strftime('%d/%m/%Y'),
+            'code': item.code,
+            'is_pos': is_pos,
+            'employee_name': item.employee.first_name if item.employee else '-',
+            'employee_photo': item.employee.photo.url if item.employee and item.employee.photo else None,
+            'employee_initial': item.employee.first_name[0] if item.employee and item.employee.first_name else '-',
+            'amount': float(item.total_amount) if hasattr(item, 'total_amount') else float(item.grand_total)
+        })
 
     context = {
         'total_sales_today': total_sales_amount,
@@ -370,7 +383,6 @@ def convert_quote_to_invoice(request, qt_id):
     qt.status = 'CONVERTED'
     qt.save()
     
-    # 🌟 [เพิ่มใหม่] สับสวิตช์ปิดจ๊อบฝั่งโรงงานให้อัตโนมัติเมื่อเซลล์กดเปิดบิล 🌟
     for job in qt.production_orders.all():
         if not job.is_closed:
             job.is_closed = True
@@ -385,7 +397,6 @@ def pos_home(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ใช้งานระบบ POS")
         return redirect('dashboard')
 
-    # 🌟 หน้านี้ (POS) จะโชว์สินค้าทั้งหมดรวมถึงตัวที่มี -JOB ต่อท้าย เพราะเซลล์ต้องเลือกเปิดบิลเก็บเงิน 🌟
     products = Product.objects.filter(is_active=True, stock_qty__gt=0, product_type='FG')
     categories = Category.objects.all()
     return render(request, 'sales/pos_home.html', {'products': products, 'categories': categories})
@@ -513,9 +524,37 @@ def quotation_list(request):
         else:
             queryset = queryset.filter(status=status_filter).distinct()
 
+    total_departments_count = ProductionStatus.objects.count()
+
+    # 🌟 [แก้บั๊กและเพิ่มสถานะ CLOSED รอบที่ 2] 🌟
+    # ดึงคอลัมน์ส่วนเกินทิ้ง (ทำเป็น List แบนๆ) เพื่อป้องกัน Database Error
     prod_status_filter = request.GET.get('prod_status')
     if prod_status_filter:
-        queryset = queryset.filter(production_orders__status=prod_status_filter).distinct()
+        if prod_status_filter == 'CLOSED':
+            valid_jobs = ProductionOrder.objects.filter(is_closed=True)
+        else:
+            valid_jobs = ProductionOrder.objects.filter(is_closed=False)
+            
+            if prod_status_filter == 'IN_PROGRESS_5':
+                valid_jobs = valid_jobs.annotate(
+                    dept_count=Count('completed_departments')
+                ).filter(
+                    status='IN_PROGRESS',
+                    dept_count__lt=total_departments_count
+                )
+            elif prod_status_filter == 'IN_PROGRESS_6':
+                valid_jobs = valid_jobs.annotate(
+                    dept_count=Count('completed_departments')
+                ).filter(
+                    status='IN_PROGRESS',
+                    dept_count=total_departments_count
+                )
+            else:
+                valid_jobs = valid_jobs.filter(status=prod_status_filter)
+            
+        # 🌟 สกัดเอามาเฉพาะลิสต์ของ ID เพียวๆ ป้องกันฐานข้อมูลทำงานชนกัน 🌟
+        valid_job_ids = list(valid_jobs.values_list('id', flat=True))
+        queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
 
     search_query = request.GET.get('q', '')
     if search_query:
@@ -538,9 +577,6 @@ def quotation_list(request):
         rank = current_emp.business_rank.lower()
         if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower():
             is_manager = True
-
-    # 🌟 นับจำนวนแผนกทั้งหมด ส่งไปทำ Progress Bar หน้าเว็บ 🌟
-    total_departments_count = ProductionStatus.objects.count()
 
     return render(request, 'sales/quotation_list.html', {
         'page_obj': page_obj,
@@ -590,7 +626,6 @@ def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
 
     main_categories = Category.objects.all()
-    # 🌟 ซ่อนสินค้าเฉพาะกิจที่มี -JOB ต่อท้าย ไม่ให้รกหน้ารายการเวลาเปิดใบเสนอราคา 🌟
     products = Product.objects.filter(is_active=True, product_type='FG').exclude(code__contains='-JOB')
 
     products_list = []
@@ -952,7 +987,6 @@ def invoice_print(request, inv_id):
     discount = Decimal('0.00')
     shipping_cost = Decimal('0.00')
     
-    # 🌟 [ปรับปรุงใหม่] จัดการข้อความข้อมูลการชำระเงิน (Payment Details) 🌟
     note = "-ไม่มี-"
     if inv.status == 'PAID':
         p_date = inv.payment_date.strftime('%d/%m/%Y') if inv.payment_date else '-'

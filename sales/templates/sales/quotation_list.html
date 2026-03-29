@@ -88,9 +88,14 @@
                                 <span class="input-group-text bg-white border-0 ps-3 py-1"><i class="fas fa-industry text-muted"></i></span>
                                 <select name="prod_status" class="form-select border-0 shadow-none filter-select py-1" style="cursor: pointer;">
                                     <option value="" {% if not prod_status_filter %}selected{% endif %}>สถานะการผลิต</option>
-                                    <option value="PLANNED" {% if prod_status_filter == 'PLANNED' %}selected{% endif %}>วางแผนผลิต</option>
-                                    <option value="IN_PROGRESS" {% if prod_status_filter == 'IN_PROGRESS' %}selected{% endif %}>กำลังผลิต</option>
-                                    <option value="COMPLETED" {% if prod_status_filter == 'COMPLETED' %}selected{% endif %}>ผลิตเสร็จสิ้น</option>
+                                    <option value="PLANNED" {% if prod_status_filter == 'PLANNED' %}selected{% endif %}>1. ตรวจสอบแปลน</option>
+                                    <option value="WAITING_MATERIALS" {% if prod_status_filter == 'WAITING_MATERIALS' %}selected{% endif %}>2. จัดซื้อสั่งของ</option>
+                                    <option value="WAITING_INVENTORY" {% if prod_status_filter == 'WAITING_INVENTORY' %}selected{% endif %}>3. รอเบิกคลัง</option>
+                                    <option value="READY_TO_PRODUCE" {% if prod_status_filter == 'READY_TO_PRODUCE' %}selected{% endif %}>4. เตรียมวัตถุดิบ</option>
+                                    <option value="IN_PROGRESS_5" {% if prod_status_filter == 'IN_PROGRESS_5' %}selected{% endif %}>5. กำลังผลิต</option>
+                                    <option value="IN_PROGRESS_6" {% if prod_status_filter == 'IN_PROGRESS_6' %}selected{% endif %}>6. รอรับสินค้าเข้าสต็อก</option>
+                                    <option value="COMPLETED" {% if prod_status_filter == 'COMPLETED' %}selected{% endif %}>7. ผลิตเสร็จสิ้น</option>
+                                    <option value="CLOSED" {% if prod_status_filter == 'CLOSED' %}selected{% endif %}>✅ ปิดจ๊อบสมบูรณ์</option>
                                 </select>
                             </div>
                         </div>
