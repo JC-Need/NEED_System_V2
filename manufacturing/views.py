@@ -254,7 +254,6 @@ def materials_ready(request, pk):
     for item in job_materials:
         StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=float(item.quantity), movement_type='OUT', created_by=request.user)
         
-        # 🌟 [แก้ไขตรงนี้] บังคับครอบด้วย float() ทั้งสองฝั่ง ป้องกัน Decimal vs Float Error 🌟
         item.raw_material.stock_qty = float(item.raw_material.stock_qty) - float(item.quantity)
         
         item.raw_material.save()
@@ -276,17 +275,39 @@ def production_process(request, pk):
         messages.warning(request, "⚠️ รายการนี้ผลิตเสร็จและรับเข้าคลังไปแล้ว!")
         return redirect('production_list')
     
+    # 🌟 สร้าง/ค้นหาสินค้าโคลนนิ่งที่ระบุเลข JOB และชื่อลูกค้า 🌟
+    alloc_code = f"{order.product.code}-{order.code}"
+    alloc_name = f"{order.product.name} [{order.code}]"
+    if order.customer_name:
+        alloc_name += f" (ลค. {order.customer_name})"
+        
+    allocated_product, created = Product.objects.get_or_create(
+        code=alloc_code,
+        defaults={
+            'name': alloc_name[:255],  # ป้องกันกรณีชื่อลูกค้ายาวเกินไป
+            'category': order.product.category,
+            'product_type': 'FG',
+            'sell_price': order.product.sell_price,
+            'cost_price': order.product.cost_price,
+            'min_level': 0,
+            'stock_qty': 0,
+            'is_active': True,
+        }
+    )
+
     doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code}", created_by=request.user)
-    StockMovement.objects.create(doc=doc_in, product=order.product, quantity=order.quantity, movement_type='IN', created_by=request.user)
     
-    order.product.stock_qty += order.quantity
-    order.product.save()
+    # 🌟 รับเข้าสต็อกไปยัง "สินค้าระบุเจ้าของ (Allocated Product)" 🌟
+    StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=order.quantity, movement_type='IN', created_by=request.user)
+    
+    allocated_product.stock_qty += order.quantity
+    allocated_product.save()
 
     order.status = 'COMPLETED'
     order.finish_date = timezone.now().date()
     order.save()
     
-    messages.success(request, f"🎉 สำเร็จ! รับ {order.product.name} ({order.quantity} หลัง) เข้าคลังเรียบร้อยแล้ว!")
+    messages.success(request, f"🎉 สำเร็จ! รับ {allocated_product.name} ({order.quantity} หลัง) เข้าคลังเรียบร้อยแล้ว!")
     return redirect('production_list')
 
 @login_required
@@ -522,7 +543,8 @@ def ajax_add_transporter(request):
 @login_required
 def ajax_get_fg_by_category(request):
     category_id = request.GET.get('category_id')
-    products = Product.objects.filter(product_type='FG', is_active=True)
+    # 🌟 ซ่อนสินค้าที่มีรหัส -JOB ไม่ให้โผล่มาตอนทำสูตรผลิต (BOM) หรือหน้าอื่นๆ 🌟
+    products = Product.objects.filter(product_type='FG', is_active=True).exclude(code__contains='-JOB')
     if category_id:
         products = products.filter(category_id=category_id)
     product_list = list(products.values('id', 'name', 'code'))

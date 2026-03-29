@@ -369,7 +369,14 @@ def convert_quote_to_invoice(request, qt_id):
     )
     qt.status = 'CONVERTED'
     qt.save()
-    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย (ยอดคงค้างชำระ: {balance:,.2f} บาท)")
+    
+    # 🌟 [เพิ่มใหม่] สับสวิตช์ปิดจ๊อบฝั่งโรงงานให้อัตโนมัติเมื่อเซลล์กดเปิดบิล 🌟
+    for job in qt.production_orders.all():
+        if not job.is_closed:
+            job.is_closed = True
+            job.save()
+            
+    messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย (ยอดคงค้างชำระ: {balance:,.2f} บาท) และอัปเดตปิดจ๊อบให้โรงงานแล้ว!")
     return redirect('invoice_list')
 
 @login_required
@@ -378,6 +385,7 @@ def pos_home(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ใช้งานระบบ POS")
         return redirect('dashboard')
 
+    # 🌟 หน้านี้ (POS) จะโชว์สินค้าทั้งหมดรวมถึงตัวที่มี -JOB ต่อท้าย เพราะเซลล์ต้องเลือกเปิดบิลเก็บเงิน 🌟
     products = Product.objects.filter(is_active=True, stock_qty__gt=0, product_type='FG')
     categories = Category.objects.all()
     return render(request, 'sales/pos_home.html', {'products': products, 'categories': categories})
@@ -497,28 +505,28 @@ def quotation_list(request):
     status_filter = request.GET.get('status')
     if status_filter:
         if status_filter == 'PENDING_PRODUCTION':
-            queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True)
+            queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True).distinct()
         elif status_filter == 'PENDING_CLOSING':
-            queryset = queryset.filter(status='APPROVED', is_deposit_paid=False)
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
         elif status_filter == 'IN_PRODUCTION':
-            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True)
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True).distinct()
         else:
-            queryset = queryset.filter(status=status_filter)
+            queryset = queryset.filter(status=status_filter).distinct()
 
     prod_status_filter = request.GET.get('prod_status')
     if prod_status_filter:
-        queryset = queryset.filter(production_orders__status=prod_status_filter)
+        queryset = queryset.filter(production_orders__status=prod_status_filter).distinct()
 
     search_query = request.GET.get('q', '')
     if search_query:
-        queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query))
+        queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query)).distinct()
 
     date_start = request.GET.get('start_date', '')
     date_end = request.GET.get('end_date', '')
     if date_start:
-        queryset = queryset.filter(date__gte=date_start)
+        queryset = queryset.filter(date__gte=date_start).distinct()
     if date_end:
-        queryset = queryset.filter(date__lte=date_end)
+        queryset = queryset.filter(date__lte=date_end).distinct()
 
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
@@ -582,7 +590,8 @@ def quotation_edit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
 
     main_categories = Category.objects.all()
-    products = Product.objects.filter(is_active=True, product_type='FG')
+    # 🌟 ซ่อนสินค้าเฉพาะกิจที่มี -JOB ต่อท้าย ไม่ให้รกหน้ารายการเวลาเปิดใบเสนอราคา 🌟
+    products = Product.objects.filter(is_active=True, product_type='FG').exclude(code__contains='-JOB')
 
     products_list = []
     for p in products:
@@ -942,7 +951,25 @@ def invoice_print(request, inv_id):
     tax_amount = Decimal('0.00')
     discount = Decimal('0.00')
     shipping_cost = Decimal('0.00')
-    note = ""
+    
+    # 🌟 [ปรับปรุงใหม่] จัดการข้อความข้อมูลการชำระเงิน (Payment Details) 🌟
+    note = "-ไม่มี-"
+    if inv.status == 'PAID':
+        p_date = inv.payment_date.strftime('%d/%m/%Y') if inv.payment_date else '-'
+        if inv.payment_method == 'TRANSFER':
+            note = f"ชำระโดย: โอนเงินเข้าบัญชี (วันที่ {p_date})"
+        elif inv.payment_method == 'CHECK':
+            note = f"ชำระโดย: เช็คธนาคาร {inv.check_bank} เลขที่ {inv.check_number} (วันที่ {p_date})"
+        elif inv.payment_method == 'CASH':
+            note = f"ชำระโดย: เงินสด (วันที่ {p_date})"
+        else:
+            note = "ชำระเงินเรียบร้อยแล้ว"
+    else:
+        if inv.quotation_ref:
+            if inv.quotation_ref.payment_terms and inv.quotation_ref.payment_terms != "-ไม่มี-":
+                note = f"เงื่อนไขการชำระเงิน:\n{inv.quotation_ref.payment_terms}"
+            elif inv.quotation_ref.note:
+                note = inv.quotation_ref.note
 
     if inv.quotation_ref:
         qt = inv.quotation_ref
@@ -959,7 +986,6 @@ def invoice_print(request, inv_id):
         tax_amount = qt.tax_amount
         discount = qt.discount
         shipping_cost = qt.shipping_cost
-        note = qt.note
 
     if not getattr(inv, 'customer_name', None) and inv.quotation_ref:
             inv.customer_name = qt.customer_name

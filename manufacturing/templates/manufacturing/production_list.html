@@ -150,6 +150,10 @@
                             </a>
                             <span class="info-label">วันที่สั่งผลิต</span>
                             <div class="small text-dark mb-2 fw-bold"><i class="far fa-calendar-alt text-secondary me-1"></i> {{ order.start_date|date:"d/m/Y" }}</div>
+                            
+                            <span class="info-label">กำหนดส่งลูกค้า</span>
+                            <div class="small text-danger mb-2 fw-bold"><i class="fas fa-flag-checkered text-danger opacity-75 me-1"></i> {{ order.delivery_date|date:"d/m/Y"|default:"ยังไม่กำหนด" }}</div>
+
                             {% if order.quotation_ref %}
                             <span class="info-label">อ้างอิง</span>
                             <div class="small text-dark"><i class="fas fa-file-invoice text-secondary me-1"></i> {{ order.quotation_ref.code }}</div>

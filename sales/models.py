@@ -94,7 +94,6 @@ class Quotation(models.Model):
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT', verbose_name="สถานะ")
     
-    # 🌟 เพิ่มช่องเงื่อนไขการชำระเงินแยกจากหมายเหตุ 🌟
     payment_terms = models.TextField(blank=True, verbose_name="เงื่อนไขการชำระเงิน")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     
@@ -103,8 +102,16 @@ class Quotation(models.Model):
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่อนุมัติ")
 
     def __str__(self): return self.code
+    
     @property
     def customer_code(self): return self.customer.code if self.customer else None
+
+    # 🌟 [เพิ่มใหม่] สอนให้ระบบคำนวณยอดค้างชำระอัตโนมัติ 🌟
+    @property
+    def balance_due(self):
+        gt = self.grand_total if self.grand_total else Decimal(0)
+        dep = self.deposit_amount if self.deposit_amount else Decimal(0)
+        return gt - dep
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
