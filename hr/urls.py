@@ -35,4 +35,8 @@ urlpatterns = [
     path('access-profile/<str:emp_id>/', views.employee_access_profile, name='employee_access_profile'),
     path('api/reset-password/', views.api_reset_password, name='api_reset_password'),
     path('api/toggle-user-group/', views.api_toggle_user_group, name='api_toggle_user_group'),
+    path('sales-groups/', views.sales_group_settings, name='sales_group_settings'),
+    # 🌟 เส้นทางทำเนียบพนักงาน และ API แก้ไขทีมขายไว 🌟
+    path('directory/', views.employee_directory, name='employee_directory'),
+    path('api/update-sales-role/', views.api_update_sales_role, name='api_update_sales_role'),
 ]

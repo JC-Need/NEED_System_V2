@@ -135,6 +135,20 @@
                         <td class="text-end fw-bold">{{ item.amount|floatformat:2|intcomma }}</td>
                     </tr>
                     {% endfor %}
+
+                    {% for u in qt.upsales.all %}
+                    <tr>
+                        <td class="text-center text-muted">{{ qt.items.all|length|add:forloop.counter }}</td>
+                        <td>
+                            <span style="font-size: 10px; border: 1px solid #999; padding: 1px 4px; border-radius: 4px; margin-right: 5px; color: #555;">งานเสริม</span>
+                            <span class="fw-bold text-dark">{{ u.description }}</span>
+                        </td>
+                        <td class="text-center fw-bold">{{ u.quantity|floatformat:0 }}</td>
+                        <td class="text-end">{{ u.unit_price|floatformat:2|intcomma }}</td>
+                        <td class="text-end fw-bold">{{ u.total_price|floatformat:2|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+
                     {% for i in "1234" %}<tr><td colspan="5" style="height: 25px;"></td></tr>{% endfor %}
                 </tbody>
             </table>

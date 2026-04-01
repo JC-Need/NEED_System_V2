@@ -15,11 +15,96 @@ from django.utils import timezone
 from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale
 from inventory.models import Product, Category
 from master_data.models import Customer, CompanyInfo
-from hr.models import Employee
+from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
 
 # 🌟 เพิ่มการดึง Model ProductionStatus เพื่อนับจำนวนแผนกสำหรับทำ Progress Bar 🌟
 from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch as MfgBranch, ProductionStatus
+
+# ==========================================
+# 🧠 [NEW 2026] สมองกลคำนวณคอมมิชชัน Real-time
+# ==========================================
+def process_commission_logic(sale_amount, seller, sale_ref_id):
+    """ฟังก์ชันคำนวณและกระจายเงินตามกฎ 3 ระดับ"""
+    now = timezone.now()
+    
+    # 1. อัปเดตภารกิจยอดขายบริษัท (Executive Mission)
+    target, _ = CompanySalesTarget.objects.get_or_create(year=now.year, month=now.month)
+    target.current_sales += sale_amount
+    if target.current_sales >= target.target_amount:
+        target.is_unlocked = True
+    target.save()
+
+    # 2. คำนวณส่วนแบ่งกลุ่มผู้บริหาร (1% ของทุกบิลในบริษัท)
+    exec_group = SalesGroup.objects.filter(group_type='EXECUTIVE').first()
+    if exec_group:
+        exec_pool_amount = sale_amount * (exec_group.commission_rate / Decimal('100'))
+        executives = Employee.objects.filter(sales_group=exec_group)
+        if executives.exists():
+            share_per_head = exec_pool_amount / executives.count()
+            for ex in executives:
+                CommissionLog.objects.create(
+                    recipient=ex, source_employee=seller, level=1,
+                    amount=share_per_head, sale_ref_id=sale_ref_id
+                )
+
+    # 3. คำนวณส่วนแบ่งของทีม หรือ พนักงานอิสระ
+    if not seller: return
+    group = seller.sales_group
+    if not group: return
+
+    total_group_comm = sale_amount * (group.commission_rate / Decimal('100'))
+    fund_to_add = Decimal('0.00')
+
+    if group.group_type == 'TEAM':
+        # ส่วนแบ่งหัวหน้า
+        leader_share = total_group_comm * (group.share_leader / Decimal('100'))
+        leader = Employee.objects.filter(sales_group=group, group_role='LEADER').first()
+        if leader:
+            CommissionLog.objects.create(recipient=leader, source_employee=seller, level=1, amount=leader_share, sale_ref_id=sale_ref_id)
+        else:
+            fund_to_add += leader_share
+
+        # ส่วนแบ่งระดับ 1
+        l1_share = total_group_comm * (group.share_level1 / Decimal('100'))
+        l1_members = Employee.objects.filter(sales_group=group, group_role='LEVEL1')
+        if l1_members.exists():
+            split = l1_share / l1_members.count()
+            for m in l1_members:
+                CommissionLog.objects.create(recipient=m, source_employee=seller, level=2, amount=split, sale_ref_id=sale_ref_id)
+        else:
+            fund_to_add += l1_share
+
+        # ส่วนแบ่งระดับ 2
+        l2_share = total_group_comm * (group.share_level2 / Decimal('100'))
+        l2_members = Employee.objects.filter(sales_group=group, group_role='LEVEL2')
+        if l2_members.exists():
+            split = l2_share / l2_members.count()
+            for m in l2_members:
+                CommissionLog.objects.create(recipient=m, source_employee=seller, level=3, amount=split, sale_ref_id=sale_ref_id)
+        else:
+            fund_to_add += l2_share
+
+        # ส่วนแบ่งเข้ากองทุน (คงที่)
+        fixed_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
+        fund_to_add += fixed_fund_share
+
+    elif group.group_type == 'INDEPENDENT':
+        # พนักงานอิสระ
+        fund_share = total_group_comm * (group.share_fund / Decimal('100'))
+        personal_share = total_group_comm - fund_share
+        CommissionLog.objects.create(recipient=seller, source_employee=seller, level=1, amount=personal_share, sale_ref_id=sale_ref_id)
+        fund_to_add = fund_share
+
+    # อัปเดตยอดเงินกองทุนจริง
+    if fund_to_add > 0:
+        group.fund_balance += fund_to_add
+        group.save()
+        FundTransaction.objects.create(
+            group=group, transaction_type='IN', amount=fund_to_add, 
+            description=f"รับคอมมิชชันจากบิล {sale_ref_id}"
+        )
+
 
 def get_next_document_number():
     now = timezone.now()
@@ -185,7 +270,7 @@ def api_dashboard_data(request):
         return JsonResponse({'error': 'Unauthorized'}, status=403)
 
     target_employees, _ = get_target_employees(request.user)
-
+    emp = getattr(request.user, 'employee', None)
     today = timezone.now().date()
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
@@ -199,6 +284,21 @@ def api_dashboard_data(request):
     pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
     total_sales_amount = float(pos_total + inv_total)
+
+    # 🌟 [NEW] ข้อมูลกองทุนและคอมมิชชันส่วนตัว 🌟
+    my_comm_month = 0
+    group_fund = 0
+    if emp:
+        my_comm_month = CommissionLog.objects.filter(recipient=emp, created_at__month=today.month, created_at__year=today.year).aggregate(Sum('amount'))['amount__sum'] or 0
+        group_fund = emp.sales_group.fund_balance if emp.sales_group else 0
+    
+    # 🌟 [NEW] ข้อมูลภารกิจผู้บริหาร 🌟
+    mission = CompanySalesTarget.objects.filter(year=today.year, month=today.month).first()
+    mission_data = {
+        'target': float(mission.target_amount) if mission else 50000000.0,
+        'current': float(mission.current_sales) if mission else 0.0,
+        'is_unlocked': mission.is_unlocked if mission else False
+    }
 
     pos_today = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date=today)
     inv_today = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today)
@@ -255,7 +355,10 @@ def api_dashboard_data(request):
         'pending_production_quotes': pending_production_quotes,
         'recent_sales': recent_sales_data,
         'chart_labels': chart_labels,
-        'chart_data': chart_data
+        'chart_data': chart_data,
+        'my_commission': float(my_comm_month), 
+        'group_fund': float(group_fund), 
+        'mission': mission_data
     })
 
 @login_required
@@ -434,7 +537,7 @@ def pos_checkout(request):
                 received_amount=received_amount,
                 change_amount=received_amount - total_amount,
                 payment_method=payment_method,
-                status='PENDING',
+                status='PAID', # เปลี่ยนเป็น PAID สำหรับ POS
                 customer=customer_obj,
                 customer_name=cust_name,
                 customer_address=cust_addr,
@@ -465,6 +568,10 @@ def pos_checkout(request):
                 )
                 product.stock_qty -= int(item['qty'])
                 product.save()
+
+            # 🌟 TRIGGER: คำนวณคอมมิชชันทันที 🌟
+            if current_emp:
+                process_commission_logic(total_amount, current_emp, order_code)
 
             return JsonResponse({'success': True, 'order_code': order_code})
         except Exception as e:
@@ -526,8 +633,6 @@ def quotation_list(request):
 
     total_departments_count = ProductionStatus.objects.count()
 
-    # 🌟 [แก้บั๊กและเพิ่มสถานะ CLOSED รอบที่ 2] 🌟
-    # ดึงคอลัมน์ส่วนเกินทิ้ง (ทำเป็น List แบนๆ) เพื่อป้องกัน Database Error
     prod_status_filter = request.GET.get('prod_status')
     if prod_status_filter:
         if prod_status_filter == 'CLOSED':
@@ -552,7 +657,6 @@ def quotation_list(request):
             else:
                 valid_jobs = valid_jobs.filter(status=prod_status_filter)
             
-        # 🌟 สกัดเอามาเฉพาะลิสต์ของ ID เพียวๆ ป้องกันฐานข้อมูลทำงานชนกัน 🌟
         valid_job_ids = list(valid_jobs.values_list('id', flat=True))
         queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
 
@@ -943,8 +1047,14 @@ def confirm_payment(request, doc_type, doc_id):
     else:
         obj = get_object_or_404(Invoice, id=doc_id)
 
-    obj.status = 'PAID'
-    obj.save()
+    if obj.status != 'PAID':
+        obj.status = 'PAID'
+        obj.save()
+        # 🌟 TRIGGER: คำนวณคอมมิชชันเมื่อยืนยันยอดเงิน 🌟
+        sale_amt = getattr(obj, 'total_amount', getattr(obj, 'grand_total', 0))
+        if obj.employee:
+            process_commission_logic(sale_amt, obj.employee, obj.code)
+
     messages.success(request, f"✅ ยืนยันรับชำระเงินเอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
     return redirect('invoice_list')
 

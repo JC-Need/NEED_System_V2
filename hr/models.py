@@ -20,6 +20,40 @@ class EmployeeType(models.Model):
     def __str__(self): return self.name
     class Meta: verbose_name_plural = "ข้อมูลประเภทพนักงาน"
 
+# ==========================================
+# 🌟 ระบบกลุ่มและกองทุนทีม (New 2026) 🌟
+# ==========================================
+class SalesGroup(models.Model):
+    GROUP_TYPES = [
+        ('EXECUTIVE', 'กลุ่มผู้บริหาร'),
+        ('TEAM', 'กลุ่มทำงาน'),
+        ('INDEPENDENT', 'พนักงานขายอิสระ')
+    ]
+    name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อกลุ่ม/ทีม")
+    group_type = models.CharField(max_length=20, choices=GROUP_TYPES, verbose_name="ประเภทกลุ่ม")
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ค่าคอมฯจากยอดขาย (%)")
+    
+    # สัดส่วนการแบ่งเงิน กลุ่มทำงาน
+    share_leader = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งหัวหน้า (%)")
+    share_level1 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งระดับ 1 (%)")
+    share_level2 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งระดับ 2 (%)")
+    
+    # 🌟 สัดส่วนการแบ่งเงิน กลุ่มผู้บริหาร 1-5 🌟
+    share_exec1 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งผู้บริหารคนที่ 1 (%)")
+    share_exec2 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งผู้บริหารคนที่ 2 (%)")
+    share_exec3 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งผู้บริหารคนที่ 3 (%)")
+    share_exec4 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งผู้บริหารคนที่ 4 (%)")
+    share_exec5 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งผู้บริหารคนที่ 5 (%)")
+
+    # กองทุน
+    share_fund = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="เข้ากองทุนกลุ่ม (%)")
+
+    fund_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00, verbose_name="ยอดเงินกองทุนคงเหลือ")
+
+    def __str__(self): return f"{self.name} ({self.get_group_type_display()})"
+    class Meta: verbose_name_plural = "จัดการกลุ่มขายและกองทุน"
+
+
 # --- Employee Core ---
 class Employee(models.Model):
     STATUS_CHOICES = [('probation', 'ทดลองงาน'), ('permanent', 'พนักงานประจำ'), ('resigned', 'ลาออก')]
@@ -47,26 +81,63 @@ class Employee(models.Model):
     salary = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="เงินเดือนปัจจุบัน")
     social_security_id = models.CharField(max_length=20, blank=True, verbose_name="เลขประกันสังคม")
     bank_account_no = models.CharField(max_length=20, blank=True, verbose_name="เลขที่บัญชี (เงินเดือน)")
-    
     photo = models.ImageField(upload_to='employees/', blank=True, verbose_name="รูปถ่าย")
-
-    # ✅ เพิ่มช่องเก็บลายเซ็นต์
     signature = models.ImageField(upload_to='signatures/', blank=True, null=True, verbose_name="รูปลายเซ็นต์ (สำหรับอนุมัติ)")
 
-    # Network & Rank
+    # 🌟 ฟิลด์โครงสร้างทีม (เชื่อมกับ SalesGroup) 🌟
+    sales_group = models.ForeignKey(SalesGroup, on_delete=models.SET_NULL, null=True, blank=True, related_name='members', verbose_name="สังกัดทีมขาย")
+    ROLE_CHOICES = [('LEADER', 'หัวหน้ากลุ่ม'), ('LEVEL1', 'พนักงานระดับ 1'), ('LEVEL2', 'พนักงานระดับ 2'), ('MEMBER', 'สมาชิก/อิสระ')]
+    group_role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='MEMBER', verbose_name="บทบาทในทีม")
+
+    # (ของเดิม) Network & Rank
     introducer = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='downlines', verbose_name='ผู้แนะนำ (Upline)')
     RANK_CHOICES = [('member', 'Member'), ('supervisor', 'Supervisor'), ('manager', 'Manager'), ('director', 'Director')]
-    business_rank = models.CharField(max_length=20, choices=RANK_CHOICES, default='member', verbose_name='ระดับธุรกิจ')
-    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name='ค่าคอมมิชชั่น (%)')
+    business_rank = models.CharField(max_length=20, choices=RANK_CHOICES, default='member', verbose_name='ระดับธุรกิจเก่า')
+    commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name='เรทคอมฯส่วนตัวเดิม')
     bank_name = models.CharField(max_length=100, blank=True, null=True, verbose_name='ธนาคาร (รับคอมมิชชั่น)')
     bank_account = models.CharField(max_length=20, blank=True, null=True, verbose_name='เลขบัญชี (รับคอมมิชชั่น)')
 
     def __str__(self): return f"{self.emp_id} - {self.first_name} {self.last_name}"
     class Meta: verbose_name_plural = "ข้อมูลพนักงาน"
 
-# --- ส่วนอื่นๆ (Attendance, LeaveRequest, Payslip, CommissionLog) คงเดิม ---
-# (เจนี่สามารถคงโค้ดส่วน Attendance... ลงไปจนจบไฟล์เดิมไว้ได้เลยครับ)
-# เพื่อความกระชับ ผมละส่วนที่ไม่เกี่ยวข้องไว้ แต่ถ้าไฟล์เดิมมีอยู่แล้ว ห้ามลบนะครับ!
+# ==========================================
+# 🌟 ระบบภารกิจผู้บริหาร และ การเบิกกองทุน 🌟
+# ==========================================
+class CompanySalesTarget(models.Model):
+    year = models.IntegerField(verbose_name="ปี ค.ศ.")
+    month = models.IntegerField(verbose_name="เดือน")
+    target_amount = models.DecimalField(max_digits=15, decimal_places=2, default=50000000.00, verbose_name="เป้าหมายยอดขายบริษัท")
+    current_sales = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, verbose_name="ยอดขายปัจจุบัน")
+    is_unlocked = models.BooleanField(default=False, verbose_name="บรรลุเป้าหมาย (ปลดล็อคคอมผู้บริหารแล้ว)")
+    class Meta: 
+        unique_together = ('year', 'month')
+        verbose_name_plural = "เป้าหมายยอดขายบริษัท (ภารกิจผู้บริหาร)"
+
+class FundWithdrawalRequest(models.Model):
+    STATUS_CHOICES = [('VOTING', 'รอสมาชิกในกลุ่มยืนยัน'), ('PENDING', 'รอผู้บริหารอนุมัติ'), ('APPROVED', 'อนุมัติแล้ว'), ('REJECTED', 'ไม่อนุมัติ')]
+    group = models.ForeignKey(SalesGroup, on_delete=models.CASCADE, verbose_name="กลุ่มที่ขอเบิก")
+    requester = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='fund_requests', verbose_name="พนักงานผู้ขอเบิก")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="จำนวนเงิน")
+    reason = models.TextField(verbose_name="วัตถุประสงค์การใช้เงิน")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='VOTING', verbose_name="สถานะ")
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ผู้บริหารที่อนุมัติ")
+    class Meta: verbose_name_plural = "คำร้องขอเบิกเงินกองทุนกลุ่ม"
+
+class FundWithdrawalVote(models.Model):
+    request = models.ForeignKey(FundWithdrawalRequest, on_delete=models.CASCADE, related_name='votes')
+    voter = models.ForeignKey(Employee, on_delete=models.CASCADE, verbose_name="ผู้ลงมติ")
+    is_confirmed = models.BooleanField(default=False, verbose_name="กดยืนยันแล้ว")
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+
+class FundTransaction(models.Model):
+    group = models.ForeignKey(SalesGroup, on_delete=models.CASCADE, related_name='transactions')
+    transaction_type = models.CharField(max_length=20, choices=[('IN', 'รายรับ (คอมมิชชัน)'), ('OUT', 'รายจ่าย (เบิกใช้)')])
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    description = models.CharField(max_length=255)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+# --- ส่วนอื่นๆ คงเดิม ---
 class Attendance(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.CASCADE, verbose_name="พนักงาน")
     date = models.DateField(verbose_name="วันที่")
@@ -111,7 +182,7 @@ class Payslip(models.Model):
     month = models.IntegerField(choices=MONTH_CHOICES, verbose_name="เดือน")
     base_salary = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="เงินเดือน")
     ot_pay = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="OT")
-    bonus = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="โบนัส")
+    bonus = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="โบนัส/ค่าคอมมิชชัน")
     other_income = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รายได้อื่นๆ")
     tax = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ภาษี")
     social_security = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ประกันสังคม")
@@ -132,8 +203,8 @@ class Payslip(models.Model):
 class CommissionLog(models.Model):
     recipient = models.ForeignKey(Employee, on_delete=models.CASCADE, related_name='commissions_received', verbose_name="ผู้รับเงิน")
     source_employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="จากยอดขายของ")
-    level = models.IntegerField(verbose_name="ชั้นที่")
+    level = models.IntegerField(verbose_name="ชั้นที่", default=1)
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="จำนวนเงิน")
-    sale_ref_id = models.CharField(max_length=50, blank=True, verbose_name="อ้างอิง")
+    sale_ref_id = models.CharField(max_length=50, blank=True, verbose_name="อ้างอิงบิล")
     created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ได้รับ")
-    class Meta: verbose_name_plural = "ประวัติค่าคอมมิชชั่น"
+    class Meta: verbose_name_plural = "ประวัติค่าคอมมิชชั่นบุคคล"

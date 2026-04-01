@@ -76,6 +76,7 @@
                                     <option value="" {% if not status_filter %}selected{% endif %}>สถานะเอกสาร</option>
                                     <option value="DRAFT" {% if status_filter == 'DRAFT' %}selected{% endif %}>รออนุมัติ</option>
                                     <option value="APPROVED" {% if status_filter == 'APPROVED' %}selected{% endif %}>อนุมัติแล้ว</option>
+                                    <option value="PENDING_CLOSING" {% if status_filter == 'PENDING_CLOSING' %}selected{% endif %}>รอรับมัดจำ</option>
                                     <option value="CONVERTED" {% if status_filter == 'CONVERTED' %}selected{% endif %}>เปิดบิลแล้ว</option>
                                     <option value="REJECTED" {% if status_filter == 'REJECTED' %}selected{% endif %}>ไม่อนุมัติ</option>
                                     <option value="CANCELLED" {% if status_filter == 'CANCELLED' %}selected{% endif %}>ยกเลิกแล้ว</option>
@@ -218,7 +219,11 @@
                                 
                                 <td class="text-center">
                                     {% if qt.status == 'APPROVED' %}
-                                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3">อนุมัติแล้ว</span>
+                                        {% if not qt.is_deposit_paid %}
+                                            <span class="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 rounded-pill px-3">รอรับมัดจำ</span>
+                                        {% else %}
+                                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 rounded-pill px-3">อนุมัติแล้ว</span>
+                                        {% endif %}
                                     {% elif qt.status == 'CONVERTED' %}
                                         <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary border-opacity-25 rounded-pill px-3">เปิดบิลแล้ว</span>
                                     {% elif qt.status == 'REJECTED' %}

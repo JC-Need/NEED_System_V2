@@ -191,21 +191,24 @@
                         <h6 class="fw-bold m-0 text-dark">🌳 โครงสร้างทีม & ผลตอบแทน (Sales)</h6>
                     </div>
                     <div class="card-body p-4">
+                        
+                        <div class="d-none">
+                            {{ form.introducer }}
+                            {{ form.business_rank }}
+                            {{ form.commission_rate }}
+                        </div>
+
                         <div class="row g-3">
-                            <div class="col-12">
-                                <label class="form-label fw-bold text-primary">👑 ผู้แนะนำ (Upline)</label>
-                                {{ form.introducer }}
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-success">สังกัดทีม/กลุ่ม (Sales Group)</label>
+                                {{ form.sales_group }}
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label fw-bold">ระดับธุรกิจ</label>
-                                {{ form.business_rank }}
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label fw-bold">ค่าคอมมิชชั่น (%)</label>
-                                {{ form.commission_rate }}
+                                <label class="form-label fw-bold text-success">บทบาทในทีม (Role)</label>
+                                {{ form.group_role }}
                             </div>
                             
-                            <div class="col-12"><hr class="text-muted"></div>
+                            <div class="col-12"><hr class="text-muted opacity-25"></div>
                             
                             <div class="col-md-4">
                                 <label class="form-label fw-bold">ธนาคาร (รับค่าคอมฯ)</label>
@@ -235,12 +238,10 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // 1. Date Config
         const dateConfig = { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true };
         flatpickr("#id_start_date", dateConfig);
         flatpickr("#id_birth_date", dateConfig);
         
-        // 2. Toggle User
         const toggleUser = document.getElementById('id_create_user_account');
         const userSection = document.getElementById('user-account-section');
         function updateToggle() {
@@ -252,43 +253,39 @@
                 userSection.querySelectorAll('input').forEach(i => i.required = false);
             }
         }
-        toggleUser.addEventListener('change', updateToggle);
-        updateToggle();
+        if(toggleUser) {
+            toggleUser.addEventListener('change', updateToggle);
+            updateToggle();
+        }
 
-        // ✅ 3. จัดการเงินเดือน (UX: 50,000.00)
         const salaryInput = document.getElementById('input_salary');
-        // ฟังก์ชันจัดรูปแบบตัวเลข (ใส่ลูกน้ำ)
         function formatMoney(amount) {
             if (!amount || amount === '') return '0.00';
-            // ลบลูกน้ำออกก่อนคำนวณ
             let num = parseFloat(amount.replace(/,/g, ''));
             if (isNaN(num)) return '0.00';
-            // คืนค่าแบบมีลูกน้ำ และทศนิยม 2 ตำแหน่ง
             return num.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
         
-        // 3.1 โหลดหน้าเว็บมาปุ๊บ จัด Format ทันที
-        salaryInput.value = formatMoney(salaryInput.value);
-        // 3.2 เมื่อคลิก (Focus) -> ลบลูกน้ำออกให้แก้ตัวเลขง่ายๆ
-        salaryInput.addEventListener('focus', function() {
-            let val = this.value.replace(/,/g, ''); // ลบลูกน้ำ
-            if (val === '0.00' || val === '0') {
-                this.value = ''; // ถ้าเป็น 0 ล้างทิ้งให้พิมพ์ใหม่เลย
-            } else {
-                this.value = val; // ถ้ามีเลขอื่น ให้โชว์เลขดิบๆ
-            }
-        });
-        // 3.3 เมื่อกดออก (Blur) -> ใส่ลูกน้ำกลับเข้าไป
-        salaryInput.addEventListener('blur', function() {
-            if (this.value === '') {
-                this.value = '0.00';
-            } else {
-                this.value = formatMoney(this.value);
-            }
-        });
+        if (salaryInput) {
+            salaryInput.value = formatMoney(salaryInput.value);
+            salaryInput.addEventListener('focus', function() {
+                let val = this.value.replace(/,/g, ''); 
+                if (val === '0.00' || val === '0') {
+                    this.value = '';
+                } else {
+                    this.value = val;
+                }
+            });
+            salaryInput.addEventListener('blur', function() {
+                if (this.value === '') {
+                    this.value = '0.00';
+                } else {
+                    this.value = formatMoney(this.value);
+                }
+            });
+        }
     });
 
-    // 🌟 ฟังก์ชันดึงรหัสพนักงาน 🌟
     function generateEmpId() {
         fetch("{% url 'api_generate_emp_id' %}", { 
             method: "POST", 
@@ -305,7 +302,6 @@
         });
     }
 
-    // AJAX Functions (คงเดิม)
     function savePosition() {
         const title = document.getElementById('new_position_title').value;
         if(!title) return alert("กรุณากรอกชื่อตำแหน่ง");

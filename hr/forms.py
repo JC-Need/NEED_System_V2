@@ -50,7 +50,6 @@ class EmployeeForm(forms.ModelForm):
             'photo': forms.FileInput(attrs={'class': 'form-control'}),
             'signature': forms.FileInput(attrs={'class': 'form-control'}),
             'prefix': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
-            # ... (ส่วนที่เหลือคงเดิมเหมือนในไฟล์เก่าเลยค่ะ) ...
             'first_name': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'last_name': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'nickname': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
@@ -66,6 +65,11 @@ class EmployeeForm(forms.ModelForm):
             'start_date': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'dd/mm/yyyy', 'autocomplete': 'off'}),
             'social_security_id': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
             'bank_account_no': forms.TextInput(attrs={'class': 'form-control', 'autocomplete': 'off'}),
+            
+            # 🌟 [NEW] เพิ่ม Widget สำหรับจัดกลุ่มทีมขาย 🌟
+            'sales_group': forms.Select(attrs={'class': 'form-select border-success'}),
+            'group_role': forms.Select(attrs={'class': 'form-select border-success'}),
+            
             'introducer': forms.Select(attrs={'class': 'form-select'}),
             'business_rank': forms.Select(attrs={'class': 'form-select'}),
             'commission_rate': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),

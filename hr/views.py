@@ -2,13 +2,13 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Count, Sum
+from django.db.models import Count, Sum, Q
 from datetime import datetime, date, timedelta
 from django.contrib.auth.models import User, Group
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
 
-from .models import Employee, Attendance, LeaveRequest, Payslip, CommissionLog, Position, Department
+from .models import Employee, Attendance, LeaveRequest, Payslip, CommissionLog, Position, Department, SalesGroup
 from .forms import LeaveRequestForm, EmployeeForm
 
 # ==========================================
@@ -181,7 +181,7 @@ def employee_add(request):
         form = EmployeeForm(request.POST, request.FILES)
         if form.is_valid():
             emp = form.save(commit=False)
-            
+
             # 🌟 แปลงปี ค.ศ. เป็น พ.ศ. (บวก 543) แล้วดึง 2 ตัวท้าย 🌟
             now = datetime.now()
             thai_year = str(now.year + 543)[-2:]
@@ -222,31 +222,31 @@ def employee_add(request):
 @user_passes_test(is_hr_or_admin, login_url='/')
 def employee_edit(request, emp_id):
     employee = get_object_or_404(Employee, emp_id=emp_id)
-    
+
     if request.method == 'POST':
         form = EmployeeForm(request.POST, request.FILES, instance=employee)
         if form.is_valid():
             emp = form.save(commit=False)
-            
+
             create_user = form.cleaned_data.get('create_user_account')
             if create_user and not emp.user:
                 username = form.cleaned_data.get('username')
                 password = form.cleaned_data.get('password')
                 email = form.cleaned_data.get('email')
-                
+
                 if username and password:
                     if User.objects.filter(username=username).exists():
                         messages.error(request, f"Username '{username}' มีผู้ใช้งานแล้ว กรุณาเปลี่ยนใหม่")
                         return render(request, 'hr/employee_edit.html', {'form': form, 'employee': employee})
                     user = User.objects.create_user(username=username, password=password, email=email)
                     emp.user = user
-            
+
             emp.save()
             messages.success(request, f"✅ บันทึกการแก้ไขข้อมูลของ {emp.first_name} เรียบร้อยแล้ว")
             return redirect('role_management')
     else:
         form = EmployeeForm(instance=employee)
-        
+
     return render(request, 'hr/employee_edit.html', {'form': form, 'employee': employee})
 
 @user_passes_test(is_hr_or_admin, login_url='/')
@@ -284,15 +284,15 @@ def api_generate_emp_id(request):
     now = datetime.now()
     thai_year = str(now.year + 543)[-2:]
     prefix = f"EMP-{thai_year}{now.strftime('%m')}"
-    
+
     last_emp = Employee.objects.filter(emp_id__startswith=prefix).order_by('emp_id').last()
-    
+
     if last_emp:
         try: seq = int(last_emp.emp_id.split('-')[-1]) + 1
         except ValueError: seq = 1
     else:
         seq = 1
-        
+
     new_id = f"{prefix}-{seq:03d}"
     return JsonResponse({'status': 'success', 'emp_id': new_id})
 
@@ -315,11 +315,11 @@ def role_management(request):
 def employee_access_profile(request, emp_id):
     employee = get_object_or_404(Employee, emp_id=emp_id)
     all_groups = Group.objects.all().order_by('name')
-    
+
     user_groups = []
     if employee.user:
         user_groups = list(employee.user.groups.values_list('id', flat=True))
-        
+
     context = {
         'employee': employee,
         'all_groups': all_groups,
@@ -376,17 +376,154 @@ def api_reset_password(request):
 def api_toggle_user_group(request):
     user_id = request.POST.get('user_id')
     group_id = request.POST.get('group_id')
-    action = request.POST.get('action') 
-    
+    action = request.POST.get('action')
+
     try:
         user = get_object_or_404(User, id=user_id)
         group = get_object_or_404(Group, id=group_id)
-        
+
         if action == 'add':
             user.groups.add(group)
         elif action == 'remove':
             user.groups.remove(group)
-            
+
         return JsonResponse({'status': 'success'})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+# ==========================================
+# 🌟 ระบบตั้งค่ากลุ่มและกองทุน (Sales Group Settings)
+# ==========================================
+@user_passes_test(is_hr_or_admin, login_url='/')
+def sales_group_settings(request):
+    groups = SalesGroup.objects.all().order_by('id')
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        if action in ['add', 'edit']:
+            group_id = request.POST.get('group_id')
+            name = request.POST.get('name')
+            group_type = request.POST.get('group_type')
+            commission_rate = request.POST.get('commission_rate') or 0
+
+            # ค่าของกลุ่มทำงาน
+            share_leader = request.POST.get('share_leader') or 0
+            share_level1 = request.POST.get('share_level1') or 0
+            share_level2 = request.POST.get('share_level2') or 0
+
+            # ค่าของกลุ่มผู้บริหาร
+            share_exec1 = request.POST.get('share_exec1') or 0
+            share_exec2 = request.POST.get('share_exec2') or 0
+            share_exec3 = request.POST.get('share_exec3') or 0
+            share_exec4 = request.POST.get('share_exec4') or 0
+            share_exec5 = request.POST.get('share_exec5') or 0
+
+            # ค่ากองทุนกลาง
+            share_fund = request.POST.get('share_fund') or 0
+
+            # 🌟 ตรวจสอบผลรวมเปอร์เซ็นต์ ให้เหมาะกับประเภท 🌟
+            if group_type == 'TEAM':
+                total_share = float(share_leader) + float(share_level1) + float(share_level2) + float(share_fund)
+            elif group_type == 'EXECUTIVE':
+                total_share = float(share_exec1) + float(share_exec2) + float(share_exec3) + float(share_exec4) + float(share_exec5) + float(share_fund)
+            else:
+                total_share = 100.0 # อิสระ ไม่ต้องซอยย่อย
+
+            if group_type in ['TEAM', 'EXECUTIVE'] and total_share != 100.0:
+                messages.warning(request, f"⚠️ คำเตือน: สัดส่วนการแบ่งเงินของกลุ่ม '{name}' รวมกันได้ {total_share}% (ระบบแนะนำให้ตั้งพอดี 100%)")
+
+            if action == 'add':
+                SalesGroup.objects.create(
+                    name=name, group_type=group_type, commission_rate=commission_rate,
+                    share_leader=share_leader, share_level1=share_level1, share_level2=share_level2,
+                    share_exec1=share_exec1, share_exec2=share_exec2, share_exec3=share_exec3,
+                    share_exec4=share_exec4, share_exec5=share_exec5, share_fund=share_fund
+                )
+                messages.success(request, f"✅ เพิ่มกลุ่ม {name} เรียบร้อยแล้ว")
+
+            elif action == 'edit' and group_id:
+                group = get_object_or_404(SalesGroup, id=group_id)
+                group.name = name
+                group.group_type = group_type
+                group.commission_rate = commission_rate
+                group.share_leader = share_leader
+                group.share_level1 = share_level1
+                group.share_level2 = share_level2
+                group.share_exec1 = share_exec1
+                group.share_exec2 = share_exec2
+                group.share_exec3 = share_exec3
+                group.share_exec4 = share_exec4
+                group.share_exec5 = share_exec5
+                group.share_fund = share_fund
+                group.save()
+                messages.success(request, f"✅ อัปเดตข้อมูลกลุ่ม {name} เรียบร้อยแล้ว")
+
+        elif action == 'delete':
+            group_id = request.POST.get('group_id')
+            group = get_object_or_404(SalesGroup, id=group_id)
+            if group.members.exists():
+                messages.error(request, f"❌ ไม่สามารถลบกลุ่ม {group.name} ได้ เนื่องจากยังมีพนักงานสังกัดอยู่ในกลุ่มนี้")
+            else:
+                group_name = group.name
+                group.delete()
+                messages.success(request, f"🗑️ ลบกลุ่ม {group_name} เรียบร้อยแล้ว")
+
+        return redirect('sales_group_settings')
+
+    return render(request, 'hr/sales_group_settings.html', {'groups': groups})
+
+# ==========================================
+# 🌟 ระบบทำเนียบพนักงาน (Employee Directory)
+# ==========================================
+@user_passes_test(is_hr_or_admin, login_url='/')
+def employee_directory(request):
+    departments = Department.objects.all().order_by('name')
+    sales_groups = SalesGroup.objects.all().order_by('name')
+
+    dept_id = request.GET.get('dept')
+    search_q = request.GET.get('q', '').strip()
+
+    employees = Employee.objects.all().order_by('-start_date')
+
+    # 🔍 ระบบกรองข้อมูล
+    if dept_id:
+        employees = employees.filter(department_id=dept_id)
+    if search_q:
+        employees = employees.filter(
+            Q(first_name__icontains=search_q) |
+            Q(last_name__icontains=search_q) |
+            Q(emp_id__icontains=search_q)
+        )
+
+    context = {
+        'employees': employees,
+        'departments': departments,
+        'sales_groups': sales_groups,
+        'selected_dept': int(dept_id) if dept_id else '',
+        'search_q': search_q,
+    }
+    return render(request, 'hr/employee_directory.html', context)
+
+@user_passes_test(is_hr_or_admin, login_url='/')
+@require_POST
+def api_update_sales_role(request):
+    """API สำหรับอัปเดตทีมขายและบทบาทผ่านหน้าตาราง (AJAX)"""
+    emp_id = request.POST.get('emp_id')
+    group_id = request.POST.get('group_id')
+    role = request.POST.get('role')
+
+    try:
+        employee = get_object_or_404(Employee, emp_id=emp_id)
+        if group_id:
+            employee.sales_group_id = group_id
+        else:
+            employee.sales_group = None
+
+        if role:
+            employee.group_role = role
+
+        employee.save()
+        return JsonResponse({'status': 'success', 'message': f'อัปเดตทีมของ {employee.first_name} เรียบร้อยแล้ว'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
