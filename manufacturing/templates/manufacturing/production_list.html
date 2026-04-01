@@ -57,12 +57,22 @@
         <div class="card-body p-3">
             <form method="GET" class="m-0">
                 <div class="row g-2 align-items-center">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <div class="input-group input-group-sm border rounded-pill overflow-hidden shadow-sm">
                             <span class="input-group-text bg-white border-0 ps-3"><i class="fas fa-search text-secondary"></i></span>
-                            <input type="text" name="q" class="form-control border-0 shadow-none bg-white py-2" placeholder="ค้นหา เลข JOB / ชื่อลูกค้า / เลขใบเสนอราคา (QT)..." value="{{ search_q }}">
+                            <input type="text" name="q" class="form-control border-0 shadow-none bg-white py-2" placeholder="เลข JOB / ลูกค้า / QT..." value="{{ search_q }}">
                         </div>
                     </div>
+                    
+                    <div class="col-md-2">
+                        <select name="status" class="form-select form-select-sm rounded-pill border shadow-sm py-2 px-3 fw-bold text-primary">
+                            <option value="">-- ขั้นตอนระบบ --</option>
+                            {% for val, label in system_status_choices %}
+                                <option value="{{ val }}" {% if search_status == val %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
                     <div class="col-md-2">
                         <div class="input-group input-group-sm border rounded-pill overflow-hidden shadow-sm">
                             <span class="input-group-text bg-white border-0 ps-3"><i class="far fa-calendar-alt text-secondary"></i></span>
@@ -75,12 +85,12 @@
                             <input type="text" name="end_date" class="form-control border-0 shadow-none bg-white datepicker text-center py-2 text-dark fw-bold" value="{{ end_date }}" placeholder="ถึงวันที่">
                         </div>
                     </div>
-                    <div class="col-md-4 d-flex gap-2">
-                        <button type="submit" class="btn btn-sm btn-dark fw-bold rounded-pill px-4 py-2 shadow-sm">กรองข้อมูล</button>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-dark fw-bold rounded-pill px-4 py-2 shadow-sm flex-grow-1">กรองข้อมูล</button>
                         <button class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-2 shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#advancedFilter" title="ตัวกรองขั้นสูง">
                             <i class="fas fa-sliders-h"></i>
                         </button>
-                        {% if search_q or search_salesperson or search_team %}
+                        {% if search_q or search_status or start_date or end_date or search_salesperson or search_team %}
                             <a href="{% url 'production_list' %}" class="btn btn-sm btn-light rounded-circle shadow-sm border d-flex align-items-center justify-content-center" style="width: 35px; height: 35px;" title="ล้างค่า"><i class="fas fa-times text-dark"></i></a>
                         {% endif %}
                     </div>
@@ -222,7 +232,7 @@
                                     </div>
                                 </div>
 
-                                {% if order.status == 'IN_PROGRESS' %}
+                                {% if order.status == 'IN_PROGRESS' or order.status == 'COMPLETED' %}
                                 <div class="dropdown">
                                     <button class="btn btn-sm btn-light border rounded-circle shadow-sm btn-action-menu" type="button" data-bs-toggle="dropdown" style="width: 35px; height: 35px;">
                                         <i class="fas fa-ellipsis-v text-dark"></i>
@@ -232,7 +242,7 @@
                                         <li>
                                             <button type="button" class="dropdown-item py-2 text-dark rounded-3 fw-bold"
                                                     onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{% for d in order.completed_departments.all %}{{ d.id }}{% if not forloop.last %},{% endif %}{% endfor %}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}')">
-                                                <i class="fas fa-edit text-info me-2" style="width: 20px;"></i> อัปเดตสถานะ
+                                                <i class="fas fa-edit text-info me-2" style="width: 20px;"></i> อัปเดตสถานะ / จัดส่ง
                                             </button>
                                         </li>
                                         <li>
@@ -243,10 +253,10 @@
                                         {% if order.status != 'COMPLETED' %}
                                         <li><hr class="dropdown-divider"></li>
                                         <li>
-                                            <form method="POST" action="{% url 'production_process' order.id %}" onsubmit="return confirm('ยืนยันปิดจ๊อบและรับสินค้าเข้าคลังใช่หรือไม่?');">
+                                            <form method="POST" action="{% url 'production_process' order.id %}" onsubmit="return confirm('ยืนยันรับสินค้าเข้าคลังใช่หรือไม่?');">
                                                 {% csrf_token %}
                                                 <button type="submit" class="dropdown-item py-2 text-success fw-bold rounded-3">
-                                                    <i class="fas fa-check-circle me-2" style="width: 20px;"></i> ผลิตเสร็จ (รับเข้าคลัง)
+                                                    <i class="fas fa-box-open me-2" style="width: 20px;"></i> ผลิตเสร็จ (รับเข้าคลัง)
                                                 </button>
                                             </form>
                                         </li>
@@ -254,7 +264,7 @@
                                     </ul>
                                 </div>
                                 {% else %}
-                                <button class="btn btn-sm btn-light border rounded-circle shadow-sm" type="button" style="width: 35px; height: 35px; opacity: 0.4; cursor: not-allowed;" title="จะปลดล็อกให้ใช้งานได้เมื่อขั้นตอนอยู่ที่ '4. ลงมือผลิต' เท่านั้น" disabled>
+                                <button class="btn btn-sm btn-light border rounded-circle shadow-sm" type="button" style="width: 35px; height: 35px; opacity: 0.4; cursor: not-allowed;" title="จะปลดล็อกให้ใช้งานได้เมื่อขั้นตอนอยู่ที่ '4. ลงมือผลิต' เป็นต้นไป" disabled>
                                     <i class="fas fa-ellipsis-v text-muted"></i>
                                 </button>
                                 {% endif %}
@@ -504,7 +514,6 @@
         document.getElementById('modalProdTeam').value = pTeam;
         document.getElementById('modalDelivStatus').value = dStatus;
         document.getElementById('modalTransporter').value = transp;
-
         document.getElementById('modalIsClosed').checked = (isClosed === 'True');
         document.getElementById('updateForm').action = `/manufacturing/production/${jobId}/update-board/`;
         updateModal.show();
@@ -528,12 +537,12 @@
         .then(res => res.json())
         .then(data => {
             if(data.success) {
-                if(type === 'prod_status') {
+                 if(type === 'prod_status') {
                     location.reload();
                 } else {
                     const select = document.getElementById(selectId);
                     select.add(new Option(data.name, data.id, true, true));
-                }
+                 }
             } else {
                 alert('เกิดข้อผิดพลาดในการบันทึกข้อมูล');
             }

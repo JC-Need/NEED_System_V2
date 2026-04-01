@@ -1,7 +1,7 @@
 import json
 import datetime
 import openpyxl
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -22,11 +22,14 @@ from .forms import QuotationForm
 from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch as MfgBranch, ProductionStatus
 
 # ==========================================
-# 🧠 [NEW 2026] สมองกลคำนวณคอมมิชชัน Real-time
+# 🧠 [NEW 2026] สมองกลคำนวณคอมมิชชัน Real-time และปัดเศษ
 # ==========================================
 def process_commission_logic(sale_amount, seller, sale_ref_id):
-    """ฟังก์ชันคำนวณและกระจายเงินตามกฎ 3 ระดับ"""
+    """ฟังก์ชันคำนวณและกระจายเงินตามกฎ 3 ระดับ พร้อมกวาดเศษสตางค์เข้ากองทุน"""
     now = timezone.now()
+    
+    # 🌟 [FIX BUG] ป้องกัน Error โดยแปลงยอดขายเป็น Decimal ทันที 🌟
+    sale_amount = Decimal(str(sale_amount))
     
     # 1. อัปเดตภารกิจยอดขายบริษัท (Executive Mission)
     target, _ = CompanySalesTarget.objects.get_or_create(year=now.year, month=now.month)
@@ -41,11 +44,24 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
         exec_pool_amount = sale_amount * (exec_group.commission_rate / Decimal('100'))
         executives = Employee.objects.filter(sales_group=exec_group)
         if executives.exists():
-            share_per_head = exec_pool_amount / executives.count()
+            exact_share_per_head = exec_pool_amount / Decimal(str(executives.count()))
+            # 🌟 บังคับปัดเศษลงเหลือ 2 ตำแหน่ง 🌟
+            share_per_head = exact_share_per_head.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            remainder = exec_pool_amount - (share_per_head * Decimal(str(executives.count())))
+            
             for ex in executives:
                 CommissionLog.objects.create(
                     recipient=ex, source_employee=seller, level=1,
                     amount=share_per_head, sale_ref_id=sale_ref_id
+                )
+            
+            # กวาดเศษสตางค์ที่เหลือเข้าสำรองบริหาร
+            if remainder > 0:
+                exec_group.fund_balance += remainder
+                exec_group.save()
+                FundTransaction.objects.create(
+                    group=exec_group, transaction_type='IN', amount=remainder, 
+                    description=f"ปัดเศษเข้าสำรองบริหาร จากบิล {sale_ref_id}"
                 )
 
     # 3. คำนวณส่วนแบ่งของทีม หรือ พนักงานอิสระ
@@ -58,7 +74,10 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
 
     if group.group_type == 'TEAM':
         # ส่วนแบ่งหัวหน้า
-        leader_share = total_group_comm * (group.share_leader / Decimal('100'))
+        exact_leader_share = total_group_comm * (group.share_leader / Decimal('100'))
+        leader_share = exact_leader_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+        fund_to_add += (exact_leader_share - leader_share) # เศษสตางค์เก็บเข้ากองทุน
+        
         leader = Employee.objects.filter(sales_group=group, group_role='LEADER').first()
         if leader:
             CommissionLog.objects.create(recipient=leader, source_employee=seller, level=1, amount=leader_share, sale_ref_id=sale_ref_id)
@@ -66,35 +85,44 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
             fund_to_add += leader_share
 
         # ส่วนแบ่งระดับ 1
-        l1_share = total_group_comm * (group.share_level1 / Decimal('100'))
+        exact_l1_share = total_group_comm * (group.share_level1 / Decimal('100'))
         l1_members = Employee.objects.filter(sales_group=group, group_role='LEVEL1')
         if l1_members.exists():
-            split = l1_share / l1_members.count()
+            exact_split = exact_l1_share / Decimal(str(l1_members.count()))
+            split = exact_split.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            remainder = exact_l1_share - (split * Decimal(str(l1_members.count())))
+            fund_to_add += remainder # เศษสตางค์เก็บเข้ากองทุน
             for m in l1_members:
                 CommissionLog.objects.create(recipient=m, source_employee=seller, level=2, amount=split, sale_ref_id=sale_ref_id)
         else:
-            fund_to_add += l1_share
+            fund_to_add += exact_l1_share
 
         # ส่วนแบ่งระดับ 2
-        l2_share = total_group_comm * (group.share_level2 / Decimal('100'))
+        exact_l2_share = total_group_comm * (group.share_level2 / Decimal('100'))
         l2_members = Employee.objects.filter(sales_group=group, group_role='LEVEL2')
         if l2_members.exists():
-            split = l2_share / l2_members.count()
+            exact_split = exact_l2_share / Decimal(str(l2_members.count()))
+            split = exact_split.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            remainder = exact_l2_share - (split * Decimal(str(l2_members.count())))
+            fund_to_add += remainder # เศษสตางค์เก็บเข้ากองทุน
             for m in l2_members:
                 CommissionLog.objects.create(recipient=m, source_employee=seller, level=3, amount=split, sale_ref_id=sale_ref_id)
         else:
-            fund_to_add += l2_share
+            fund_to_add += exact_l2_share
 
-        # ส่วนแบ่งเข้ากองทุน (คงที่)
-        fixed_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
-        fund_to_add += fixed_fund_share
+        # ส่วนแบ่งเข้ากองทุน (% คงที่)
+        exact_fixed_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
+        fund_to_add += exact_fixed_fund_share
 
     elif group.group_type == 'INDEPENDENT':
         # พนักงานอิสระ
-        fund_share = total_group_comm * (group.share_fund / Decimal('100'))
-        personal_share = total_group_comm - fund_share
+        exact_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
+        exact_personal_share = total_group_comm - exact_fund_share
+        
+        personal_share = exact_personal_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+        fund_to_add = exact_fund_share + (exact_personal_share - personal_share)
+        
         CommissionLog.objects.create(recipient=seller, source_employee=seller, level=1, amount=personal_share, sale_ref_id=sale_ref_id)
-        fund_to_add = fund_share
 
     # อัปเดตยอดเงินกองทุนจริง
     if fund_to_add > 0:
@@ -102,7 +130,7 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
         group.save()
         FundTransaction.objects.create(
             group=group, transaction_type='IN', amount=fund_to_add, 
-            description=f"รับคอมมิชชันจากบิล {sale_ref_id}"
+            description=f"รับคอมฯและปัดเศษสตางค์ จากบิล {sale_ref_id}"
         )
 
 
@@ -453,7 +481,7 @@ def create_job_order(request, qt_id):
         customer_name=qt.customer_name,
         note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}",
         salesperson=sales_obj,      
-        branch=branch_obj,          
+        branch=branch_obj,         
         delivery_date=target_date   
     )
 
@@ -655,7 +683,7 @@ def quotation_list(request):
                     dept_count=total_departments_count
                 )
             else:
-                valid_jobs = valid_jobs.filter(status=prod_status_filter)
+                 valid_jobs = valid_jobs.filter(status=prod_status_filter)
             
         valid_job_ids = list(valid_jobs.values_list('id', flat=True))
         queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
@@ -797,8 +825,8 @@ def quotation_edit(request, qt_id):
         elif 'delete_upsale' in request.POST:
             upsale_id = request.POST.get('upsale_id')
             try:
-                QuotationUpsale.objects.filter(id=upsale_id).delete()
-                calculate_totals(qt)
+                 QuotationUpsale.objects.filter(id=upsale_id).delete()
+                 calculate_totals(qt)
             except: pass
             return redirect('quotation_edit', qt_id=qt.id)
 
@@ -895,7 +923,7 @@ def quotation_clone(request, qt_id):
     for upsale in old_qt.upsales.all():
         QuotationUpsale.objects.create(
             quotation=new_qt, description=upsale.description,
-            quantity=upsale.quantity, unit_price=upsale.unit_price, total_price=upsale.total_price
+             quantity=upsale.quantity, unit_price=upsale.unit_price, total_price=upsale.total_price
         )
 
     messages.success(request, f"📋 คัดลอกเอกสารสำเร็จ! (คุณกำลังอยู่ในเอกสารใหม่ อ้างอิงข้อมูลจากใบเดิม {old_qt.code})")
@@ -967,7 +995,7 @@ def api_search_customer(request):
         addr_parts = [c.address, f"ต.{c.sub_district}" if c.sub_district else "", f"อ.{c.district}" if c.district else "", f"จ.{c.province}" if c.province else "", c.zip_code]
         full_address = " ".join(filter(None, addr_parts))
         results.append({
-            'id': c.id, 'name': c.name, 'code': c.code, 'address': full_address, 'tax_id': c.tax_id, 'phone': c.phone
+             'id': c.id, 'name': c.name, 'code': c.code, 'address': full_address, 'tax_id': c.tax_id, 'phone': c.phone
         })
     return JsonResponse({'results': results})
 

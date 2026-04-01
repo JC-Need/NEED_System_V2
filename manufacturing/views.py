@@ -21,24 +21,27 @@ from .forms import BOMForm, BOMItemFormSet
 # ==========================================
 @login_required
 def production_list(request):
-    today = datetime.date.today()
-    default_start = today.replace(day=1).strftime('%Y-%m-%d')
-    last_day = calendar.monthrange(today.year, today.month)[1]
-    default_end = today.replace(day=last_day).strftime('%Y-%m-%d')
-
-    start_date = request.GET.get('start_date', default_start)
-    end_date = request.GET.get('end_date', default_end)
+    # 🌟 [UPDATE 2026] ปรับค่าเริ่มต้นให้วันที่ว่าง เพื่อโชว์งานค้างทั้งหมด 🌟
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
     search_q = request.GET.get('q', '')
     search_salesperson = request.GET.get('salesperson', '')
     search_team = request.GET.get('team', '')
+    search_status = request.GET.get('status', '') # 🌟 ตัวรับค่าจาก Dropdown สถานะระบบ
 
     orders = ProductionOrder.objects.select_related(
         'product', 'quotation_ref', 'salesperson', 
         'production_team', 'delivery_status', 'transporter'
     ).prefetch_related('completed_departments').all().order_by('-id')
 
-    if start_date and end_date:
-        orders = orders.filter(start_date__gte=start_date, start_date__lte=end_date)
+    # 🔍 ระบบกรองข้อมูล
+    if start_date:
+        orders = orders.filter(start_date__gte=start_date)
+    if end_date:
+        orders = orders.filter(start_date__lte=end_date)
+    
+    if search_status:
+        orders = orders.filter(status=search_status)
 
     if search_q:
         orders = orders.filter(
@@ -74,6 +77,9 @@ def production_list(request):
     transporters = Transporter.objects.all().order_by('name')
     salespersons = Salesperson.objects.all().order_by('name')
     total_departments_count = prod_statuses.count()
+
+    # ดึง Choices สถานะระบบจาก Model มาทำตัวกรอง
+    system_status_choices = ProductionOrder.STATUS_CHOICES
 
     can_add_master_data = False
     if request.user.is_superuser:
@@ -113,6 +119,8 @@ def production_list(request):
         'search_q': search_q,
         'search_salesperson': search_salesperson,
         'search_team': search_team,
+        'search_status': search_status,
+        'system_status_choices': system_status_choices,
         'filter_string': filter_string,
         'can_add_master_data': can_add_master_data,
         'total_departments_count': total_departments_count,
@@ -275,7 +283,6 @@ def production_process(request, pk):
         messages.warning(request, "⚠️ รายการนี้ผลิตเสร็จและรับเข้าคลังไปแล้ว!")
         return redirect('production_list')
     
-    # 🌟 สร้าง/ค้นหาสินค้าโคลนนิ่งที่ระบุเลข JOB และชื่อลูกค้า 🌟
     alloc_code = f"{order.product.code}-{order.code}"
     alloc_name = f"{order.product.name} [{order.code}]"
     if order.customer_name:
@@ -284,7 +291,7 @@ def production_process(request, pk):
     allocated_product, created = Product.objects.get_or_create(
         code=alloc_code,
         defaults={
-            'name': alloc_name[:255],  # ป้องกันกรณีชื่อลูกค้ายาวเกินไป
+            'name': alloc_name[:255],
             'category': order.product.category,
             'product_type': 'FG',
             'sell_price': order.product.sell_price,
@@ -297,7 +304,6 @@ def production_process(request, pk):
 
     doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code}", created_by=request.user)
     
-    # 🌟 รับเข้าสต็อกไปยัง "สินค้าระบุเจ้าของ (Allocated Product)" 🌟
     StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=order.quantity, movement_type='IN', created_by=request.user)
     
     allocated_product.stock_qty += order.quantity
@@ -543,7 +549,6 @@ def ajax_add_transporter(request):
 @login_required
 def ajax_get_fg_by_category(request):
     category_id = request.GET.get('category_id')
-    # 🌟 ซ่อนสินค้าที่มีรหัส -JOB ไม่ให้โผล่มาตอนทำสูตรผลิต (BOM) หรือหน้าอื่นๆ 🌟
     products = Product.objects.filter(product_type='FG', is_active=True).exclude(code__contains='-JOB')
     if category_id:
         products = products.filter(category_id=category_id)

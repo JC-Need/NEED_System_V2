@@ -53,6 +53,20 @@ def employee_dashboard(request):
         date__range=[start_date_str, end_date_str]
     ).order_by('-date')
 
+    # 🌟 คำนวณคอมมิชชันสะสมเดือนนี้แบบ Real-time
+    current_month = timezone.now().month
+    current_year = timezone.now().year
+    total_commission = CommissionLog.objects.filter(
+        recipient=employee,
+        created_at__year=current_year,
+        created_at__month=current_month
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    # 🌟 [NEW] ดึงยอดเงินกองทุนทีมของพนักงานคนนี้ 🌟
+    group_fund = 0
+    if employee.sales_group:
+        group_fund = employee.sales_group.fund_balance
+
     context = {
         'employee': employee,
         'payslip': latest_payslip,
@@ -61,6 +75,8 @@ def employee_dashboard(request):
         'attendance_history': attendance_history,
         'start_date': start_date_str,
         'end_date': end_date_str,
+        'total_commission': total_commission,
+        'group_fund': group_fund, # 🌟 ส่งค่ายอดกองทุนไปแสดงผล 🌟
     }
     return render(request, 'hr/dashboard.html', context)
 

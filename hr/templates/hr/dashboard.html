@@ -91,13 +91,13 @@
 <div class="container">
     
     <div class="row g-4 mb-5">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="stat-card h-100 p-4 position-relative overflow-hidden">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
                         <small class="text-muted text-uppercase fw-bold">เงินได้สุทธิเดือนนี้</small>
                         <h2 class="fw-bold text-primary mt-1 mb-0 blur-text" id="salaryText" onclick="toggleSalary()">
-                            ฿ {{ payslip.net_salary|default:employee.salary|intcomma }}
+                            ฿ {{ payslip.net_salary|default:employee.salary|floatformat:2|intcomma }}
                         </h2>
                         <small class="text-muted" style="font-size: 0.8rem;">คลิกเพื่อแสดง/ซ่อน</small>
                     </div>
@@ -105,28 +105,54 @@
                         <i class="fas fa-wallet fa-lg"></i>
                     </div>
                 </div>
-                <div class="progress" style="height: 6px;">
-                    <div class="progress-bar bg-primary" style="width: 75%"></div>
-                </div>
             </div>
         </div>
 
-        <div class="col-md-4">
-            <div class="stat-card h-100 p-4">
+        <div class="col-md-3">
+            <div class="stat-card h-100 p-4 position-relative overflow-hidden">
                 <div class="d-flex justify-content-between align-items-start mb-3">
                     <div>
-                        <small class="text-muted text-uppercase fw-bold">โบนัสคงเหลือ</small>
-                        <h2 class="fw-bold text-success mt-1 mb-0">฿ {{ payslip.bonus|default:"0.00"|intcomma }}</h2>
+                        <small class="text-muted text-uppercase fw-bold">คอมมิชชันสะสมเดือนนี้</small>
+                        <h2 class="fw-bold text-success mt-1 mb-0 blur-text" id="commText" onclick="toggleComm()">
+                            ฿ {{ total_commission|default:"0.00"|floatformat:2|intcomma }}
+                        </h2>
+                        <small class="text-muted" style="font-size: 0.8rem;">คลิกเพื่อแสดง/ซ่อน</small>
                     </div>
-                    <div class="bg-light p-3 rounded-circle text-success">
-                        <i class="fas fa-gift fa-lg"></i>
+                    <div class="bg-success bg-opacity-10 p-3 rounded-circle text-success">
+                        <i class="fas fa-hand-holding-usd fa-lg"></i>
                     </div>
                 </div>
-                <small class="text-muted"><i class="fas fa-check-circle me-1"></i> สถานะปกติ</small>
+                <div class="mt-2">
+                    <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2 py-1" style="font-size: 0.75rem;">
+                        <i class="fas fa-sync-alt me-1"></i> อัปเดตแบบ Real-time
+                    </span>
+                </div>
             </div>
         </div>
 
-        <div class="col-md-4">
+        <div class="col-md-3">
+            <div class="stat-card h-100 p-4 position-relative overflow-hidden">
+                <div class="d-flex justify-content-between align-items-start mb-3">
+                    <div>
+                        <small class="text-muted text-uppercase fw-bold">ยอดเงินกองทุนทีม</small>
+                        <h2 class="fw-bold text-info mt-1 mb-0 blur-text" id="fundText" onclick="toggleFund()">
+                            ฿ {{ group_fund|default:"0.00"|floatformat:2|intcomma }}
+                        </h2>
+                        <small class="text-muted" style="font-size: 0.8rem;">คลิกเพื่อแสดง/ซ่อน</small>
+                    </div>
+                    <div class="bg-info bg-opacity-10 p-3 rounded-circle text-info">
+                        <i class="fas fa-piggy-bank fa-lg"></i>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <span class="badge bg-info bg-opacity-10 text-info rounded-pill px-2 py-1" style="font-size: 0.75rem;">
+                        <i class="fas fa-users me-1"></i> {{ employee.sales_group.name|default:"ไม่มีสังกัดทีม" }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
             <div class="stat-card h-100 p-4" style="background: #f8f9fa;">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <small class="text-muted text-uppercase fw-bold">สถานะวันนี้</small>
@@ -135,7 +161,7 @@
                     {% else %}
                         <span class="badge bg-warning text-dark rounded-pill px-3">ยังไม่ลงเวลา</span>
                     {% endif %}
-                </div>
+                 </div>
                 <div class="text-center py-2">
                     <h1 class="fw-bold display-6 mb-0">
                         {{ today_attendance.time_in|time:"H:i"|default:"--:--" }}
@@ -320,7 +346,7 @@
         // ตั้งค่าตัวเลือกวันที่สำหรับ "วันที่เริ่มต้น"
         flatpickr("#startDate", {
             locale: "th",
-            dateFormat: "Y-m-d", // รูปแบบที่ส่งไปหลังบ้าน (ต้องเป็น Y-m-d เพื่อให้ Django เข้าใจ)
+            dateFormat: "Y-m-d", // รูปแบบที่ส่งไปหลังบ้าน
             altInput: true,       // ให้แสดงผลแบบสวยงาม
             altFormat: "d/m/Y",   // รูปแบบที่ตาเห็น (dd/mm/yyyy)
             defaultDate: "{{ start_date }}" // ค่าเริ่มต้น
@@ -338,6 +364,17 @@
 
     function toggleSalary() {
         var element = document.getElementById("salaryText");
+        element.classList.toggle("revealed");
+    }
+
+    function toggleComm() {
+        var element = document.getElementById("commText");
+        element.classList.toggle("revealed");
+    }
+
+    // 🌟 ฟังก์ชันเปิด/ปิด ซ่อนตัวเลขกองทุน 🌟
+    function toggleFund() {
+        var element = document.getElementById("fundText");
         element.classList.toggle("revealed");
     }
 </script>
