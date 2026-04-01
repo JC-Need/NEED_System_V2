@@ -16,7 +16,7 @@ class Position(models.Model):
     class Meta: verbose_name_plural = "ข้อมูลตำแหน่ง"
 
 class EmployeeType(models.Model):
-    name = models.CharField(max_length=50, verbose_name="ประเภทพนักงาน") 
+    name = models.CharField(max_length=50, verbose_name="ประเภทพนักงาน")
     def __str__(self): return self.name
     class Meta: verbose_name_plural = "ข้อมูลประเภทพนักงาน"
 
@@ -32,12 +32,12 @@ class SalesGroup(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อกลุ่ม/ทีม")
     group_type = models.CharField(max_length=20, choices=GROUP_TYPES, verbose_name="ประเภทกลุ่ม")
     commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ค่าคอมฯจากยอดขาย (%)")
-    
+
     # สัดส่วนการแบ่งเงิน กลุ่มทำงาน
     share_leader = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งหัวหน้า (%)")
     share_level1 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งระดับ 1 (%)")
     share_level2 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งระดับ 2 (%)")
-    
+
     # 🌟 สัดส่วนการแบ่งเงิน กลุ่มผู้บริหาร 1-5 🌟
     share_exec1 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งผู้บริหารคนที่ 1 (%)")
     share_exec2 = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งผู้บริหารคนที่ 2 (%)")
@@ -70,14 +70,14 @@ class Employee(models.Model):
     birth_date = models.DateField(null=True, blank=True, verbose_name="วันเกิด")
     address = models.TextField(blank=True, verbose_name="ที่อยู่ปัจจุบัน")
     phone = models.CharField(max_length=20, verbose_name="เบอร์โทรศัพท์")
-    
+
     department = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, verbose_name="แผนก")
     position = models.ForeignKey(Position, on_delete=models.SET_NULL, null=True, verbose_name="ตำแหน่ง")
     emp_type = models.ForeignKey(EmployeeType, on_delete=models.SET_NULL, null=True, verbose_name="ประเภทการจ้าง")
     start_date = models.DateField(verbose_name="วันที่เริ่มงาน", default=timezone.now)
     resign_date = models.DateField(null=True, blank=True, verbose_name="วันที่ลาออก")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='probation', verbose_name="สถานะภาพ")
-    
+
     salary = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="เงินเดือนปัจจุบัน")
     social_security_id = models.CharField(max_length=20, blank=True, verbose_name="เลขประกันสังคม")
     bank_account_no = models.CharField(max_length=20, blank=True, verbose_name="เลขที่บัญชี (เงินเดือน)")
@@ -109,7 +109,7 @@ class CompanySalesTarget(models.Model):
     target_amount = models.DecimalField(max_digits=15, decimal_places=2, default=50000000.00, verbose_name="เป้าหมายยอดขายบริษัท")
     current_sales = models.DecimalField(max_digits=15, decimal_places=2, default=0.00, verbose_name="ยอดขายปัจจุบัน")
     is_unlocked = models.BooleanField(default=False, verbose_name="บรรลุเป้าหมาย (ปลดล็อคคอมผู้บริหารแล้ว)")
-    class Meta: 
+    class Meta:
         unique_together = ('year', 'month')
         verbose_name_plural = "เป้าหมายยอดขายบริษัท (ภารกิจผู้บริหาร)"
 
@@ -147,6 +147,11 @@ class Attendance(models.Model):
     is_late = models.BooleanField(default=False, verbose_name="มาสาย")
     is_overtime = models.BooleanField(default=False, verbose_name="มี OT")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
+
+    # 🌟 [NEW] เพิ่มฟิลด์สำหรับเก็บพิกัด GPS ตอนเช็คอิน 🌟
+    latitude = models.CharField(max_length=50, null=True, blank=True, verbose_name="ละติจูด (Latitude)")
+    longitude = models.CharField(max_length=50, null=True, blank=True, verbose_name="ลองจิจูด (Longitude)")
+
     def save(self, *args, **kwargs):
         WORK_START_TIME = datetime.time(8, 30, 0)
         if self.time_in:
@@ -159,6 +164,7 @@ class Attendance(models.Model):
             duration = dt_out - dt_in
             self.total_hours = duration.total_seconds() / 3600
         super().save(*args, **kwargs)
+
     class Meta: verbose_name_plural = "บันทึกเวลาทำงาน"
 
 class LeaveRequest(models.Model):

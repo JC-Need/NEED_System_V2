@@ -176,13 +176,16 @@
     <div class="row g-3 mb-5">
         <div class="col-md-4">
             {% if not today_attendance.time_in %}
-                <form action="{% url 'check_in' %}" method="post" class="w-100">
+                <form id="checkInForm" action="{% url 'check_in' %}" method="post" class="w-100">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-action btn-checkin w-100 d-flex align-items-center justify-content-center">
+                    <input type="hidden" name="latitude" id="latInput">
+                    <input type="hidden" name="longitude" id="longInput">
+                    
+                    <button type="button" onclick="getLocationAndSubmit()" class="btn btn-action btn-checkin w-100 d-flex align-items-center justify-content-center">
                         <i class="fas fa-fingerprint fa-2x me-3"></i>
                         <div class="text-start">
                             <div class="fs-5">ลงเวลาเข้างาน</div>
-                            <small class="opacity-75">Check-in Now</small>
+                            <small class="opacity-75">Check-in with GPS</small>
                         </div>
                     </button>
                 </form>
@@ -250,7 +253,6 @@
     </div>
 
     <div class="row g-4 mb-5">
-        
         <div class="col-lg-6">
             <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden">
                 <div class="card-header bg-white py-3 border-bottom-0">
@@ -269,25 +271,15 @@
                             {% for leave in leaves %}
                             <tr>
                                 <td class="ps-4 fw-bold text-dark">{{ leave.start_date|date:"d/m/Y" }}</td>
+                                <td>{{ leave.get_leave_type_display }}</td>
                                 <td>
-                                    {% if leave.leave_type == 'sick' %}🩹 ลาป่วย
-                                    {% elif leave.leave_type == 'vacation' %}🏖️ พักร้อน
-                                    {% else %}📝 {{ leave.get_leave_type_display }}{% endif %}
-                                </td>
-                                <td>
-                                    {% if leave.status == 'approved' %}
-                                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2">อนุมัติ</span>
-                                    {% elif leave.status == 'rejected' %}
-                                        <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-2">ไม่อนุมัติ</span>
-                                    {% else %}
-                                        <span class="badge bg-warning bg-opacity-10 text-warning rounded-pill px-2">รอพิจารณา</span>
-                                    {% endif %}
+                                    <span class="badge bg-{% if leave.status == 'approved' %}success{% elif leave.status == 'rejected' %}danger{% else %}warning{% endif %} bg-opacity-10 text-{% if leave.status == 'approved' %}success{% elif leave.status == 'rejected' %}danger{% else %}warning{% endif %} rounded-pill px-2">
+                                        {{ leave.get_status_display }}
+                                    </span>
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr>
-                                <td colspan="3" class="text-center py-4 text-muted small">ยังไม่มีประวัติการลา</td>
-                            </tr>
+                            <tr><td colspan="3" class="text-center py-4 text-muted small">ยังไม่มีประวัติการลา</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -317,66 +309,68 @@
                                 <td class="text-success fw-bold">{{ log.time_in|time:"H:i"|default:"-" }}</td>
                                 <td class="text-danger fw-bold">{{ log.time_out|time:"H:i"|default:"-" }}</td>
                                 <td class="text-end pe-4">
-                                    {% if log.is_late %}
-                                        <span class="badge bg-warning text-dark rounded-1">⚠️ มาสาย</span>
-                                    {% elif log.time_in %}
-                                        <span class="badge bg-success bg-opacity-25 text-success rounded-1">ปกติ</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary rounded-1">ขาดงาน</span>
-                                    {% endif %}
+                                    {% if log.is_late %}<span class="badge bg-warning text-dark">⚠️ มาสาย</span>
+                                    {% elif log.time_in %}<span class="badge bg-success bg-opacity-25 text-success">ปกติ</span>
+                                    {% else %}<span class="badge bg-secondary">ขาดงาน</span>{% endif %}
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center py-4 text-muted small">ไม่พบข้อมูลในช่วงเวลานี้</td>
-                            </tr>
+                            <tr><td colspan="4" class="text-center py-4 text-muted small">ไม่พบข้อมูลในช่วงเวลานี้</td></tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
 <script>
-    // ✅ สคริปต์ตั้งค่าวันที่ให้เป็น dd/mm/yyyy
-    document.addEventListener('DOMContentLoaded', function() {
-        // ตั้งค่าตัวเลือกวันที่สำหรับ "วันที่เริ่มต้น"
-        flatpickr("#startDate", {
-            locale: "th",
-            dateFormat: "Y-m-d", // รูปแบบที่ส่งไปหลังบ้าน
-            altInput: true,       // ให้แสดงผลแบบสวยงาม
-            altFormat: "d/m/Y",   // รูปแบบที่ตาเห็น (dd/mm/yyyy)
-            defaultDate: "{{ start_date }}" // ค่าเริ่มต้น
-        });
+    // ✅ ฟังก์ชันดึงพิกัด GPS ก่อนส่งฟอร์ม (Step 2)
+    function getLocationAndSubmit() {
+        const form = document.getElementById('checkInForm');
+        const btn = form.querySelector('button');
+        
+        if (navigator.geolocation) {
+            // โชว์ Loading สวยๆ
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-3"></i> กำลังดึงพิกัด GPS...';
 
-        // ตั้งค่าตัวเลือกวันที่สำหรับ "วันที่สิ้นสุด"
-        flatpickr("#endDate", {
-            locale: "th",
-            dateFormat: "Y-m-d",
-            altInput: true,
-            altFormat: "d/m/Y",
-            defaultDate: "{{ end_date }}"
-        });
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    // ดึงค่าใส่ Hidden Input
+                    document.getElementById('latInput').value = position.coords.latitude;
+                    document.getElementById('longInput').value = position.coords.longitude;
+                    form.submit(); // ส่งข้อมูลเข้าเซิร์ฟเวอร์
+                },
+                (error) => {
+                    let msg = "ไม่สามารถเข้าถึงตำแหน่งได้: ";
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED: msg += "คุณไม่ได้อนุญาตให้เข้าถึงพิกัด"; break;
+                        case error.POSITION_UNAVAILABLE: msg += "ข้อมูลพิกัดไม่พร้อมใช้งาน"; break;
+                        case error.TIMEOUT: msg += "หมดเวลาดึงพิกัด"; break;
+                        default: msg += "เกิดข้อผิดพลาดที่ไม่รู้จัก"; break;
+                    }
+                    alert(msg + "\n\nระบบจะลงเวลาเช็คอินโดยไม่มีพิกัดตำแหน่งค่ะ");
+                    form.submit(); // ส่งต่อแม้ดึงพิกัดไม่ได้ (เพื่อให้พนักงานเช็คอินได้แม้ในที่อับสัญญาณ)
+                },
+                { enableHighAccuracy: true, timeout: 7000 } // ความแม่นยำสูง รอไม่เกิน 7 วิ
+            );
+        } else {
+            alert("เบราว์เซอร์ของคุณไม่รองรับการดึงพิกัด GPS ค่ะ");
+            form.submit();
+        }
+    }
+
+    // ฟังก์ชันส่วนอื่นๆ คงเดิม
+    document.addEventListener('DOMContentLoaded', function() {
+        flatpickr("#startDate", { locale: "th", dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", defaultDate: "{{ start_date }}" });
+        flatpickr("#endDate", { locale: "th", dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", defaultDate: "{{ end_date }}" });
     });
 
-    function toggleSalary() {
-        var element = document.getElementById("salaryText");
-        element.classList.toggle("revealed");
-    }
-
-    function toggleComm() {
-        var element = document.getElementById("commText");
-        element.classList.toggle("revealed");
-    }
-
-    // 🌟 ฟังก์ชันเปิด/ปิด ซ่อนตัวเลขกองทุน 🌟
-    function toggleFund() {
-        var element = document.getElementById("fundText");
-        element.classList.toggle("revealed");
-    }
+    function toggleSalary() { document.getElementById("salaryText").classList.toggle("revealed"); }
+    function toggleComm() { document.getElementById("commText").classList.toggle("revealed"); }
+    function toggleFund() { document.getElementById("fundText").classList.toggle("revealed"); }
 </script>
 
 {% endblock %}

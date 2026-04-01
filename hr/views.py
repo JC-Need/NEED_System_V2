@@ -62,7 +62,7 @@ def employee_dashboard(request):
         created_at__month=current_month
     ).aggregate(total=Sum('amount'))['total'] or 0
 
-    # 🌟 [NEW] ดึงยอดเงินกองทุนทีมของพนักงานคนนี้ 🌟
+    # 🌟 ดึงยอดเงินกองทุนทีมของพนักงานคนนี้
     group_fund = 0
     if employee.sales_group:
         group_fund = employee.sales_group.fund_balance
@@ -76,7 +76,7 @@ def employee_dashboard(request):
         'start_date': start_date_str,
         'end_date': end_date_str,
         'total_commission': total_commission,
-        'group_fund': group_fund, # 🌟 ส่งค่ายอดกองทุนไปแสดงผล 🌟
+        'group_fund': group_fund,
     }
     return render(request, 'hr/dashboard.html', context)
 
@@ -86,14 +86,32 @@ def check_in(request):
         try:
             employee = request.user.employee
             today = date.today()
+            
+            # 🌟 [NEW] รับค่าพิกัด GPS จากหน้าบ้าน
+            lat = request.POST.get('latitude')
+            lng = request.POST.get('longitude')
+            
             attendance, created = Attendance.objects.get_or_create(employee=employee, date=today)
 
             if not attendance.time_in:
                 attendance.time_in = timezone.localtime(timezone.now()).time()
+                
+                # 🌟 [NEW] บันทึกพิกัดลงฐานข้อมูล
+                if lat: attendance.latitude = lat
+                if lng: attendance.longitude = lng
+                
                 attendance.save()
-                messages.success(request, f'ลงเวลาเข้างานเรียบร้อย ({attendance.time_in.strftime("%H:%M")})')
+                
+                msg = f'ลงเวลาเข้างานเรียบร้อย ({attendance.time_in.strftime("%H:%M")})'
+                if lat and lng:
+                    msg += ' พร้อมบันทึกพิกัด GPS สำเร็จ ✅'
+                else:
+                    msg += ' (ไม่พบข้อมูลพิกัด GPS)'
+                    
+                messages.success(request, msg)
         except Exception as e:
             print(f"Error checking in: {e}")
+            messages.error(request, "เกิดข้อผิดพลาดในการลงเวลา กรุณาลองใหม่อีกครั้ง")
     return redirect('employee_dashboard')
 
 @login_required
@@ -543,3 +561,29 @@ def api_update_sales_role(request):
         return JsonResponse({'status': 'success', 'message': f'อัปเดตทีมของ {employee.first_name} เรียบร้อยแล้ว'})
     except Exception as e:
         return JsonResponse({'status': 'error', 'message': str(e)}, status=400)
+
+# ==========================================
+# 🌟 ระบบตรวจสอบเวลาเข้างานและพิกัด GPS
+# ==========================================
+@user_passes_test(is_hr_or_admin, login_url='/')
+def attendance_map(request):
+    today = timezone.now().date()
+    date_filter = request.GET.get('date', today.strftime('%Y-%m-%d'))
+    search_q = request.GET.get('q', '').strip()
+
+    # ดึงข้อมูลการเข้างานตามวันที่เลือก
+    attendances = Attendance.objects.filter(date=date_filter).select_related('employee', 'employee__department').order_by('-time_in')
+
+    if search_q:
+        attendances = attendances.filter(
+            Q(employee__first_name__icontains=search_q) | 
+            Q(employee__last_name__icontains=search_q) |
+            Q(employee__emp_id__icontains=search_q)
+        )
+
+    context = {
+        'attendances': attendances,
+        'date_filter': date_filter,
+        'search_q': search_q,
+    }
+    return render(request, 'hr/attendance_map.html', context)
