@@ -12,59 +12,43 @@ from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 
-from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale
+from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment
 from inventory.models import Product, Category
 from master_data.models import Customer, CompanyInfo
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
-
-# 🌟 เพิ่มการดึง Model ProductionStatus เพื่อนับจำนวนแผนกสำหรับทำ Progress Bar 🌟
 from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch as MfgBranch, ProductionStatus
 
 # ==========================================
-# 🧠 [NEW 2026] สมองกลคำนวณคอมมิชชัน Real-time และปัดเศษ
+# 🧠 สมองกลคำนวณคอมมิชชัน
 # ==========================================
 def process_commission_logic(sale_amount, seller, sale_ref_id):
-    """ฟังก์ชันคำนวณและกระจายเงินตามกฎ 3 ระดับ พร้อมกวาดเศษสตางค์เข้ากองทุน"""
     now = timezone.now()
-    
-    # 🌟 [FIX BUG] ป้องกัน Error โดยแปลงยอดขายเป็น Decimal ทันที 🌟
     sale_amount = Decimal(str(sale_amount))
     
-    # 1. อัปเดตภารกิจยอดขายบริษัท (Executive Mission)
     target, _ = CompanySalesTarget.objects.get_or_create(year=now.year, month=now.month)
     target.current_sales += sale_amount
     if target.current_sales >= target.target_amount:
         target.is_unlocked = True
     target.save()
 
-    # 2. คำนวณส่วนแบ่งกลุ่มผู้บริหาร (1% ของทุกบิลในบริษัท)
     exec_group = SalesGroup.objects.filter(group_type='EXECUTIVE').first()
     if exec_group:
         exec_pool_amount = sale_amount * (exec_group.commission_rate / Decimal('100'))
         executives = Employee.objects.filter(sales_group=exec_group)
         if executives.exists():
             exact_share_per_head = exec_pool_amount / Decimal(str(executives.count()))
-            # 🌟 บังคับปัดเศษลงเหลือ 2 ตำแหน่ง 🌟
             share_per_head = exact_share_per_head.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
             remainder = exec_pool_amount - (share_per_head * Decimal(str(executives.count())))
             
             for ex in executives:
-                CommissionLog.objects.create(
-                    recipient=ex, source_employee=seller, level=1,
-                    amount=share_per_head, sale_ref_id=sale_ref_id
-                )
+                CommissionLog.objects.create(recipient=ex, source_employee=seller, level=1, amount=share_per_head, sale_ref_id=sale_ref_id)
             
-            # กวาดเศษสตางค์ที่เหลือเข้าสำรองบริหาร
             if remainder > 0:
                 exec_group.fund_balance += remainder
                 exec_group.save()
-                FundTransaction.objects.create(
-                    group=exec_group, transaction_type='IN', amount=remainder, 
-                    description=f"ปัดเศษเข้าสำรองบริหาร จากบิล {sale_ref_id}"
-                )
+                FundTransaction.objects.create(group=exec_group, transaction_type='IN', amount=remainder, description=f"ปัดเศษเข้าสำรองบริหาร จากบิล {sale_ref_id}")
 
-    # 3. คำนวณส่วนแบ่งของทีม หรือ พนักงานอิสระ
     if not seller: return
     group = seller.sales_group
     if not group: return
@@ -73,10 +57,9 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
     fund_to_add = Decimal('0.00')
 
     if group.group_type == 'TEAM':
-        # ส่วนแบ่งหัวหน้า
         exact_leader_share = total_group_comm * (group.share_leader / Decimal('100'))
         leader_share = exact_leader_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
-        fund_to_add += (exact_leader_share - leader_share) # เศษสตางค์เก็บเข้ากองทุน
+        fund_to_add += (exact_leader_share - leader_share) 
         
         leader = Employee.objects.filter(sales_group=group, group_role='LEADER').first()
         if leader:
@@ -84,55 +67,44 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
         else:
             fund_to_add += leader_share
 
-        # ส่วนแบ่งระดับ 1
         exact_l1_share = total_group_comm * (group.share_level1 / Decimal('100'))
         l1_members = Employee.objects.filter(sales_group=group, group_role='LEVEL1')
         if l1_members.exists():
             exact_split = exact_l1_share / Decimal(str(l1_members.count()))
             split = exact_split.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
             remainder = exact_l1_share - (split * Decimal(str(l1_members.count())))
-            fund_to_add += remainder # เศษสตางค์เก็บเข้ากองทุน
+            fund_to_add += remainder 
             for m in l1_members:
                 CommissionLog.objects.create(recipient=m, source_employee=seller, level=2, amount=split, sale_ref_id=sale_ref_id)
         else:
             fund_to_add += exact_l1_share
 
-        # ส่วนแบ่งระดับ 2
         exact_l2_share = total_group_comm * (group.share_level2 / Decimal('100'))
         l2_members = Employee.objects.filter(sales_group=group, group_role='LEVEL2')
         if l2_members.exists():
             exact_split = exact_l2_share / Decimal(str(l2_members.count()))
             split = exact_split.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
             remainder = exact_l2_share - (split * Decimal(str(l2_members.count())))
-            fund_to_add += remainder # เศษสตางค์เก็บเข้ากองทุน
+            fund_to_add += remainder
             for m in l2_members:
                 CommissionLog.objects.create(recipient=m, source_employee=seller, level=3, amount=split, sale_ref_id=sale_ref_id)
         else:
             fund_to_add += exact_l2_share
 
-        # ส่วนแบ่งเข้ากองทุน (% คงที่)
         exact_fixed_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
         fund_to_add += exact_fixed_fund_share
 
     elif group.group_type == 'INDEPENDENT':
-        # พนักงานอิสระ
         exact_fund_share = total_group_comm * (group.share_fund / Decimal('100'))
         exact_personal_share = total_group_comm - exact_fund_share
-        
         personal_share = exact_personal_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
         fund_to_add = exact_fund_share + (exact_personal_share - personal_share)
-        
         CommissionLog.objects.create(recipient=seller, source_employee=seller, level=1, amount=personal_share, sale_ref_id=sale_ref_id)
 
-    # อัปเดตยอดเงินกองทุนจริง
     if fund_to_add > 0:
         group.fund_balance += fund_to_add
         group.save()
-        FundTransaction.objects.create(
-            group=group, transaction_type='IN', amount=fund_to_add, 
-            description=f"รับคอมฯและปัดเศษสตางค์ จากบิล {sale_ref_id}"
-        )
-
+        FundTransaction.objects.create(group=group, transaction_type='IN', amount=fund_to_add, description=f"รับคอมฯและปัดเศษสตางค์ จากบิล {sale_ref_id}")
 
 def get_next_document_number():
     now = timezone.now()
@@ -194,18 +166,12 @@ def get_sales_queryset(model_class, user, target_employees):
     return model_class.objects.filter(employee__in=target_employees)
 
 def is_sales_authorized(user):
-    if user.is_superuser:
-        return True
-
+    if user.is_superuser: return True
     user_groups = list(user.groups.values_list('name', flat=True))
-    if 'Sales' in user_groups:
-        return True
-
+    if 'Sales' in user_groups: return True
     if hasattr(user, 'employee') and user.employee:
         dept = user.employee.department.name if user.employee.department else ''
-        if 'ขาย' in dept or 'Sales' in dept:
-            return True
-
+        if 'ขาย' in dept or 'Sales' in dept: return True
     return False
 
 @login_required
@@ -240,9 +206,7 @@ def sales_dashboard(request):
     pending_closing_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
     in_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
 
-    pending_production_quotes = qt_all_qs.filter(
-        status='APPROVED', is_deposit_paid=True, production_orders__isnull=True
-    ).count()
+    pending_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True, production_orders__isnull=True).count()
 
     pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
     inv_team = inv_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('grand_total'))
@@ -313,14 +277,12 @@ def api_dashboard_data(request):
     inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
     total_sales_amount = float(pos_total + inv_total)
 
-    # 🌟 [NEW] ข้อมูลกองทุนและคอมมิชชันส่วนตัว 🌟
     my_comm_month = 0
     group_fund = 0
     if emp:
         my_comm_month = CommissionLog.objects.filter(recipient=emp, created_at__month=today.month, created_at__year=today.year).aggregate(Sum('amount'))['amount__sum'] or 0
         group_fund = emp.sales_group.fund_balance if emp.sales_group else 0
     
-    # 🌟 [NEW] ข้อมูลภารกิจผู้บริหาร 🌟
     mission = CompanySalesTarget.objects.filter(year=today.year, month=today.month).first()
     mission_data = {
         'target': float(mission.target_amount) if mission else 50000000.0,
@@ -333,14 +295,10 @@ def api_dashboard_data(request):
     total_orders_today = pos_today.count() + inv_today.count()
 
     qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
-
     pending_approval_quotes = qt_all_qs.filter(status='DRAFT').count()
     pending_closing_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
     in_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
-
-    pending_production_quotes = qt_all_qs.filter(
-        status='APPROVED', is_deposit_paid=True, production_orders__isnull=True
-    ).count()
+    pending_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True, production_orders__isnull=True).count()
 
     pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
     inv_team = inv_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('grand_total'))
@@ -416,10 +374,8 @@ def record_deposit(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     if request.method == 'POST':
         amount_str = request.POST.get('deposit_amount', '0').replace(',', '')
-        try:
-            amount = Decimal(amount_str)
-        except:
-            amount = Decimal(0)
+        try: amount = Decimal(amount_str)
+        except: amount = Decimal(0)
 
         method = request.POST.get('deposit_method', 'TRANSFER')
         date_str = request.POST.get('deposit_date')
@@ -428,22 +384,17 @@ def record_deposit(request, qt_id):
         if amount > 0:
             qt.deposit_amount = amount
             qt.deposit_method = method
-            if date_str:
-                qt.deposit_date = parse_date(date_str)
-            else:
-                qt.deposit_date = timezone.now().date()
+            if date_str: qt.deposit_date = parse_date(date_str)
+            else: qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
 
-            if 'deposit_slip' in request.FILES:
-                qt.deposit_slip = request.FILES['deposit_slip']
-
+            if 'deposit_slip' in request.FILES: qt.deposit_slip = request.FILES['deposit_slip']
             qt.save()
             messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
         else:
             messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
 
-        if next_url:
-            return redirect(next_url)
+        if next_url: return redirect(next_url)
 
     return redirect('quotation_edit', qt_id=qt.id)
 
@@ -527,7 +478,6 @@ def pos_home(request):
     if not is_sales_authorized(request.user):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ใช้งานระบบ POS")
         return redirect('dashboard')
-
     products = Product.objects.filter(is_active=True, stock_qty__gt=0, product_type='FG')
     categories = Category.objects.all()
     return render(request, 'sales/pos_home.html', {'products': products, 'categories': categories})
@@ -565,7 +515,7 @@ def pos_checkout(request):
                 received_amount=received_amount,
                 change_amount=received_amount - total_amount,
                 payment_method=payment_method,
-                status='PAID', # เปลี่ยนเป็น PAID สำหรับ POS
+                status='PAID',
                 customer=customer_obj,
                 customer_name=cust_name,
                 customer_address=cust_addr,
@@ -587,19 +537,14 @@ def pos_checkout(request):
             for item in cart:
                 product = Product.objects.get(id=item['id'])
                 POSOrderItem.objects.create(
-                    order=order,
-                    product=product,
-                    product_name=product.name,
-                    quantity=item['qty'],
-                    price=item['price'],
+                    order=order, product=product, product_name=product.name,
+                    quantity=item['qty'], price=item['price'],
                     total_price=float(item['qty']) * float(item['price'])
                 )
                 product.stock_qty -= int(item['qty'])
                 product.save()
 
-            # 🌟 TRIGGER: คำนวณคอมมิชชันทันที 🌟
-            if current_emp:
-                process_commission_logic(total_amount, current_emp, order_code)
+            if current_emp: process_commission_logic(total_amount, current_emp, order_code)
 
             return JsonResponse({'success': True, 'order_code': order_code})
         except Exception as e:
@@ -630,16 +575,10 @@ def pos_print_slip(request, order_code):
     tax_amount = grand_total - subtotal
 
     context = {
-        'inv': order,
-        'company': company,
-        'items': items,
-        'item_total': item_total,
-        'subtotal': subtotal,
-        'tax_amount': tax_amount,
-        'discount': Decimal('0.00'),
-        'shipping_cost': Decimal('0.00'),
-        'note': payment_note,
-        'is_pos': True
+        'inv': order, 'company': company, 'items': items,
+        'item_total': item_total, 'subtotal': subtotal, 'tax_amount': tax_amount,
+        'discount': Decimal('0.00'), 'shipping_cost': Decimal('0.00'),
+        'note': payment_note, 'is_pos': True
     }
     return render(request, 'sales/invoice_print.html', context)
 
@@ -653,7 +592,7 @@ def quotation_list(request):
         if status_filter == 'PENDING_PRODUCTION':
             queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True).distinct()
         elif status_filter == 'PENDING_CLOSING':
-            queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
+             queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
         elif status_filter == 'IN_PRODUCTION':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=True).distinct()
         else:
@@ -667,24 +606,12 @@ def quotation_list(request):
             valid_jobs = ProductionOrder.objects.filter(is_closed=True)
         else:
             valid_jobs = ProductionOrder.objects.filter(is_closed=False)
-            
             if prod_status_filter == 'IN_PROGRESS_5':
-                valid_jobs = valid_jobs.annotate(
-                    dept_count=Count('completed_departments')
-                ).filter(
-                    status='IN_PROGRESS',
-                    dept_count__lt=total_departments_count
-                )
+                valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count__lt=total_departments_count)
             elif prod_status_filter == 'IN_PROGRESS_6':
-                valid_jobs = valid_jobs.annotate(
-                    dept_count=Count('completed_departments')
-                ).filter(
-                    status='IN_PROGRESS',
-                    dept_count=total_departments_count
-                )
+                valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count=total_departments_count)
             else:
                  valid_jobs = valid_jobs.filter(status=prod_status_filter)
-            
         valid_job_ids = list(valid_jobs.values_list('id', flat=True))
         queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
 
@@ -694,10 +621,8 @@ def quotation_list(request):
 
     date_start = request.GET.get('start_date', '')
     date_end = request.GET.get('end_date', '')
-    if date_start:
-        queryset = queryset.filter(date__gte=date_start).distinct()
-    if date_end:
-        queryset = queryset.filter(date__lte=date_end).distinct()
+    if date_start: queryset = queryset.filter(date__gte=date_start).distinct()
+    if date_end: queryset = queryset.filter(date__lte=date_end).distinct()
 
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
@@ -707,18 +632,12 @@ def quotation_list(request):
     if request.user.is_superuser: is_manager = True
     elif current_emp:
         rank = current_emp.business_rank.lower()
-        if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower():
-            is_manager = True
+        if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower(): is_manager = True
 
     return render(request, 'sales/quotation_list.html', {
-        'page_obj': page_obj,
-        'search_query': search_query,
-        'is_manager': is_manager,
-        'status_filter': status_filter,
-        'prod_status_filter': prod_status_filter,
-        'date_start': date_start,
-        'date_end': date_end,
-        'total_departments_count': total_departments_count
+        'page_obj': page_obj, 'search_query': search_query, 'is_manager': is_manager,
+        'status_filter': status_filter, 'prod_status_filter': prod_status_filter,
+        'date_start': date_start, 'date_end': date_end, 'total_departments_count': total_departments_count
     })
 
 @login_required
@@ -740,10 +659,8 @@ def quotation_create(request):
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             qt.code = f"{prefix}-{seq:03d}"
 
-            if not qt.payment_terms:
-                qt.payment_terms = "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"
-            if not qt.note:
-                qt.note = "-ไม่มี-"
+            if not qt.payment_terms: qt.payment_terms = "-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง"
+            if not qt.note: qt.note = "-ไม่มี-"
 
             qt.save()
             messages.success(request, f"ร่างใบเสนอราคา {qt.code} เรียบร้อย กรุณาเพิ่มรายการสินค้า")
@@ -763,11 +680,7 @@ def quotation_edit(request, qt_id):
     products_list = []
     for p in products:
         products_list.append({
-            'id': p.id,
-            'name': p.name,
-            'code': p.code,
-            'sell_price': float(p.sell_price),
-            'category_id': getattr(p, 'category_id', None)
+            'id': p.id, 'name': p.name, 'code': p.code, 'sell_price': float(p.sell_price), 'category_id': getattr(p, 'category_id', None)
         })
 
     upsale_categories = UpsaleCategory.objects.filter(is_active=True)
@@ -776,10 +689,7 @@ def quotation_edit(request, qt_id):
     upsales_list = []
     for u in upsale_catalogs:
         upsales_list.append({
-            'id': u.id,
-            'name': u.name,
-            'default_price': float(u.default_price),
-            'category_id': u.category_id
+            'id': u.id, 'name': u.name, 'default_price': float(u.default_price), 'category_id': u.category_id
         })
 
     main_item_total = sum(i.quantity * i.unit_price for i in qt.items.all())
@@ -805,9 +715,7 @@ def quotation_edit(request, qt_id):
                 except Product.DoesNotExist: pass
 
             if item_name:
-                QuotationItem.objects.create(
-                    quotation=qt, product=product_obj, item_name=item_name, quantity=qty, unit_price=price
-                )
+                QuotationItem.objects.create(quotation=qt, product=product_obj, item_name=item_name, quantity=qty, unit_price=price)
                 calculate_totals(qt)
             return redirect('quotation_edit', qt_id=qt.id)
 
@@ -816,9 +724,7 @@ def quotation_edit(request, qt_id):
             qty = Decimal(request.POST.get('upsale_qty', '1'))
             price = Decimal(request.POST.get('upsale_price', '0').replace(',', ''))
             if desc:
-                QuotationUpsale.objects.create(
-                    quotation=qt, description=desc, quantity=qty, unit_price=price
-                )
+                QuotationUpsale.objects.create(quotation=qt, description=desc, quantity=qty, unit_price=price)
                 calculate_totals(qt)
             return redirect('quotation_edit', qt_id=qt.id)
 
@@ -845,13 +751,9 @@ def quotation_edit(request, qt_id):
                 return redirect('quotation_edit', qt_id=qt.id)
 
     return render(request, 'sales/quotation_edit.html', {
-        'qt': qt,
-        'main_categories': main_categories,
-        'upsale_categories': upsale_categories,
-        'products_json': json.dumps(products_list),
-        'upsales_json': json.dumps(upsales_list),
-        'item_total': item_total,
-        'balance_due': balance_due
+        'qt': qt, 'main_categories': main_categories, 'upsale_categories': upsale_categories,
+        'products_json': json.dumps(products_list), 'upsales_json': json.dumps(upsales_list),
+        'item_total': item_total, 'balance_due': balance_due
     })
 
 
@@ -923,7 +825,7 @@ def quotation_clone(request, qt_id):
     for upsale in old_qt.upsales.all():
         QuotationUpsale.objects.create(
             quotation=new_qt, description=upsale.description,
-             quantity=upsale.quantity, unit_price=upsale.unit_price, total_price=upsale.total_price
+            quantity=upsale.quantity, unit_price=upsale.unit_price, total_price=upsale.total_price
         )
 
     messages.success(request, f"📋 คัดลอกเอกสารสำเร็จ! (คุณกำลังอยู่ในเอกสารใหม่ อ้างอิงข้อมูลจากใบเดิม {old_qt.code})")
@@ -963,11 +865,9 @@ def quotation_cancel(request, qt_id):
 def quotation_print(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
     company = CompanyInfo.objects.first()
-
     main_total = sum(item.quantity * item.unit_price for item in qt.items.all())
     upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
     item_total = main_total + upsale_total
-
     return render(request, 'sales/quotation_print.html', {'qt': qt, 'company': company, 'item_total': item_total})
 
 @login_required
@@ -994,9 +894,7 @@ def api_search_customer(request):
     for c in customers:
         addr_parts = [c.address, f"ต.{c.sub_district}" if c.sub_district else "", f"อ.{c.district}" if c.district else "", f"จ.{c.province}" if c.province else "", c.zip_code]
         full_address = " ".join(filter(None, addr_parts))
-        results.append({
-             'id': c.id, 'name': c.name, 'code': c.code, 'address': full_address, 'tax_id': c.tax_id, 'phone': c.phone
-        })
+        results.append({'id': c.id, 'name': c.name, 'code': c.code, 'address': full_address, 'tax_id': c.tax_id, 'phone': c.phone})
     return JsonResponse({'results': results})
 
 @csrf_exempt
@@ -1014,16 +912,8 @@ def api_create_customer(request):
                 count = Customer.objects.count() + 1
                 code = f"C{count:04d}"
 
-            customer = Customer.objects.create(
-                name=name, code=code, phone=phone, tax_id=tax_id, address=address
-            )
-            return JsonResponse({
-                'success': True,
-                'customer': {
-                    'id': customer.id, 'name': customer.name, 'address': customer.address,
-                    'tax_id': customer.tax_id, 'phone': customer.phone
-                }
-            })
+            customer = Customer.objects.create(name=name, code=code, phone=phone, tax_id=tax_id, address=address)
+            return JsonResponse({'success': True, 'customer': {'id': customer.id, 'name': customer.name, 'address': customer.address, 'tax_id': customer.tax_id, 'phone': customer.phone}})
         except Exception as e:
             return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid Method'})
@@ -1031,7 +921,7 @@ def api_create_customer(request):
 @login_required
 def invoice_list(request):
     target_employees, _ = get_target_employees(request.user)
-    qs_invoice = get_sales_queryset(Invoice, request.user, target_employees)
+    qs_invoice = get_sales_queryset(Invoice, request.user, target_employees).prefetch_related('payment_history', 'quotation_ref__production_orders')
     qs_pos = get_sales_queryset(POSOrder, request.user, target_employees)
 
     search_query = request.GET.get('q', '')
@@ -1068,48 +958,77 @@ def invoice_list(request):
         'start_date': start_date, 'end_date': end_date, 'status_filter': status_filter
     })
 
+# 🌟 [UPDATE] สมองกลใหม่รองรับการจ่ายเงิน 100% หรือ บางส่วน (ดึงประวัติมาเช็ค)
 @login_required
 def confirm_payment(request, doc_type, doc_id):
     if doc_type == 'pos':
         obj = get_object_or_404(POSOrder, id=doc_id)
+        if obj.status != 'PAID':
+            obj.status = 'PAID'
+            obj.save()
+            sale_amt = getattr(obj, 'total_amount', getattr(obj, 'grand_total', 0))
+            if obj.employee:
+                process_commission_logic(sale_amt, obj.employee, obj.code)
+        messages.success(request, f"✅ ยืนยันรับชำระเงินเอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
     else:
         obj = get_object_or_404(Invoice, id=doc_id)
+        if obj.status == 'PENDING':
+            # 🌟 อัปเดตสลิปทั้งหมดที่ยัง PENDING อยู่ให้เป็น VERIFIED (บัญชีตรวจผ่าน)
+            pending_payments = obj.payment_history.filter(status='PENDING')
+            pending_payments.update(status='VERIFIED')
 
-    if obj.status != 'PAID':
-        obj.status = 'PAID'
-        obj.save()
-        # 🌟 TRIGGER: คำนวณคอมมิชชันเมื่อยืนยันยอดเงิน 🌟
-        sale_amt = getattr(obj, 'total_amount', getattr(obj, 'grand_total', 0))
-        if obj.employee:
-            process_commission_logic(sale_amt, obj.employee, obj.code)
-
-    messages.success(request, f"✅ ยืนยันรับชำระเงินเอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
+            if obj.balance_amount <= 0:
+                obj.status = 'PAID'
+                obj.save()
+                sale_amt = getattr(obj, 'total_amount', getattr(obj, 'grand_total', 0))
+                if obj.employee:
+                    process_commission_logic(sale_amt, obj.employee, obj.code)
+                messages.success(request, f"✅ ยืนยันรับชำระเงินครบ 100% เอกสาร {obj.code} ปิดการขายเรียบร้อยแล้ว!")
+            else:
+                obj.status = 'UNPAID'
+                obj.save()
+                messages.success(request, f"✅ ยืนยันการแบ่งชำระเงินเอกสาร {obj.code} เรียบร้อยแล้ว! (ยอดคงค้าง: {obj.balance_amount:,.2f} บาท)")
     return redirect('invoice_list')
 
+# 🌟 [UPDATE] บันทึกรับชำระเงินลงตาราง InvoicePayment แบบแยกย่อย
 @login_required
 def record_invoice_payment(request, inv_id):
     inv = get_object_or_404(Invoice, pk=inv_id)
     if request.method == 'POST':
         method = request.POST.get('payment_method', 'TRANSFER')
         date_str = request.POST.get('payment_date')
+        amount_str = request.POST.get('received_amount', '0').replace(',', '')
 
-        inv.payment_method = method
-        if date_str:
-            inv.payment_date = parse_date(date_str)
-        else:
-            inv.payment_date = timezone.now().date()
+        try:
+            amount = Decimal(amount_str)
+        except:
+            amount = Decimal('0.00')
 
-        if method == 'TRANSFER' and 'transfer_slip' in request.FILES:
-            inv.transfer_slip = request.FILES['transfer_slip']
-        elif method == 'CHECK':
-            inv.check_number = request.POST.get('check_number', '')
-            inv.check_bank = request.POST.get('check_bank', '')
-            if 'check_slip' in request.FILES:
-                inv.check_slip = request.FILES['check_slip']
+        if amount > 0:
+            # 1. สร้างประวัติรับเงิน
+            payment = InvoicePayment(
+                invoice=inv,
+                amount=amount,
+                payment_method=method,
+                payment_date=parse_date(date_str) if date_str else timezone.now().date()
+            )
+            if method == 'TRANSFER' and 'transfer_slip' in request.FILES:
+                payment.transfer_slip = request.FILES['transfer_slip']
+            elif method == 'CHECK':
+                payment.check_number = request.POST.get('check_number', '')
+                payment.check_bank = request.POST.get('check_bank', '')
+                if 'check_slip' in request.FILES:
+                    payment.check_slip = request.FILES['check_slip']
+            payment.save()
 
-        inv.status = 'PENDING'
-        inv.save()
-        messages.success(request, f"💰 บันทึกรับชำระเงินสำหรับเอกสาร {inv.code} เรียบร้อยแล้ว (รอการตรวจสอบยอดจากฝ่ายบัญชี)")
+            # 2. หักยอดเงินคงค้าง
+            inv.balance_amount -= amount
+            if inv.balance_amount < 0:
+                inv.balance_amount = Decimal('0.00')
+
+            inv.status = 'PENDING'
+            inv.save()
+            messages.success(request, f"💰 บันทึกรับชำระเงิน {amount:,.2f} บาท สำหรับเอกสาร {inv.code} สำเร็จ! (รอตรวจสอบยอดจากฝ่ายบัญชี)")
 
     return redirect('invoice_list')
 

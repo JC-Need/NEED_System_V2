@@ -120,7 +120,15 @@
                                 
                                 <td>
                                     <div class="fw-bold text-dark" style="font-family: 'Courier New', monospace;">{{ item.code }}</div>
-                                    <div class="text-muted small" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i> {{ item.created_at|date:"d/m/Y H:i" }}</div>
+                                    <div class="text-muted small mb-1" style="font-size: 0.75rem;"><i class="far fa-clock me-1"></i> {{ item.created_at|date:"d/m/Y H:i" }}</div>
+                                    {% if not item.total_amount %}
+                                        {% if item.quotation_ref %}
+                                            <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">QT:</span> {{ item.quotation_ref.code }}</div>
+                                            {% for job in item.quotation_ref.production_orders.all %}
+                                                <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">JOB:</span> {{ job.code }}</div>
+                                            {% endfor %}
+                                        {% endif %}
+                                    {% endif %}
                                 </td>
                                 
                                 <td>
@@ -133,18 +141,22 @@
                                     {% endif %}
                                  </td>
 
-                                <td class="text-center">
-                                    {% if item.employee.photo %}
-                                     <img src="{{ item.employee.photo.url }}" class="rounded-circle border" style="width: 32px; height: 32px; object-fit: cover;" title="{{ item.employee.first_name }}">
-                                    {% else %}
-                                        <div class="bg-light text-secondary rounded-circle d-inline-flex align-items-center justify-content-center border" style="width: 32px; height: 32px; font-size: 10px;" title="{{ item.employee.first_name }}">
-                                            {{ item.employee.first_name|slice:":2" }}
-                                        </div>
-                                    {% endif %}
+                                <td>
+                                    <div class="d-flex flex-column align-items-center justify-content-center">
+                                        {% if item.employee.photo %}
+                                         <img src="{{ item.employee.photo.url }}" class="rounded-circle border mb-1" style="width: 30px; height: 30px; object-fit: cover;">
+                                        {% else %}
+                                            <div class="bg-light text-secondary rounded-circle d-inline-flex align-items-center justify-content-center border mb-1" style="width: 30px; height: 30px; font-size: 10px;">
+                                                {{ item.employee.first_name|slice:":2" }}
+                                            </div>
+                                        {% endif %}
+                                        <div class="small fw-bold text-dark lh-sm">{{ item.employee.first_name|default:"-" }}</div>
+                                        <div class="text-muted lh-sm" style="font-size: 0.65rem;">{{ item.employee.department.name|default:"ไม่มีสาขา"|truncatechars:15 }}</div>
+                                    </div>
                                 </td>
 
                                 <td class="text-end">
-                                     <span class="fw-bold text-dark fs-6">
+                                    <span class="fw-bold text-dark fs-6">
                                         {% if item.total_amount %}
                                             {{ item.total_amount|intcomma }}
                                         {% else %}
@@ -155,72 +167,90 @@
 
                                 <td class="text-center">
                                     {% if item.status == 'PAID' %}
-                                         <span class="status-badge status-paid"><i class="fas fa-check-circle"></i> ชำระแล้ว</span>
+                                        <span class="status-badge status-paid"><i class="fas fa-check-circle"></i> ชำระแล้ว</span>
                                     {% elif item.status == 'PENDING' %}
-                                         <span class="status-badge status-pending"><i class="fas fa-hourglass-half"></i> รอตรวจสอบยอด</span>
+                                        <span class="status-badge status-pending"><i class="fas fa-hourglass-half"></i> รอตรวจสอบยอด</span>
                                     {% else %}
-                                         <span class="status-badge status-unpaid"><i class="fas fa-times-circle"></i> ยังไม่ชำระ</span>
+                                        <span class="status-badge status-unpaid"><i class="fas fa-times-circle"></i> ยังไม่ชำระ</span>
                                     {% endif %}
                                 </td>
 
                                 <td class="text-center">
-                                    {% if item.payment_method %}
+                                    {% if item.total_amount %}
                                         <div class="d-flex align-items-center justify-content-center gap-2">
                                             {% if item.payment_method == 'TRANSFER' %}
                                                 <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
                                                 {% if item.transfer_slip %}
-                                                    <img src="{{ item.transfer_slip.url }}" class="slip-thumbnail" loading="lazy" 
-                                                         data-bs-toggle="modal" data-bs-target="#slipModal" 
-                                                         onclick="document.getElementById('slipImageFull').src='{{ item.transfer_slip.url }}'" 
-                                                         title="คลิกเพื่อขยายรูปสลิป">
+                                                    <img src="{{ item.transfer_slip.url }}" class="slip-thumbnail" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.transfer_slip.url }}'">
                                                 {% endif %}
                                             {% elif item.payment_method == 'CASH' %}
                                                 <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
                                             {% elif item.payment_method == 'CHECK' %}
                                                 <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
                                                 {% if item.check_slip %}
-                                                    <img src="{{ item.check_slip.url }}" class="slip-thumbnail" loading="lazy" 
-                                                         data-bs-toggle="modal" data-bs-target="#slipModal" 
-                                                         onclick="document.getElementById('slipImageFull').src='{{ item.check_slip.url }}'" 
-                                                         title="คลิกเพื่อขยายรูปเช็ค">
+                                                    <img src="{{ item.check_slip.url }}" class="slip-thumbnail" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.check_slip.url }}'">
                                                 {% endif %}
                                             {% else %}
                                                 <span class="text-muted small">-</span>
                                             {% endif %}
                                         </div>
                                     {% else %}
-                                        {% if not item.total_amount and item.status != 'PAID' %}
+                                        {% if item.payment_history.all %}
+                                            <div class="d-flex flex-column gap-1 align-items-center mb-2">
+                                            {% for pay in item.payment_history.all %}
+                                                <div class="d-flex align-items-center gap-1">
+                                                    <span class="badge bg-light text-dark border" style="font-size: 0.7rem; min-width: 60px;">
+                                                        {% if pay.payment_method == 'TRANSFER' %}<i class="fas fa-mobile-alt text-info"></i>
+                                                        {% elif pay.payment_method == 'CASH' %}<i class="fas fa-money-bill-wave text-success"></i>
+                                                        {% else %}<i class="fas fa-money-check text-warning"></i>{% endif %}
+                                                        {{ pay.amount|intcomma }}
+                                                    </span>
+                                                    {% if pay.transfer_slip %}
+                                                        <img src="{{ pay.transfer_slip.url }}" class="slip-thumbnail" loading="lazy" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ pay.transfer_slip.url }}'">
+                                                    {% elif pay.check_slip %}
+                                                        <img src="{{ pay.check_slip.url }}" class="slip-thumbnail" loading="lazy" style="width: 25px; height: 25px;" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ pay.check_slip.url }}'">
+                                                    {% endif %}
+                                                    {% if pay.status == 'PENDING' %}
+                                                        <i class="fas fa-circle text-warning ms-1" style="font-size: 8px;" title="รอตรวจ"></i>
+                                                    {% else %}
+                                                        <i class="fas fa-check-circle text-success ms-1" style="font-size: 10px;" title="ตรวจแล้ว"></i>
+                                                    {% endif %}
+                                                </div>
+                                            {% endfor %}
+                                            </div>
+                                        {% endif %}
+
+                                        {% if item.status != 'PAID' %}
                                             {% if not 'บัญชี' in user.employee.department.name|default:'' and not 'Accounting' in user.employee.department.name|default:'' %}
-                                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold" 
-                                                        data-bs-toggle="modal" data-bs-target="#paymentModal{{ item.id }}">
-                                                    <i class="fas fa-hand-holding-usd me-1"></i> บันทึกรับเงิน
+                                                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold w-100" data-bs-toggle="modal" data-bs-target="#paymentModal{{ item.id }}">
+                                                    <i class="fas fa-plus"></i> เพิ่มรับชำระ
                                                 </button>
                                             {% else %}
-                                                <span class="badge bg-light text-muted border rounded-pill px-3 py-2"><i class="fas fa-hourglass-start me-1"></i> รอแนบสลิป</span>
+                                                {% if not item.payment_history.all %}
+                                                    <span class="badge bg-light text-muted border rounded-pill px-3 py-1"><i class="fas fa-hourglass-start me-1"></i> รอเซลล์แนบสลิป</span>
+                                                {% endif %}
                                             {% endif %}
-                                        {% else %}
-                                            <span class="text-muted small">-</span>
                                         {% endif %}
                                     {% endif %}
                                 </td>
 
-                                 <td class="text-center">
+                                <td class="text-center">
                                     {% if item.status == 'PENDING' %}
-                                         {% if user.is_superuser or 'บัญชี' in user.employee.department.name|default:'' or 'Accounting' in user.employee.department.name|default:'' %}
+                                        {% if user.is_superuser or 'บัญชี' in user.employee.department.name|default:'' or 'Accounting' in user.employee.department.name|default:'' %}
                                             {% if item.total_amount %}
                                                 <a href="{% url 'confirm_payment' 'pos' item.id %}" class="btn btn-sm btn-warning text-dark fw-bold border-0 px-3 shadow-sm w-100" onclick="return confirm('ยืนยันยอดเงินเข้าบัญชีเรียบร้อย?');" title="ยืนยันยอดเงิน">
                                                     <i class="fas fa-check-double me-1"></i> ยืนยันยอด
-                                                 </a>
+                                                </a>
                                             {% else %}
                                                 <a href="{% url 'confirm_payment' 'invoice' item.id %}" class="btn btn-sm btn-warning text-dark fw-bold border-0 px-3 shadow-sm w-100" onclick="return confirm('ยืนยันยอดเงินเข้าบัญชีเรียบร้อย?');" title="ยืนยันยอดเงิน">
                                                     <i class="fas fa-check-double me-1"></i> ยืนยันยอด
                                                 </a>
                                             {% endif %}
-                                         {% else %}
+                                        {% else %}
                                             <span class="text-muted small">-</span>
-                                         {% endif %}
+                                        {% endif %}
                                     {% else %}
-                                         <span class="text-muted small">-</span>
+                                        <span class="text-muted small">-</span>
                                     {% endif %}
                                 </td>
 
@@ -248,19 +278,34 @@
                                         <form method="POST" action="{% url 'record_invoice_payment' item.id %}" enctype="multipart/form-data">
                                             {% csrf_token %}
                                             <div class="modal-body p-4">
-                                                <div class="alert alert-primary py-2 small mb-4">
-                                                    เอกสารอ้างอิง: <strong>{{ item.code }}</strong><br>
-                                                    ยอดที่ต้องชำระ: <strong class="text-danger fs-6">{{ item.balance_amount|default:0|floatformat:2|intcomma }}</strong> บาท
+                                                
+                                                <div class="alert alert-primary py-3 mb-4 rounded-3 border-0">
+                                                    <div class="d-flex justify-content-between align-items-center border-bottom border-primary border-opacity-25 pb-2 mb-2">
+                                                        <span class="text-primary fw-bold">เอกสารอ้างอิง:</span>
+                                                        <strong class="text-dark fs-6">{{ item.code }}</strong>
+                                                    </div>
+                                                    <div class="d-flex justify-content-between align-items-center">
+                                                        <span class="text-primary fw-bold">ยอดค้างชำระ:</span>
+                                                        <strong class="text-danger fs-5">{{ item.balance_amount|default:0|floatformat:2|intcomma }} บาท</strong>
+                                                    </div>
+                                                </div>
+
+                                                <div class="mb-4">
+                                                    <label class="form-label fw-bold text-dark fs-6">จำนวนเงินที่รับชำระ (บาท)</label>
+                                                    <input type="text" name="received_amount" class="form-control form-control-lg text-end fw-bold text-success shadow-sm" 
+                                                           value="{{ item.balance_amount|default:0|floatformat:2|intcomma }}" 
+                                                           placeholder="ระบุจำนวนเงิน..." onfocus="this.select();" oninput="formatCurrencyInput(this)" required style="font-size: 1.25rem;">
+                                                    <small class="text-muted mt-2 d-block"><i class="fas fa-info-circle me-1"></i> ระบบดึงยอดค้างชำระมาให้อัตโนมัติ สามารถพิมพ์แก้ตัวเลขได้หากเป็นการแบ่งจ่าย</small>
                                                 </div>
 
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted">วันที่รับเงิน</label>
-                                                    <input type="text" name="payment_date" class="form-control datepicker" value="{% now 'Y-m-d' %}" required>
+                                                    <input type="text" name="payment_date" class="form-control datepicker bg-light" value="{% now 'Y-m-d' %}" required>
                                                 </div>
 
                                                 <div class="mb-3">
                                                     <label class="form-label fw-bold text-muted">ช่องทางรับเงิน</label>
-                                                    <select name="payment_method" id="paymentMethodSelect{{ item.id }}" class="form-select" onchange="togglePaymentFields('{{ item.id }}')">
+                                                    <select name="payment_method" id="paymentMethodSelect{{ item.id }}" class="form-select bg-light" onchange="togglePaymentFields('{{ item.id }}')">
                                                         <option value="TRANSFER">โอนเงินเข้าบัญชี</option>
                                                         <option value="CASH">เงินสด</option>
                                                         <option value="CHECK">เช็คธนาคาร</option>
@@ -270,7 +315,7 @@
                                                 <div id="transferFields{{ item.id }}">
                                                     <div class="mb-2">
                                                         <label class="form-label fw-bold text-muted">อัปโหลดสลิป</label>
-                                                        <input type="file" name="transfer_slip" class="form-control" accept="image/*">
+                                                        <input type="file" name="transfer_slip" class="form-control bg-light" accept="image/*">
                                                     </div>
                                                 </div>
 
@@ -278,22 +323,22 @@
                                                     <div class="row g-2 mb-2">
                                                         <div class="col-6">
                                                             <label class="form-label fw-bold text-muted">ธนาคาร</label>
-                                                            <input type="text" name="check_bank" class="form-control" placeholder="เช่น กสิกรไทย">
+                                                            <input type="text" name="check_bank" class="form-control bg-light" placeholder="เช่น กสิกรไทย">
                                                         </div>
                                                         <div class="col-6">
                                                             <label class="form-label fw-bold text-muted">เลขที่เช็ค</label>
-                                                            <input type="text" name="check_number" class="form-control" placeholder="ระบุเลขที่เช็ค">
+                                                            <input type="text" name="check_number" class="form-control bg-light" placeholder="ระบุเลขที่เช็ค">
                                                         </div>
                                                     </div>
                                                     <div class="mb-2">
                                                         <label class="form-label fw-bold text-muted">อัปโหลดหน้าเช็ค</label>
-                                                        <input type="file" name="check_slip" class="form-control" accept="image/*">
+                                                        <input type="file" name="check_slip" class="form-control bg-light" accept="image/*">
                                                     </div>
                                                 </div>
                                             </div>
                                             <div class="modal-footer bg-light border-0">
                                                 <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
-                                                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ยืนยันบันทึกรับชำระเงิน? (ยอดนี้จะรอการตรวจสอบจากฝ่ายบัญชีอีกครั้ง)')">บันทึกยอดรับชำระ</button>
+                                                <button type="submit" class="btn btn-primary rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ยืนยันบันทึกรับชำระเงิน?\n(ยอดนี้จะรอการตรวจสอบจากฝ่ายบัญชีอีกครั้ง)')">บันทึกยอดรับชำระ</button>
                                             </div>
                                         </form>
                                     </div>
@@ -347,13 +392,20 @@
         flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true, defaultDate: "today" });
     });
 
-    // โค้ดเหลือแค่นี้เลยค่ะ คลีนมากๆ
     function togglePaymentFields(itemId) {
         var method = document.getElementById('paymentMethodSelect' + itemId).value;
         document.getElementById('transferFields' + itemId).classList.add('d-none');
         document.getElementById('checkFields' + itemId).classList.add('d-none');
         if (method === 'TRANSFER') document.getElementById('transferFields' + itemId).classList.remove('d-none');
         else if (method === 'CHECK') document.getElementById('checkFields' + itemId).classList.remove('d-none');
+    }
+
+    function formatCurrencyInput(input) {
+        let val = input.value.replace(/[^0-9.]/g, '');
+        let parts = val.split('.');
+        if (parts.length > 2) parts = [parts[0], parts[1]];
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        input.value = parts.join('.');
     }
 </script>
 {% endblock %}

@@ -210,3 +210,38 @@ class QuotationUpsale(models.Model):
 
     def __str__(self):
         return f"{self.description} ({self.quotation.code})"
+
+# ==========================================
+# 🌟 [NEW] ตารางประวัติการชำระเงิน (รองรับการโอนหลายสลิป) 🌟
+# ==========================================
+class InvoicePayment(models.Model):
+    invoice = models.ForeignKey(Invoice, related_name='payment_history', on_delete=models.CASCADE, verbose_name="อ้างอิงบิล")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดชำระ")
+    payment_method = models.CharField(max_length=50, choices=Invoice.PAYMENT_CHOICES, verbose_name="วิธีชำระ")
+    payment_date = models.DateField(default=timezone.now, verbose_name="วันที่ชำระ")
+    
+    transfer_slip = models.ImageField(upload_to='invoice_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
+    check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
+    check_slip = models.ImageField(upload_to='invoice_checks/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายเช็ค")
+    
+    status = models.CharField(max_length=20, choices=[('PENDING', 'รอตรวจสอบ'), ('VERIFIED', 'ตรวจสอบแล้ว')], default='PENDING', verbose_name="สถานะการตรวจ")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # ระบบย่อขนาดรูปสลิปอัตโนมัติ
+        if self.transfer_slip:
+            try:
+                img = Image.open(self.transfer_slip.path)
+                if img.height > 800 or img.width > 800:
+                    img.thumbnail((800, 800))
+                    img.save(self.transfer_slip.path, quality=85, optimize=True)
+            except Exception: pass
+        if self.check_slip:
+            try:
+                img = Image.open(self.check_slip.path)
+                if img.height > 800 or img.width > 800:
+                    img.thumbnail((800, 800))
+                    img.save(self.check_slip.path, quality=85, optimize=True)
+            except Exception: pass
