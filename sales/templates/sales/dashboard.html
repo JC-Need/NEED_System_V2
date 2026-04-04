@@ -4,252 +4,123 @@
 {% block content %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
 <style>
     .flatpickr-input { background-color: #fff !important; cursor: pointer; font-size: 0.9rem; }
-    
-    .search-capsule .form-control:focus {
-        box-shadow: none; border-color: transparent;
-    }
-    .search-capsule {
-        border: 1px solid #e2e8f0; }
-    
-    .badge-pulse {
-        animation: pulse-animation 2s infinite; }
-    @keyframes pulse-animation {
-        0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
-        70% { box-shadow: 0 0 0 8px rgba(220, 53, 69, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
-    }
+    .chart-container { min-height: 400px; position: relative; width: 100%; }
+    .hover-scale { transition: transform 0.2s; cursor: pointer; }
+    .hover-scale:hover { transform: translateY(-3px); }
 </style>
 
 <div class="container-fluid py-4 px-4">
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold text-dark mb-0">
-                <i class="fas fa-chart-pie me-2 text-warning"></i>ภาพรวมฝ่ายขาย (Sales Overview)
+                <i class="fas fa-chart-line me-2 text-primary"></i>Sales Overview
                 <span id="sync-indicator" class="ms-2 fs-6 text-success" style="opacity: 0; transition: opacity 0.5s;"><i class="fas fa-sync-alt fa-spin"></i></span>
             </h2>
             <p class="text-muted mb-0">ข้อมูล <span id="label-date-range">วันนี้</span> | <span class="badge bg-info text-dark">{{ scope_title }}</span></p>
         </div>
-        
-        <div class="d-flex flex-wrap gap-2 align-items-center">
-            <div class="btn-group shadow-sm" role="group">
-                <a href="{% url 'quotation_list' %}" class="btn btn-outline-secondary fw-bold"><i class="fas fa-list-ul me-1"></i> ใบเสนอราคา</a>
-                <a href="{% url 'deposit_list' %}" class="btn btn-outline-info text-dark fw-bold"><i class="fas fa-hand-holding-usd me-1"></i> ใบมัดจำ</a>
-                <a href="{% url 'invoice_list' %}" class="btn btn-outline-primary fw-bold"><i class="fas fa-receipt me-1"></i> ใบขาย</a>
-            </div>
-            <div class="vr mx-2 bg-secondary opacity-25" style="width: 2px; height: 35px;"></div> 
-            
-            <a href="{% url 'quotation_create' %}" class="btn btn-dark rounded-pill shadow-sm px-3 fw-bold"><i class="fas fa-file-signature me-1"></i> สร้างใบเสนอราคา</a>
-            
-            <a href="{% url 'quotation_list' %}?status=PENDING_PRODUCTION" class="btn btn-success rounded-pill shadow-sm px-3 fw-bold position-relative">
-                <i class="fas fa-industry me-1"></i> สร้างใบสั่งผลิต
-                {% if pending_production_quotes > 0 %}
-                <span id="badge-pending-production" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light border-2 badge-pulse">
-                    {{ pending_production_quotes }}
-                </span>
-                {% else %}
-                <span id="badge-pending-production" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light border-2 d-none">
-                  0
-                </span>
-                {% endif %}
-            </a>
-            <a href="{% url 'sales_hub' %}" class="btn btn-primary rounded-pill shadow-sm px-3 fw-bold"><i class="fas fa-cash-register me-1"></i> เปิดบิลขาย / POS</a>
+        <div class="d-flex gap-2">
+            <a href="{% url 'quotation_create' %}" class="btn btn-dark rounded-pill px-3 fw-bold shadow-sm"><i class="fas fa-plus me-1"></i> ใบเสนอราคา</a>
+            <a href="{% url 'sales_hub' %}" class="btn btn-primary rounded-pill px-3 fw-bold shadow-sm"><i class="fas fa-cash-register me-1"></i> เปิดบิลขาย / POS</a>
         </div>
     </div>
 
     <div class="card border-0 shadow-sm rounded-4 mb-4 bg-white">
-        <div class="card-body p-3">
-            <div class="row g-3 align-items-center">
-                <div class="col-md-5 col-lg-5">
-                    <div class="d-flex flex-wrap gap-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill fw-bold px-4" onclick="setPresetDate('today')">วันนี้</button>
-                        <button type="button" class="btn btn-outline-primary btn-sm rounded-pill fw-bold px-4" onclick="setPresetDate('this_month')">เดือนนี้</button>
-                        <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill fw-bold px-4" onclick="setPresetDate('last_month')">เดือนก่อนหน้า</button>
-                    </div>
+        <div class="card-body p-3 d-flex justify-content-between align-items-center flex-wrap gap-3">
+            <div class="btn-group btn-group-sm rounded-pill shadow-sm overflow-hidden">
+                <button class="btn btn-outline-primary px-3 fw-bold" onclick="setPresetDate('today')">วันนี้</button>
+                <button class="btn btn-outline-primary px-3 fw-bold" onclick="setPresetDate('this_month')">เดือนนี้</button>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <div class="input-group input-group-sm shadow-sm rounded-3 overflow-hidden" style="width: 300px;">
+                    <span class="input-group-text bg-white border-0 ps-3"><i class="far fa-calendar-alt text-muted"></i></span>
+                    <input type="text" id="filter_start" class="form-control border-0 text-center datepicker fw-bold" value="{{ start_date }}">
+                    <span class="input-group-text bg-white border-0 px-1">-</span>
+                    <input type="text" id="filter_end" class="form-control border-0 text-center datepicker fw-bold" value="{{ end_date }}">
                 </div>
-                
-                <div class="col-md-7 col-lg-7">
-                    <div class="input-group search-capsule rounded-pill overflow-hidden shadow-sm">
-                        <span class="input-group-text bg-white border-0 text-muted ps-4"><i class="far fa-calendar-alt"></i></span>
-                        <input type="text" id="filter_start" class="form-control border-0 text-center datepicker fw-bold text-primary" placeholder="เริ่มต้น" value="{{ start_date }}">
-                        <span class="input-group-text bg-white border-0 text-muted px-1">-</span>
-                        <input type="text" id="filter_end" class="form-control border-0 text-center datepicker fw-bold text-primary" placeholder="สิ้นสุด" value="{{ end_date }}">
-                        <button type="button" class="btn btn-success fw-bold px-4 text-uppercase" onclick="fetchDashboardData(true)" style="letter-spacing: 1px;">
-                            <i class="fas fa-search me-1"></i> ค้นหา
-                        </button>
-                    </div>
-                </div>
+                <button class="btn btn-sm btn-success rounded-3 px-3 fw-bold" onclick="fetchDashboardData(true)"><i class="fas fa-search me-1"></i>ค้นหา</button>
             </div>
         </div>
     </div>
 
     <div class="row g-3 mb-4">
-        
-        <div class="col-lg-4 col-md-12">
+        <div class="col-lg-4">
             <div class="card border-0 shadow-sm h-100 rounded-4 overflow-hidden" style="background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white;">
-                <div class="card-body p-4 position-relative">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <p class="mb-0 opacity-75 text-uppercase small fw-bold">ยอดขายรวม (Total Sales)</p>
-                            <h2 id="val-total-sales" class="fw-bold display-6 mb-0 mt-2">฿{{ total_sales_today|default:"0"|floatformat:2|intcomma }}</h2>
-                        </div>
-                        <div class="bg-white bg-opacity-25 p-3 rounded-circle">
-                            <i class="fas fa-coins fa-2x text-white"></i>
-                        </div>
-                    </div>
+                <div class="card-body p-4">
+                    <p class="mb-0 opacity-75 text-uppercase small fw-bold">ยอดขายรวมสุทธิ</p>
+                    <h2 id="val-total-sales" class="fw-bold display-6 mb-0 mt-2">฿0.00</h2>
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-2 col-md-3 col-6">
-            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white">
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white hover-scale" onclick="location.href='{% url 'invoice_list' %}'">
                 <div class="card-body p-3">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="me-1">
-                            <h6 class="text-secondary fw-bold mb-1 lh-sm" style="font-size: 0.85rem;">ใบขายวันนี้<br>&nbsp;</h6>
-                            <h4 id="val-total-orders" class="fw-bold mb-0 text-dark">{{ total_orders_today|default:"0"|intcomma }} <small class="text-muted" style="font-size: 0.65rem;">บิล</small></h4>
-                        </div>
-                        <div class="bg-success bg-opacity-10 p-2 rounded-circle">
-                            <i class="fas fa-receipt fa-lg text-success"></i>
-                        </div>
-                    </div>
-                    <a href="{% url 'invoice_list' %}" class="btn btn-sm btn-outline-success rounded-pill w-100 mt-2 fw-bold" style="font-size: 0.75rem;">
-                        ตรวจสอบบิล <i class="fas fa-arrow-right ms-1"></i>
-                    </a>
+                    <small class="text-muted fw-bold">ใบขายวันนี้</small>
+                    <h4 id="val-total-orders" class="fw-bold mb-0 text-dark mt-1">0 <small class="text-muted" style="font-size: 0.6rem;">บิล</small></h4>
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-2 col-md-3 col-6">
-            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white">
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white hover-scale" onclick="location.href='{% url 'quotation_list' %}?status=DRAFT'">
                 <div class="card-body p-3">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="me-1">
-                            <h6 class="text-secondary fw-bold mb-1 lh-sm" style="font-size: 0.85rem;">ใบเสนอราคา<br>(รออนุมัติ)</h6>
-                            <h4 id="val-pending-approval" class="fw-bold mb-0 text-danger">{{ pending_approval_quotes|default:"0"|intcomma }} <small class="text-muted" style="font-size: 0.65rem;">ใบ</small></h4>
-                        </div>
-                        <div class="bg-info bg-opacity-10 p-2 rounded-circle">
-                            <i class="fas fa-user-clock fa-lg text-info"></i>
-                        </div>
-                    </div>
-                    <a href="{% url 'quotation_list' %}?status=DRAFT" class="btn btn-sm btn-outline-info rounded-pill w-100 mt-2 fw-bold" style="font-size: 0.75rem;">
-                        เช็คสถานะ <i class="fas fa-arrow-right ms-1"></i>
-                    </a>
+                    <small class="text-muted fw-bold text-danger">ใบเสนอราคา (รออนุมัติ)</small>
+                    <h4 id="val-pending-approval" class="fw-bold mb-0 text-danger mt-1">0 <small class="text-muted" style="font-size: 0.6rem;">ใบ</small></h4>
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-2 col-md-3 col-6">
-            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white">
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white hover-scale" onclick="location.href='{% url 'quotation_list' %}?status=PENDING_CLOSING'">
                 <div class="card-body p-3">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="me-1">
-                            <h6 class="text-secondary fw-bold mb-1 lh-sm" style="font-size: 0.85rem;">ใบเสนอราคา<br>(รอปิดการขาย)</h6>
-                            <h4 id="val-pending-closing" class="fw-bold mb-0 text-dark">{{ pending_closing_quotes|default:"0"|intcomma }} <small class="text-muted" style="font-size: 0.65rem;">ใบ</small></h4>
-                        </div>
-                        <div class="bg-warning bg-opacity-10 p-2 rounded-circle">
-                            <i class="fas fa-file-signature fa-lg text-warning"></i>
-                        </div>
-                    </div>
-                    <a href="{% url 'quotation_list' %}?status=PENDING_CLOSING" class="btn btn-sm btn-outline-warning rounded-pill w-100 mt-2 fw-bold text-dark" style="font-size: 0.75rem;">
-                        ติดตามลูกค้า <i class="fas fa-arrow-right ms-1"></i>
-                    </a>
+                    <small class="text-muted fw-bold">รอปิดการขาย</small>
+                    <h4 id="val-pending-closing" class="fw-bold mb-0 text-dark mt-1">0 <small class="text-muted" style="font-size: 0.6rem;">ใบ</small></h4>
                 </div>
             </div>
         </div>
-
-        <div class="col-lg-2 col-md-3 col-6">
-            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white">
+        <div class="col-lg-2 col-md-4 col-6">
+            <div class="card border-0 shadow-sm h-100 rounded-4 bg-white hover-scale" onclick="location.href='{% url 'quotation_list' %}?status=IN_PRODUCTION'">
                 <div class="card-body p-3">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="me-1">
-                            <h6 class="text-secondary fw-bold mb-1 lh-sm" style="font-size: 0.85rem;">ใบเสนอราคา<br>(ระหว่างผลิต)</h6>
-                            <h4 id="val-in-production" class="fw-bold mb-0 text-dark">{{ in_production_quotes|default:"0"|intcomma }} <small class="text-muted" style="font-size: 0.65rem;">ใบ</small></h4>
-                        </div>
-                        <div class="p-2 rounded-circle" style="background-color: rgba(111, 66, 193, 0.1);">
-                            <i class="fas fa-industry fa-lg" style="color: #6f42c1;"></i>
-                        </div>
-                    </div>
-                    <a href="{% url 'quotation_list' %}?status=IN_PRODUCTION" class="btn btn-sm rounded-pill w-100 mt-2 fw-bold" style="color: #6f42c1; border: 1px solid #6f42c1; font-size: 0.75rem;">
-                        ติดตามผลิต <i class="fas fa-arrow-right ms-1"></i>
-                    </a>
+                    <small class="text-muted fw-bold">ระหว่างผลิต</small>
+                    <h4 id="val-in-production" class="fw-bold mb-0 text-dark mt-1">0 <small class="text-muted" style="font-size: 0.6rem;">ใบ</small></h4>
                 </div>
             </div>
         </div>
-
     </div>
 
-    <div class="row g-4">
-        <div class="col-lg-8">
-            <div class="card border-0 shadow-sm rounded-4 h-100">
-                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="fw-bold mb-0"><i class="fas fa-history me-2 text-primary"></i>รายการขาย (Live Feed)</h6>
-                    <a href="{% url 'export_sales_excel' %}" class="btn btn-sm btn-light text-success fw-bold"><i class="fas fa-file-excel me-1"></i>Export Excel</a>
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-chart-line me-2 text-success"></i><span id="chart-title-text">กำลังโหลด...</span></h6>
+                    <div class="btn-group btn-group-sm rounded-pill p-1 bg-light border shadow-sm">
+                        <button type="button" class="btn btn-white rounded-pill border-0 px-3 fw-bold active" id="btnGroupDay" onclick="updateChartGroup('day')">รายวัน (Trend)</button>
+                        <button type="button" class="btn btn-light rounded-pill border-0 px-3 fw-bold" id="btnGroupMonth" onclick="updateChartGroup('month')">รายเดือน (Ranking)</button>
+                    </div>
                 </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="bg-light text-muted small text-uppercase">
-                                <tr>
-                                    <th class="ps-4">เวลา</th>
-                                    <th>เลขที่เอกสาร</th>
-                                    <th>พนักงาน</th>
-                                    <th>ยอดเงิน</th>
-                                    <th>สถานะ</th>
-                                </tr>
-                            </thead>
-                             <tbody id="val-recent-sales">
-                                {% for item in recent_sales %}
-                                <tr>
-                                     <td class="ps-4 text-muted small">
-                                        {% if item.created_at.date == today %}{{ item.created_at|date:"H:i" }}{% else %}{{ item.created_at|date:"d/m/Y" }}{% endif %}
-                                     </td>
-                                    <td>
-                                        <span class="fw-bold text-dark">{{ item.code }}</span>
-                                        {% if 'POS' in item.code %}
-                                            <span class="badge bg-warning text-dark border ms-1" style="font-size: 0.6rem;">หน้าร้าน</span>
-                                         {% else %}
-                                            <span class="badge bg-info text-dark border ms-1" style="font-size: 0.6rem;">ใบกำกับ</span>
-                                         {% endif %}
-                                    </td>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            {% if item.employee.photo %}
-                                                 <img src="{{ item.employee.photo.url }}" class="rounded-circle me-2" style="width: 25px; height: 25px; object-fit: cover;">
-                                            {% else %}
-                                                <div class="bg-secondary rounded-circle me-2 d-flex align-items-center justify-content-center text-white" style="width: 25px; height: 25px; font-size: 10px;">{{ item.employee.first_name|slice:":1" }}</div>
-                                            {% endif %}
-                                            <span class="small">{{ item.employee.first_name }}</span>
-                                        </div>
-                                    </td>
-                                    <td class="fw-bold text-success">
-                                        {% if 'POS' in item.code %}
-                                            +{{ item.total_amount|intcomma }}
-                                        {% else %}
-                                            +{{ item.grand_total|intcomma }}
-                                        {% endif %}
-                                    </td>
-                                    <td><span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2">สำเร็จ</span></td>
-                                </tr>
-                                {% empty %}
-                                    <tr><td colspan="5" class="text-center py-4 text-muted">ยังไม่มีรายการขายในช่วงเวลานี้</td></tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="mainSalesChart"></canvas>
                     </div>
                 </div>
             </div>
         </div>
+    </div>
 
-        <div class="col-lg-4">
-            <div class="card border-0 shadow-sm rounded-4 h-100 bg-white">
-                <div class="card-body p-4">
-                    <h6 class="text-uppercase text-dark fw-bold mb-1"><i class="fas fa-chart-bar me-2 text-primary"></i>ยอดขายแยกตามทีม</h6>
-                    <p class="text-muted small mb-4">เปรียบเทียบผลงาน Sales Team (ตามช่วงเวลา)</p>
-                    <div style="height: 300px; width: 100%;">
-                        <canvas id="teamSalesChart"></canvas>
-                    </div>
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm rounded-4 bg-white">
+                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-history me-2 text-warning"></i>รายการขายล่าสุด (Live Feed)</h6>
+                    <a href="{% url 'export_sales_excel' %}" class="btn btn-sm btn-light text-success fw-bold"><i class="fas fa-file-excel me-1"></i>Excel</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light text-secondary small text-uppercase">
+                            <tr><th class="ps-4">เวลา</th><th>เลขที่เอกสาร / อ้างอิง</th><th>พนักงาน / สาขา</th><th class="text-end">ยอดเงิน</th><th class="text-center">สถานะ</th></tr>
+                        </thead>
+                        <tbody id="val-recent-sales"></tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -258,137 +129,84 @@
 
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script>
-    let teamChart;
+    let mainChart;
+    let currentGroupBy = 'day';
     let fpStart, fpEnd;
 
     document.addEventListener("DOMContentLoaded", function() {
-        fpStart = flatpickr("#filter_start", { dateFormat: "Y-m-d", altInput: true, altFormat: "d-m-Y", allowInput: true, defaultDate: "today" });
-        fpEnd = flatpickr("#filter_end", { dateFormat: "Y-m-d", altInput: true, altFormat: "d-m-Y", allowInput: true, defaultDate: "today" });
-
-        const ctx = document.getElementById('teamSalesChart').getContext('2d');
-        teamChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: {{ chart_labels|safe }},
-                datasets: [{
-                    label: 'ยอดขาย (บาท)',
-                    data: {{ chart_data|safe }},
-                    backgroundColor: 'rgba(54, 162, 235, 0.7)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1,
-                    borderRadius: 6,
-                    barPercentage: 0.6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: { beginAtZero: true, grid: { borderDash: [5, 5], color: '#f0f0f0' }, ticks: { callback: function(value) { return '฿' + value.toLocaleString(); }, font: { family: 'Sarabun', size: 11 } } },
-                    x: { grid: { display: false }, ticks: { font: { family: 'Sarabun', size: 12, weight: 'bold' } } }
-                },
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { backgroundColor: 'rgba(0, 0, 0, 0.8)', titleFont: { family: 'Sarabun', size: 13 }, bodyFont: { family: 'Sarabun', size: 14, weight: 'bold' }, padding: 10, callbacks: { label: function(context) { return 'ยอดขาย: ฿' + context.parsed.y.toLocaleString('en-US', {minimumFractionDigits: 2}); } } }
-                }
-            }
-        });
-        updateDateLabel();
+        fpStart = flatpickr("#filter_start", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+        fpEnd = flatpickr("#filter_end", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+        initChart('line'); // เริ่มต้นด้วย Line Chart สำหรับเทรนด์รายวัน
+        fetchDashboardData();
     });
 
-    function setPresetDate(type) {
-        let start, end;
-        const today = new Date();
-        if (type === 'today') {
-            start = today;
-            end = today;
-        } else if (type === 'this_month') {
-            start = new Date(today.getFullYear(), today.getMonth(), 1);
-            end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        } else if (type === 'last_month') {
-            start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-            end = new Date(today.getFullYear(), today.getMonth(), 0);
-        }
-
-        let startStr = new Date(start.getTime() - (start.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-        let endStr = new Date(end.getTime() - (end.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-
-        fpStart.setDate(startStr);
-        fpEnd.setDate(endStr);
+    function initChart(type) {
+        const ctx = document.getElementById('mainSalesChart').getContext('2d');
+        if (mainChart) mainChart.destroy();
         
+        mainChart = new Chart(ctx, {
+            type: type,
+            data: { labels: [], datasets: [{ 
+                label: 'ยอดขาย (บาท)', data: [], 
+                backgroundColor: type === 'line' ? 'rgba(78, 115, 223, 0.1)' : 'rgba(78, 115, 223, 0.85)',
+                borderColor: 'rgba(78, 115, 223, 1)',
+                borderWidth: 2, fill: type === 'line', tension: 0.3, borderRadius: 8
+            }] },
+            options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, ticks: { callback: v => '฿' + v.toLocaleString() } } } }
+        });
+    }
+
+    function setPresetDate(type) {
+        const today = new Date();
+        let start, end;
+        if (type === 'today') { start = today; end = today; }
+        else { start = new Date(today.getFullYear(), today.getMonth(), 1); end = new Date(today.getFullYear(), today.getMonth() + 1, 0); }
+        fpStart.setDate(start); fpEnd.setDate(end);
         fetchDashboardData(true);
     }
 
-    function updateDateLabel() {
-        let s = document.getElementById('filter_start').value;
-        let e = document.getElementById('filter_end').value;
-        
-        let today = new Date();
-        let todayStr = new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
-        let label = document.getElementById('label-date-range');
-        if(s === todayStr && e === todayStr) { 
-            label.innerText = "วันนี้";
-        } else { 
-            label.innerText = `ตั้งแต่วันที่ ${fpStart.altInput.value} ถึง ${fpEnd.altInput.value}`;
-        }
+    function updateChartGroup(type) {
+        currentGroupBy = type;
+        document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active', 'btn-white', 'btn-light'));
+        document.getElementById(type === 'day' ? 'btnGroupDay' : 'btnGroupMonth').classList.add('active', 'btn-white');
+        document.getElementById(type === 'day' ? 'btnGroupMonth' : 'btnGroupDay').classList.add('btn-light');
+        fetchDashboardData();
     }
 
     function fetchDashboardData(isManual = false) {
         const syncIcon = document.getElementById('sync-indicator');
-        let startDate = document.getElementById('filter_start').value;
-        let endDate = document.getElementById('filter_end').value;
-
-        if (isManual) updateDateLabel();
+        if (syncIcon) syncIcon.style.opacity = '1';
         
-        let url = `{% url 'api_dashboard_data' %}?start_date=${startDate}&end_date=${endDate}`;
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (syncIcon) syncIcon.style.opacity = '1';
+        const start = document.getElementById('filter_start').value;
+        const end = document.getElementById('filter_end').value;
+        const url = `{% url 'api_dashboard_data' %}?start_date=${start}&end_date=${end}&group_by=${currentGroupBy}`;
 
-                document.getElementById('val-total-sales').innerText = '฿' + data.total_sales_today.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                
-                document.getElementById('val-total-orders').innerHTML = (data.total_orders_today || 0).toLocaleString() + ' <small class="text-muted" style="font-size: 0.65rem;">บิล</small>';
-                // 🌟 ตัวเลขจาก API ก็แสดงสีแดงเมื่อรีเฟรชออโต้ด้วยค่ะ 🌟
-                document.getElementById('val-pending-approval').innerHTML = (data.pending_approval_quotes || 0).toLocaleString() + ' <small class="text-muted" style="font-size: 0.65rem;">ใบ</small>';
-                document.getElementById('val-pending-closing').innerHTML = (data.pending_closing_quotes || 0).toLocaleString() + ' <small class="text-muted" style="font-size: 0.65rem;">ใบ</small>';
-                let valInProd = document.getElementById('val-in-production');
-                if (valInProd) valInProd.innerHTML = (data.in_production_quotes || 0).toLocaleString() + ' <small class="text-muted" style="font-size: 0.65rem;">ใบ</small>';
-                let badgeProd = document.getElementById('badge-pending-production');
-                if (badgeProd) {
-                    badgeProd.innerText = data.pending_production_quotes;
-                    if (data.pending_production_quotes > 0) {
-                        badgeProd.classList.remove('d-none');
-                        badgeProd.classList.add('badge-pulse');
-                    } else {
-                        badgeProd.classList.add('d-none');
-                        badgeProd.classList.remove('badge-pulse');
-                    }
-                }
+        fetch(url).then(r => r.json()).then(data => {
+            document.getElementById('val-total-sales').innerText = '฿' + data.total_sales.toLocaleString(undefined, {minimumFractionDigits:2});
+            document.getElementById('val-total-orders').innerText = data.total_orders_today;
+            document.getElementById('val-pending-approval').innerText = data.pending_approval;
+            document.getElementById('val-pending-closing').innerText = data.pending_closing;
+            document.getElementById('val-in-production').innerText = data.in_production;
 
-                let feedHtml = '';
-                if (data.recent_sales.length > 0) {
-                    data.recent_sales.forEach(item => {
-                        let badge = item.is_pos ? '<span class="badge bg-warning text-dark border ms-1" style="font-size: 0.6rem;">หน้าร้าน</span>' : '<span class="badge bg-info text-dark border ms-1" style="font-size: 0.6rem;">ใบกำกับ</span>';
-                        let empHtml = item.employee_photo ? 
-                        `<img src="${item.employee_photo}" class="rounded-circle me-2" style="width: 25px; height: 25px; object-fit: cover;">` : `<div class="bg-secondary rounded-circle me-2 d-flex align-items-center justify-content-center text-white" style="width: 25px; height: 25px; font-size: 10px;">${item.employee_initial}</div>`;
-                        feedHtml += `<tr><td class="ps-4 text-muted small">${item.time}</td><td><span class="fw-bold text-dark">${item.code}</span> ${badge}</td><td><div class="d-flex align-items-center">${empHtml}<span class="small">${item.employee_name}</span></div></td><td class="fw-bold text-success">+${item.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td><td><span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2">สำเร็จ</span></td></tr>`;
-                    });
-                } else {
-                    feedHtml = '<tr><td colspan="5" class="text-center py-4 text-muted">ยังไม่มีรายการขายในช่วงเวลานี้</td></tr>';
-                }
-                document.getElementById('val-recent-sales').innerHTML = feedHtml;
-                if(teamChart) {
-                    teamChart.data.labels = data.chart_labels;
-                    teamChart.data.datasets[0].data = data.chart_data;
-                    teamChart.update();
-                }
+            // 🌟 ตรวจสอบและสลับประเภทกราฟ
+            if (mainChart.config.type !== data.chart_type) {
+                initChart(data.chart_type);
+            }
+            document.getElementById('chart-title-text').innerText = data.chart_title;
+            mainChart.data.labels = data.chart_labels;
+            mainChart.data.datasets[0].data = data.chart_data;
+            mainChart.update();
 
-                setTimeout(() => { if(syncIcon) syncIcon.style.opacity = '0'; }, 1000);
-            })
-            .catch(error => console.error('Update failed:', error));
+            let html = '';
+            data.recent_sales.forEach(i => {
+                let badge = i.is_pos ? '<span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem">POS</span>' : '<span class="badge bg-info text-dark ms-1" style="font-size:0.6rem">INV</span>';
+                let photo = i.employee_photo ? `<img src="${i.employee_photo}" class="rounded-circle me-2" style="width:25px;height:25px;object-fit:cover;">` : `<div class="bg-secondary text-white rounded-circle me-2 d-inline-flex align-items-center justify-content-center" style="width:25px;height:25px;font-size:10px;">${i.employee_initial}</div>`;
+                html += `<tr><td class="ps-4 text-muted small">${i.time}</td><td><div class="fw-bold text-dark">${i.code} ${badge}</div><div class="small text-muted" style="font-size:0.7rem">QT: ${i.qt_code} | JOB: ${i.job_code}</div></td><td><div class="d-flex align-items-center">${photo}<div><div class="fw-bold small">${i.employee_name}</div><div class="text-muted" style="font-size:0.6rem">${i.employee_branch}</div></div></div></td><td class="text-end fw-bold text-success">+฿${i.amount.toLocaleString()}</td><td class="text-center"><span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2">สำเร็จ</span></td></tr>`;
+            });
+            document.getElementById('val-recent-sales').innerHTML = html || '<tr><td colspan="5" class="text-center py-5 text-muted">ไม่พบข้อมูล</td></tr>';
+            if (syncIcon) setTimeout(() => syncIcon.style.opacity = '0', 800);
+        });
     }
-
-    setInterval(() => fetchDashboardData(false), 60000);
+    setInterval(fetchDashboardData, 60000);
 </script>
 {% endblock %}

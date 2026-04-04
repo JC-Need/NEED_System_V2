@@ -33,8 +33,6 @@ class CompanyInfo(models.Model):
     logo = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้")
     login_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="รูปหน้า Login")
     navbar_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้บนแถบเมนู")
-
-    # ✅ เพิ่มตราประทับกลับเข้าไปครับ
     seal = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="ตราประทับบริษัท (Seal)")
 
     class Meta: verbose_name_plural = "1. ตั้งค่าข้อมูลบริษัท"
@@ -63,7 +61,9 @@ class Customer(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta: verbose_name_plural = "2. ฐานข้อมูลลูกค้า"; ordering = ['-created_at']
+    class Meta: 
+        verbose_name_plural = "2. ฐานข้อมูลลูกค้า"
+        ordering = ['-created_at']
     def __str__(self): return f"{self.code} - {self.name}"
     def save(self, *args, **kwargs):
         if not self.code:
@@ -90,11 +90,10 @@ class Supplier(models.Model):
         return f"{self.code} - {self.name}"
 
     def save(self, *args, **kwargs):
-        if not self.code:  # ถ้ารหัสว่างเปล่า ให้เริ่มรันเลขใหม่
+        if not self.code:  
             last_supplier = Supplier.objects.filter(code__startswith='SUP-').order_by('code').last()
             if last_supplier and last_supplier.code:
                 try:
-                    # ตัดเอาเฉพาะตัวเลขด้านหลังมา +1
                     last_num = int(last_supplier.code.split('-')[1])
                     new_num = last_num + 1
                 except (IndexError, ValueError):
@@ -102,5 +101,20 @@ class Supplier(models.Model):
             else:
                 new_num = 1
             self.code = f"SUP-{new_num:03d}"
+        super().save(*args, **kwargs)
 
-        super().save(*args, **kwargs) # ★ 2 บรรทัดที่หายไปคือตรงนี้ครับ ★
+# ==========================================
+# 🌟 [NEW] ส่วนที่ 5: เรทค่าจัดส่ง (Shipping Rate) 🌟
+# ==========================================
+class ShippingRate(models.Model):
+    origin_branch = models.CharField(max_length=100, choices=[('บางพระ', 'บางพระ (ชลบุรี)'), ('นครปฐม', 'นครปฐม'), ('อยุธยา', 'อยุธยา')], verbose_name="สาขาต้นทาง (ผลิต)")
+    destination_province = models.CharField(max_length=100, verbose_name="จังหวัดปลายทาง")
+    price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ค่าขนส่งมาตรฐาน")
+
+    class Meta:
+        verbose_name = "ตั้งค่าเรทค่าขนส่ง"
+        verbose_name_plural = "4. ตั้งค่าเรทค่าขนส่ง"
+        unique_together = ('origin_branch', 'destination_province') # ป้องกันการตั้งราคาซ้ำซ้อนในสาขาเดียวกัน
+        
+    def __str__(self):
+        return f"จาก {self.origin_branch} -> ส่ง {self.destination_province} : ฿{self.price}"

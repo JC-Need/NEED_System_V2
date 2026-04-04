@@ -28,6 +28,7 @@
         <div>
             <a href="{% url 'quotation_list' %}" class="btn btn-light border shadow-sm rounded-pill px-3 btn-sm fw-bold"><i class="fas fa-chevron-left me-1"></i> กลับ</a>
             <a href="{% url 'quotation_clone' qt.id %}" class="btn btn-info shadow-sm rounded-pill px-3 ms-2 btn-sm fw-bold text-white"><i class="fas fa-copy me-1"></i> คัดลอกสร้างใบใหม่</a>
+            
             {% if qt.status != 'CANCELLED' %}
             <a href="{% url 'quotation_print' qt.id %}" target="_blank" class="btn btn-primary shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold"><i class="fas fa-print me-1"></i> พิมพ์ / ตัวอย่าง</a>
             {% endif %}
@@ -247,6 +248,44 @@
                         {% csrf_token %}
                         <div class="row">
                             <div class="col-lg-7 border-end pe-lg-4 pb-3 pb-lg-0">
+                                
+                                <div class="bg-success bg-opacity-10 border border-success border-opacity-25 rounded p-3 mb-3">
+                                    <label class="text-success fw-bold small mb-2"><i class="fas fa-truck-moving me-1"></i> ระบบประเมินและคำนวณค่าจัดส่งอัตโนมัติ</label>
+                                    <div class="row g-2 mb-2">
+                                        <div class="col-md-4">
+                                            <select name="shipping_origin" id="shipping_origin" class="form-select form-select-sm border-success" {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                                <option value="">-- สาขาต้นทาง --</option>
+                                                <option value="บางพระ" {% if qt.shipping_origin == 'บางพระ' %}selected{% endif %}>บางพระ</option>
+                                                <option value="นครปฐม" {% if qt.shipping_origin == 'นครปฐม' %}selected{% endif %}>นครปฐม</option>
+                                                <option value="อยุธยา" {% if qt.shipping_origin == 'อยุธยา' %}selected{% endif %}>อยุธยา</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <select id="shipping_region" class="form-select form-select-sm border-success" {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                                <option value="">-- เลือกภาค --</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <select name="shipping_province" id="shipping_province" class="form-select form-select-sm select2 border-success" {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                                <option value="">-- ระบุจังหวัดปลายทาง --</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-3 mt-3">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="shipping_is_island" id="shipping_is_island" {% if qt.shipping_is_island %}checked{% endif %} {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                            <label class="form-check-label fw-bold text-dark small" style="font-size: 11px;">พื้นที่เกาะ (ต้องข้ามเรือ)</label>
+                                        </div>
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" name="shipping_is_oversize" id="shipping_is_oversize" {% if qt.shipping_is_oversize %}checked{% endif %} {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                            <label class="form-check-label fw-bold text-dark small" style="font-size: 11px;">ความยาวตู้เกิน 3.7 x 2.8m (+1,000฿)</label>
+                                        </div>
+                                    </div>
+                                    <div id="shipping_alert" class="alert alert-danger py-2 px-3 mt-2 mb-0 d-none fw-bold shadow-sm" style="font-size: 11px;">
+                                        <i class="fas fa-exclamation-triangle me-1"></i> พื้นที่ 3 จังหวัดชายแดน หรือ ข้ามเกาะ: ไม่มีเรทราคาตายตัว กรุณาส่งพิกัดให้ฝ่ายขนส่งประเมิน แล้วระบุค่าขนส่งด้วยตนเองในช่องด้านขวามือ
+                                    </div>
+                                </div>
+
                                 <label class="text-primary fw-bold small mb-1"><i class="fas fa-file-invoice-dollar me-1"></i> เงื่อนไขการชำระเงิน (Payment Terms):</label>
                                 <textarea name="payment_terms" class="form-control form-control-sm mb-3" rows="3" {% if qt.status != 'DRAFT' %}readonly{% endif %}>{{ qt.payment_terms|default:"-ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ ส่วนที่เหลือชำระก่อนการจัดส่ง" }}</textarea>
                                 
@@ -255,7 +294,7 @@
                                 
                                 {% if qt.status == 'DRAFT' %}
                                 <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3 mt-1">
-                                    <i class="fas fa-sync-alt me-1"></i> บันทึกหมายเหตุ/เงื่อนไข
+                                    <i class="fas fa-sync-alt me-1"></i> บันทึกหมายเหตุ/เงื่อนไข/ค่าจัดส่ง
                                 </button>
                                 {% endif %}
                             </div>
@@ -273,9 +312,9 @@
                                         </td>
                                     </tr>
                                     <tr>
-                                        <td class="text-end text-muted align-middle">ค่าขนส่ง:</td>
+                                        <td class="text-end text-muted align-middle">ค่าจัดส่ง:</td>
                                         <td class="text-end">
-                                            <input type="text" name="shipping_cost" id="live_shipping" value="{% if qt.shipping_cost > 0 %}{{ qt.shipping_cost }}{% endif %}" class="form-control form-control-sm text-end d-inline-block number-format" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' %}readonly{% endif %}>
+                                            <input type="text" name="shipping_cost" id="live_shipping" value="{% if qt.shipping_cost > 0 %}{{ qt.shipping_cost }}{% endif %}" class="form-control form-control-sm text-end d-inline-block number-format fw-bold text-success" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' %}readonly{% endif %}>
                                         </td>
                                     </tr>
                                     <tr class="border-top">
@@ -316,11 +355,20 @@
 <script>
     const productsData = {{ products_json|safe }};
     const upsalesData = {{ upsales_json|safe }};
+    
+    // 🌟 นำเข้าข้อมูลภาค-จังหวัด และเรทราคา จาก Backend 🌟
+    const regionsData = {{ regions_json|safe }};
+    const shippingRates = {{ shipping_rates_json|safe }};
+    const riskProvinces = ['นราธิวาส', 'ปัตตานี', 'ยะลา'];
+    
+    // ค่าเริ่มต้นถ้าเคยบันทึกจังหวัดเอาไว้แล้ว
+    const savedProvince = "{{ qt.shipping_province|default:'' }}";
 
     $(document).ready(function() {
         $('.select2').select2({ theme: 'bootstrap4', width: '100%' });
         $('.select2-tags').select2({ theme: 'bootstrap4', width: '100%', tags: true });
 
+        // --- ส่วนจัดการ สินค้าหลัก & Upsales ---
         function populateMainProducts(catId) {
             let html = '<option value="">-- เลือกสินค้า --</option>';
             productsData.forEach(p => {
@@ -330,12 +378,9 @@
             });
             $('#product_selector').html(html).trigger('change');
         }
-        
         populateMainProducts(''); 
 
-        $('#main_category_selector').change(function() {
-            populateMainProducts($(this).val());
-        });
+        $('#main_category_selector').change(function() { populateMainProducts($(this).val()); });
 
         $('#product_selector').change(function() {
             var selectedOption = $(this).find(':selected');
@@ -357,32 +402,118 @@
             });
             $('#upsale_item_selector').html(html).trigger('change');
         }
-        
         populateUpsales('');
-        $('#upsale_category_selector').change(function() {
-            populateUpsales($(this).val());
-        });
+        
+        $('#upsale_category_selector').change(function() { populateUpsales($(this).val()); });
+        
         $('#upsale_item_selector').change(function() {
             var selectedOption = $(this).find(':selected');
             var price = selectedOption.data('price');
             var name = selectedOption.val();
-            
             if(name) {
                 $('#input_upsale_desc').val(name);
-                if(price !== undefined) {
-                    $('#upsale_price').val(formatNumber(price));
-                }
+                if(price !== undefined) { $('#upsale_price').val(formatNumber(price)); }
             } else {
                 $('#input_upsale_desc').val('');
                 $('#upsale_price').val('');
             }
         });
 
+
+        // 🌟 --- ส่วนจัดการ: เลือกภาค -> คัดกรองจังหวัด --- 🌟
+        
+        // 1. โหลดรายชื่อภาคเข้า Dropdown
+        let regionHtml = '<option value="">-- เลือกภาค --</option>';
+        Object.keys(regionsData).forEach(region => {
+            regionHtml += `<option value="${region}">${region}</option>`;
+        });
+        $('#shipping_region').html(regionHtml);
+
+        // 2. ฟังก์ชันสาดรายชื่อจังหวัดลง Dropdown ตามภาคที่เลือก
+        function populateProvinces(selectedRegion, autoSelectProv = '') {
+            let provHtml = '<option value="">-- ระบุจังหวัดปลายทาง --</option>';
+            if (selectedRegion && regionsData[selectedRegion]) {
+                regionsData[selectedRegion].forEach(prov => {
+                    let isSelected = (prov === autoSelectProv) ? 'selected' : '';
+                    provHtml += `<option value="${prov}" ${isSelected}>${prov}</option>`;
+                });
+            }
+            $('#shipping_province').html(provHtml).trigger('change');
+        }
+
+        // 3. ดักจับตอนที่เซลส์กดเปลี่ยน "ภาค"
+        $('#shipping_region').change(function() {
+            populateProvinces($(this).val());
+        });
+
+        // 4. กรณีเปิดหน้ามา แล้วเคยเซฟ "จังหวัด" ไว้แล้ว ให้ระบบค้นหาอัตโนมัติว่าจังหวัดนี้อยู่ภาคไหน
+        if (savedProvince) {
+            let foundRegion = '';
+            for (const [region, provinces] of Object.entries(regionsData)) {
+                if (provinces.includes(savedProvince)) {
+                    foundRegion = region;
+                    break;
+                }
+            }
+            if (foundRegion) {
+                $('#shipping_region').val(foundRegion);
+                populateProvinces(foundRegion, savedProvince);
+            }
+        }
+
+        // 🌟 --- ส่วนจัดการ: คำนวณค่าจัดส่งอัตโนมัติ --- 🌟
+        function calculateSmartShipping() {
+            let origin = $('#shipping_origin').val();
+            let province = $('#shipping_province').val();
+            let isIsland = $('#shipping_is_island').is(':checked');
+            let isOversize = $('#shipping_is_oversize').is(':checked');
+
+            let shippingInput = $('#live_shipping');
+            let alertBox = $('#shipping_alert');
+
+            // 1. ถ้ายังระบุพิกัดไม่ครบ ให้เปิดช่องให้กรอกมือไปก่อน
+            if (!origin || !province) {
+                shippingInput.prop('readonly', false);
+                return;
+            }
+
+            // 2. เช็กเงื่อนไขพิเศษ (ข้ามเกาะ หรือ 3 จังหวัดชายแดน) -> ปลดล็อก
+            if (isIsland || riskProvinces.includes(province)) {
+                alertBox.removeClass('d-none');
+                shippingInput.prop('readonly', false); 
+                shippingInput.removeClass('text-success').addClass('text-danger');
+            } else {
+                alertBox.addClass('d-none');
+                shippingInput.removeClass('text-danger').addClass('text-success');
+
+                // 3. ค้นหาราคาจากตารางไขว้ (Matrix) ในหน่วยความจำ
+                let rate = shippingRates.find(r => r.origin === origin && r.province === province);
+                if (rate) {
+                    let price = rate.price;
+                    if (isOversize) price += 1000; // บวกค่าตู้พิเศษ 1000 บาท
+                    
+                    {% if qt.status == 'DRAFT' %}
+                    shippingInput.val(formatNumber(price));
+                    shippingInput.prop('readonly', true); // ค้นหาเจอ -> ล็อกช่องทันที
+                    calculateLiveTotals();
+                    {% endif %}
+                } else {
+                    shippingInput.prop('readonly', false); // ไม่มีในฐานข้อมูลให้กรอกเอง
+                }
+            }
+        }
+
+        // จับตาดูความเคลื่อนไหว ถ้าเปลี่ยนพิกัดให้คำนวณใหม่
+        {% if qt.status == 'DRAFT' %}
+        $('#shipping_origin, #shipping_province, #shipping_is_island, #shipping_is_oversize').on('change', calculateSmartShipping);
+        {% endif %}
+
+
+        // --- ฟังก์ชันเรื่องตัวเลข และคำนวณยอดรวม ---
         function formatNumber(num) {
             if (!num || isNaN(num)) return '';
             return parseFloat(num).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
-
         function unformatNumber(str) {
             if (!str) return 0;
             return parseFloat(str.toString().replace(/,/g, '')) || 0;
@@ -390,11 +521,8 @@
 
         $('.number-format').on('blur', function() {
             let val = unformatNumber(this.value);
-            if (val === 0 && !$(this).prop('required')) {
-                this.value = '';
-            } else {
-                this.value = formatNumber(val);
-            }
+            if (val === 0 && !$(this).prop('required')) { this.value = ''; } 
+            else { this.value = formatNumber(val); }
         }).on('focus', function() {
             let val = unformatNumber(this.value);
             this.value = val === 0 ? '' : val;
@@ -403,16 +531,11 @@
             calculateLiveTotals();
         });
 
-        $('.number-only').on('input', function() {
-            this.value = this.value.replace(/[^0-9]/g, '');
-        });
-
+        $('.number-only').on('input', function() { this.value = this.value.replace(/[^0-9]/g, ''); });
+        
         $('.number-format').each(function() {
-            if (this.value && this.value !== '0.00') {
-                this.value = formatNumber(unformatNumber(this.value));
-            } else if (!$(this).prop('required')) {
-                this.value = '';
-            }
+            if (this.value && this.value !== '0.00') { this.value = formatNumber(unformatNumber(this.value)); } 
+            else if (!$(this).prop('required')) { this.value = ''; }
         });
 
         const baseItemTotal = {{ item_total|default:0 }};
@@ -433,10 +556,10 @@
 
         $('.smart-form').on('submit', function() {
             $(this).find('.number-format').each(function() {
-                if(this.value) {
-                    this.value = this.value.replace(/,/g, '');
-                }
+                if(this.value) { this.value = this.value.replace(/,/g, ''); }
             });
+            // ปลดล็อก select ก่อน Submit เพื่อให้ส่งค่าไปเซฟได้
+            $(this).find('select').prop('disabled', false); 
         });
     });
 </script>

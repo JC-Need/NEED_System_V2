@@ -8,24 +8,26 @@ from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.db.models import Q, Sum, Count, Max
+from django.db.models.functions import TruncDate, TruncMonth
 from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
 from django.utils import timezone
+from datetime import timedelta
+from django.core.cache import cache
 
 from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment
 from inventory.models import Product, Category
-from master_data.models import Customer, CompanyInfo
+from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
 from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch as MfgBranch, ProductionStatus
 
 # ==========================================
-# 🧠 สมองกลคำนวณคอมมิชชัน
+# 🧠 ระบบคำนวณคอมมิชชัน
 # ==========================================
 def process_commission_logic(sale_amount, seller, sale_ref_id):
     now = timezone.now()
     sale_amount = Decimal(str(sale_amount))
-    
     target, _ = CompanySalesTarget.objects.get_or_create(year=now.year, month=now.month)
     target.current_sales += sale_amount
     if target.current_sales >= target.target_amount:
@@ -37,21 +39,18 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
         exec_pool_amount = sale_amount * (exec_group.commission_rate / Decimal('100'))
         executives = Employee.objects.filter(sales_group=exec_group)
         if executives.exists():
-            exact_share_per_head = exec_pool_amount / Decimal(str(executives.count()))
-            share_per_head = exact_share_per_head.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
+            exact_share = exec_pool_amount / Decimal(str(executives.count()))
+            share_per_head = exact_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
             remainder = exec_pool_amount - (share_per_head * Decimal(str(executives.count())))
-            
             for ex in executives:
                 CommissionLog.objects.create(recipient=ex, source_employee=seller, level=1, amount=share_per_head, sale_ref_id=sale_ref_id)
-            
             if remainder > 0:
                 exec_group.fund_balance += remainder
                 exec_group.save()
                 FundTransaction.objects.create(group=exec_group, transaction_type='IN', amount=remainder, description=f"ปัดเศษเข้าสำรองบริหาร จากบิล {sale_ref_id}")
 
-    if not seller: return
+    if not seller or not seller.sales_group: return
     group = seller.sales_group
-    if not group: return
 
     total_group_comm = sale_amount * (group.commission_rate / Decimal('100'))
     fund_to_add = Decimal('0.00')
@@ -60,7 +59,6 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
         exact_leader_share = total_group_comm * (group.share_leader / Decimal('100'))
         leader_share = exact_leader_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
         fund_to_add += (exact_leader_share - leader_share) 
-        
         leader = Employee.objects.filter(sales_group=group, group_role='LEADER').first()
         if leader:
             CommissionLog.objects.create(recipient=leader, source_employee=seller, level=1, amount=leader_share, sale_ref_id=sale_ref_id)
@@ -110,10 +108,8 @@ def get_next_document_number():
     now = timezone.now()
     thai_year = (now.year + 543) % 100
     prefix = f"DLN-{thai_year:02d}{now.strftime('%m')}"
-
     last_inv = Invoice.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
     last_pos = POSOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
-
     max_seq = 0
     if last_inv:
         try: max_seq = max(max_seq, int(last_inv.split('-')[-1]))
@@ -121,54 +117,34 @@ def get_next_document_number():
     if last_pos:
         try: max_seq = max(max_seq, int(last_pos.split('-')[-1]))
         except: pass
-
-    new_seq = max_seq + 1
-    return f"{prefix}-{new_seq:03d}"
+    return f"{prefix}-{max_seq + 1:03d}"
 
 def get_target_employees(user):
     current_emp = getattr(user, 'employee', None)
-    if user.is_superuser:
-        return Employee.objects.all(), "Admin View"
+    if user.is_superuser: return Employee.objects.all(), "Admin View"
     elif current_emp:
         dept_name = current_emp.department.name if current_emp.department else ""
-        if 'บัญชี' in dept_name or 'Accounting' in dept_name:
-            return Employee.objects.all(), "Accounting View"
-
+        if 'บัญชี' in dept_name or 'Accounting' in dept_name: return Employee.objects.all(), "Accounting View"
         rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
-        job_title = current_emp.position.title.lower() if current_emp.position else ""
-
-        if rank in ['manager', 'director'] or 'manager' in job_title:
-            return Employee.objects.all(), "Manager View"
+        if rank in ['manager', 'director']: return Employee.objects.all(), "Manager View"
         elif rank == 'supervisor':
-            if current_emp.department:
-                return Employee.objects.filter(department=current_emp.department), f"Team {current_emp.department.name}"
-            else:
-                return Employee.objects.filter(Q(id=current_emp.id) | Q(introducer=current_emp)), "Direct Team"
-        else:
-            return Employee.objects.filter(id=current_emp.id), "Self View"
-    else:
-        return Employee.objects.none(), "-"
+            if current_emp.department: return Employee.objects.filter(department=current_emp.department), f"Team {current_emp.department.name}"
+            else: return Employee.objects.filter(Q(id=current_emp.id) | Q(introducer=current_emp)), "Direct Team"
+        else: return Employee.objects.filter(id=current_emp.id), "Self View"
+    return Employee.objects.none(), "-"
 
 def get_sales_queryset(model_class, user, target_employees):
-    if user.is_superuser:
-        return model_class.objects.all()
-
+    if user.is_superuser: return model_class.objects.all()
     if hasattr(user, 'employee') and user.employee:
         dept_name = user.employee.department.name if user.employee.department else ""
         rank = user.employee.business_rank.lower() if user.employee.business_rank else ""
-        job_title = user.employee.position.title.lower() if user.employee.position else ""
-
-        if 'บัญชี' in dept_name or 'Accounting' in dept_name:
-            return model_class.objects.all()
-        if rank in ['manager', 'director'] or 'manager' in job_title:
-            return model_class.objects.all()
-
-    return model_class.objects.filter(employee__in=target_employees)
+        if 'บัญชี' in dept_name or rank in ['manager', 'director']: return model_class.objects.all()
+    
+    emp_ids = list(target_employees.values_list('id', flat=True))
+    return model_class.objects.filter(employee_id__in=emp_ids)
 
 def is_sales_authorized(user):
     if user.is_superuser: return True
-    user_groups = list(user.groups.values_list('name', flat=True))
-    if 'Sales' in user_groups: return True
     if hasattr(user, 'employee') and user.employee:
         dept = user.employee.department.name if user.employee.department else ''
         if 'ขาย' in dept or 'Sales' in dept: return True
@@ -176,176 +152,169 @@ def is_sales_authorized(user):
 
 @login_required
 def sales_dashboard(request):
-    if not is_sales_authorized(request.user):
-        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงภาพรวมฝ่ายขาย")
-        return redirect('dashboard')
-
-    target_employees, scope_title = get_target_employees(request.user)
-
+    if not is_sales_authorized(request.user): return redirect('dashboard')
+    _, scope_title = get_target_employees(request.user)
     today = timezone.now().date()
-    start_date_str = request.GET.get('start_date')
-    end_date_str = request.GET.get('end_date')
-
-    start_date = parse_date(start_date_str) if start_date_str else today
-    end_date = parse_date(end_date_str) if end_date_str else today
-
-    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
-    inv_qs = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
-
-    pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
-    total_sales_amount = float(pos_total + inv_total)
-
-    pos_today = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date=today)
-    inv_today = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today)
-    total_orders_today = pos_today.count() + inv_today.count()
-
-    qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
-
-    pending_approval_quotes = qt_all_qs.filter(status='DRAFT').count()
-    pending_closing_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
-    in_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
-
-    pending_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True, production_orders__isnull=True).count()
-
-    pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
-    inv_team = inv_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('grand_total'))
-
-    team_sales_dict = {}
-    for p in pos_team:
-        dept = p['employee__department__name'] or 'ไม่ระบุทีม'
-        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(p['total'] or 0)
-    for i in inv_team:
-        dept = i['employee__department__name'] or 'ไม่ระบุทีม'
-        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(i['total'] or 0)
-
-    sorted_teams = sorted(team_sales_dict.items(), key=lambda x: x[1], reverse=True)
-    chart_labels = [x[0] for x in sorted_teams]
-    chart_data = [x[1] for x in sorted_teams]
-
-    recent_pos = list(pos_qs.order_by('-created_at')[:10])
-    recent_inv = list(inv_qs.order_by('-created_at')[:10])
-    combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
-
-    recent_sales_data = []
-    for item in combined_sales:
-        is_pos = 'POS' in item.code
-        recent_sales_data.append({
-            'time': item.created_at.strftime('%H:%M') if item.created_at.date() == timezone.now().date() else item.created_at.strftime('%d/%m/%Y'),
-            'code': item.code,
-            'is_pos': is_pos,
-            'employee_name': item.employee.first_name if item.employee else '-',
-            'employee_photo': item.employee.photo.url if item.employee and item.employee.photo else None,
-            'employee_initial': item.employee.first_name[0] if item.employee and item.employee.first_name else '-',
-            'amount': float(item.total_amount) if hasattr(item, 'total_amount') else float(item.grand_total)
-        })
-
-    context = {
-        'total_sales_today': total_sales_amount,
-        'total_orders_today': total_orders_today,
-        'pending_approval_quotes': pending_approval_quotes,
-        'pending_closing_quotes': pending_closing_quotes,
-        'in_production_quotes': in_production_quotes,
-        'pending_production_quotes': pending_production_quotes,
-        'chart_labels': json.dumps(chart_labels),
-        'chart_data': json.dumps(chart_data),
-        'recent_sales': combined_sales,
-        'scope_title': scope_title,
-        'start_date': start_date.strftime('%Y-%m-%d'),
-        'end_date': end_date.strftime('%Y-%m-%d'),
-    }
-    return render(request, 'sales/dashboard.html', context)
+    return render(request, 'sales/dashboard.html', {
+        'scope_title': scope_title, 'start_date': today.strftime('%Y-%m-%d'), 'end_date': today.strftime('%Y-%m-%d')
+    })
 
 @login_required
 def api_dashboard_data(request):
-    if not is_sales_authorized(request.user):
-        return JsonResponse({'error': 'Unauthorized'}, status=403)
+    if not is_sales_authorized(request.user): return JsonResponse({'error': 'Unauthorized'}, status=403)
 
-    target_employees, _ = get_target_employees(request.user)
+    target_employees, scope_title = get_target_employees(request.user)
     emp = getattr(request.user, 'employee', None)
     today = timezone.now().date()
+    
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
+    group_by = request.GET.get('group_by', 'day')
+    force_refresh = request.GET.get('force_refresh') == '1'
 
     start_date = parse_date(start_date_str) if start_date_str else today
     end_date = parse_date(end_date_str) if end_date_str else today
+    end_date_inclusive = end_date + timedelta(days=1)
 
-    pos_qs = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
-    inv_qs = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
+    cache_key = f"dash_cache_{request.user.id}_{start_date}_{end_date}_{group_by}"
+    if force_refresh: cache.delete(cache_key)
+    cached_data = cache.get(cache_key)
 
-    pos_total = pos_qs.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    inv_total = inv_qs.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0
-    total_sales_amount = float(pos_total + inv_total)
+    if not cached_data:
+        pos_qs_all = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
+        inv_qs_all = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
 
-    my_comm_month = 0
-    group_fund = 0
-    if emp:
-        my_comm_month = CommissionLog.objects.filter(recipient=emp, created_at__month=today.month, created_at__year=today.year).aggregate(Sum('amount'))['amount__sum'] or 0
-        group_fund = emp.sales_group.fund_balance if emp.sales_group else 0
+        total_sales = float((pos_qs_all.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0) + 
+                            (inv_qs_all.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0))
+        
+        today_inclusive = today + timedelta(days=1)
+        total_orders_today = (
+            get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=today, created_at__lt=today_inclusive).count() + 
+            get_sales_queryset(Invoice, request.user, target_employees).filter(date=today).count()
+        )
+
+        qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
+        pending_approval = qt_all_qs.filter(status='DRAFT').count()
+        pending_closing = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
+        in_production = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
+
+        chart_labels, chart_data, chart_title, chart_type = [], [], "", "bar"
+        user_rank = emp.business_rank.lower() if (emp and emp.business_rank) else "member"
+
+        pos_raw = list(pos_qs_all.filter(status='PAID').values('created_at', 'total_amount', 'employee__department__name', 'employee__first_name'))
+        inv_raw = list(inv_qs_all.filter(status='PAID').values('date', 'grand_total', 'employee__department__name', 'employee__first_name'))
+
+        if user_rank in ['manager', 'director'] or request.user.is_superuser:
+            if group_by == 'day':
+                chart_title = "แนวโน้มยอดขายรวมทั้งบริษัท (รายวัน)"
+                chart_type = "line"
+                
+                period_dict = {}
+                for p in pos_raw:
+                    if p['created_at']:
+                        key = p['created_at'].strftime("%Y-%m-%d")
+                        period_dict[key] = period_dict.get(key, 0) + float(p['total_amount'] or 0)
+                for i in inv_raw:
+                    if i['date']:
+                        key = i['date'].strftime("%Y-%m-%d")
+                        period_dict[key] = period_dict.get(key, 0) + float(i['grand_total'] or 0)
+
+                sorted_keys = sorted(period_dict.keys())
+                chart_labels = [datetime.datetime.strptime(k, "%Y-%m-%d").strftime("%d/%m") for k in sorted_keys]
+                chart_data = [period_dict[k] for k in sorted_keys]
+
+            else:
+                chart_title = "ยอดขายเปรียบเทียบรายทีม/สาขา"
+                chart_type = "bar"
+                team_dict = {}
+                for p in pos_raw:
+                    t = p['employee__department__name'] or 'ไม่ระบุทีม'
+                    team_dict[t] = team_dict.get(t, 0) + float(p['total_amount'] or 0)
+                for i in inv_raw:
+                    t = i['employee__department__name'] or 'ไม่ระบุทีม'
+                    team_dict[t] = team_dict.get(t, 0) + float(i['grand_total'] or 0)
+                
+                sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
+                chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
+
+        elif user_rank == 'supervisor':
+            chart_title = f"เปรียบเทียบผลงานในทีม {emp.department.name if emp.department else ''}"
+            chart_type = "bar"
+            mem_dict = {}
+            for p in pos_raw:
+                m = p['employee__first_name'] or 'ไม่ระบุ'
+                mem_dict[m] = mem_dict.get(m, 0) + float(p['total_amount'] or 0)
+            for i in inv_raw:
+                m = i['employee__first_name'] or 'ไม่ระบุ'
+                mem_dict[m] = mem_dict.get(m, 0) + float(i['grand_total'] or 0)
+            
+            sorted_data = sorted(mem_dict.items(), key=lambda x: x[1], reverse=True)
+            chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
+
+        else:
+            chart_title = "แนวโน้มยอดขายส่วนตัว"
+            chart_type = "bar"
+            
+            period_dict = {}
+            for p in pos_raw:
+                if p['created_at']:
+                    key = p['created_at'].strftime("%Y-%m") if group_by == 'month' else p['created_at'].strftime("%Y-%m-%d")
+                    period_dict[key] = period_dict.get(key, 0) + float(p['total_amount'] or 0)
+            for i in inv_raw:
+                if i['date']:
+                    key = i['date'].strftime("%Y-%m") if group_by == 'month' else i['date'].strftime("%Y-%m-%d")
+                    period_dict[key] = period_dict.get(key, 0) + float(i['grand_total'] or 0)
+                    
+            sorted_keys = sorted(period_dict.keys())
+            if group_by == 'month':
+                chart_labels = [f"{k[5:7]}/{k[:4]}" for k in sorted_keys] 
+            else:
+                chart_labels = [f"{k[-2:]}/{k[5:7]}" for k in sorted_keys]
+            chart_data = [period_dict[k] for k in sorted_keys]
+
+        cached_data = {
+            'total_sales': total_sales, 'total_orders_today': total_orders_today,
+            'pending_approval': pending_approval, 'pending_closing': pending_closing,
+            'in_production': in_production, 'chart_labels': chart_labels, 
+            'chart_data': chart_data, 'chart_title': chart_title, 
+            'chart_type': chart_type, 'scope_title': scope_title
+        }
+        cache.set(cache_key, cached_data, timeout=300)
+
+    recent_pos = list(get_sales_queryset(POSOrder, request.user, target_employees)
+                      .filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
+                      .select_related('employee', 'employee__department')
+                      .order_by('-created_at')[:10])
     
-    mission = CompanySalesTarget.objects.filter(year=today.year, month=today.month).first()
-    mission_data = {
-        'target': float(mission.target_amount) if mission else 50000000.0,
-        'current': float(mission.current_sales) if mission else 0.0,
-        'is_unlocked': mission.is_unlocked if mission else False
-    }
-
-    pos_today = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__date=today)
-    inv_today = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today)
-    total_orders_today = pos_today.count() + inv_today.count()
-
-    qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
-    pending_approval_quotes = qt_all_qs.filter(status='DRAFT').count()
-    pending_closing_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
-    in_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
-    pending_production_quotes = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True, production_orders__isnull=True).count()
-
-    pos_team = pos_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('total_amount'))
-    inv_team = inv_qs.filter(status='PAID').values('employee__department__name').annotate(total=Sum('grand_total'))
-
-    team_sales_dict = {}
-    for p in pos_team:
-        dept = p['employee__department__name'] or 'ไม่ระบุทีม'
-        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(p['total'] or 0)
-    for i in inv_team:
-        dept = i['employee__department__name'] or 'ไม่ระบุทีม'
-        team_sales_dict[dept] = team_sales_dict.get(dept, 0) + float(i['total'] or 0)
-
-    sorted_teams = sorted(team_sales_dict.items(), key=lambda x: x[1], reverse=True)
-    chart_labels = [x[0] for x in sorted_teams]
-    chart_data = [x[1] for x in sorted_teams]
-
-    recent_pos = list(pos_qs.order_by('-created_at')[:10])
-    recent_inv = list(inv_qs.order_by('-created_at')[:10])
-    combined_sales = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
-
+    recent_inv = list(get_sales_queryset(Invoice, request.user, target_employees)
+                      .filter(date__gte=start_date, date__lte=end_date)
+                      .select_related('employee', 'employee__department', 'quotation_ref')
+                      .prefetch_related('quotation_ref__production_orders')
+                      .order_by('-created_at')[:10])
+    
+    combined = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
     recent_sales_data = []
-    for item in combined_sales:
+    for item in combined:
         is_pos = 'POS' in item.code
+        qt, job = "-", "-"
+        if not is_pos and item.quotation_ref:
+            qt = item.quotation_ref.code
+            jobs = item.quotation_ref.production_orders.all()
+            if jobs.exists(): job = ", ".join([j.code for j in jobs])
         recent_sales_data.append({
-            'time': item.created_at.strftime('%H:%M') if item.created_at.date() == timezone.now().date() else item.created_at.strftime('%d/%m/%Y'),
-            'code': item.code,
-            'is_pos': is_pos,
+            'time': item.created_at.strftime('%H:%M') if item.created_at.date() == today else item.created_at.strftime('%d/%m/%Y'),
+            'code': item.code, 'is_pos': is_pos, 'qt_code': qt, 'job_code': job,
             'employee_name': item.employee.first_name if item.employee else '-',
+            'employee_branch': item.employee.department.name if item.employee and item.employee.department else '-',
             'employee_photo': item.employee.photo.url if item.employee and item.employee.photo else None,
             'employee_initial': item.employee.first_name[0] if item.employee and item.employee.first_name else '-',
-            'amount': float(item.total_amount) if hasattr(item, 'total_amount') else float(item.grand_total)
+            'amount': float(item.total_amount) if is_pos else float(item.grand_total)
         })
 
-    return JsonResponse({
-        'total_sales_today': total_sales_amount,
-        'total_orders_today': total_orders_today,
-        'pending_approval_quotes': pending_approval_quotes,
-        'pending_closing_quotes': pending_closing_quotes,
-        'in_production_quotes': in_production_quotes,
-        'pending_production_quotes': pending_production_quotes,
-        'recent_sales': recent_sales_data,
-        'chart_labels': chart_labels,
-        'chart_data': chart_data,
-        'my_commission': float(my_comm_month), 
-        'group_fund': float(group_fund), 
-        'mission': mission_data
-    })
+    response_data = cached_data.copy()
+    response_data['recent_sales'] = recent_sales_data
+
+    return JsonResponse(response_data)
 
 @login_required
 def sales_hub(request):
@@ -697,6 +666,21 @@ def quotation_edit(request, qt_id):
     item_total = main_item_total + upsale_total
 
     balance_due = qt.grand_total - qt.deposit_amount
+    
+    # 🌟 [NEW] จัดกลุ่มจังหวัดตามภาค ส่งให้หน้าจอในรูปแบบ Dictionary 🌟
+    regions_data = {
+        'ภาคเหนือ': ['เชียงราย', 'เชียงใหม่', 'น่าน', 'พะเยา', 'แพร่', 'แม่ฮ่องสอน', 'ลำปาง', 'ลำพูน', 'อุตรดิตถ์'],
+        'ภาคกลาง': ['กรุงเทพมหานคร', 'กำแพงเพชร', 'ชัยนาท', 'นครนายก', 'นครปฐม', 'นครสวรรค์', 'นนทบุรี', 'ปทุมธานี', 'พระนครศรีอยุธยา', 'พิจิตร', 'พิษณุโลก', 'เพชรบูรณ์', 'ลพบุรี', 'สมุทรปราการ', 'สมุทรสงคราม', 'สมุทรสาคร', 'สระบุรี', 'สิงห์บุรี', 'สุโขทัย', 'สุพรรณบุรี', 'อ่างทอง', 'อุทัยธานี'],
+        'ภาคอีสาน': ['กาฬสินธุ์', 'ขอนแก่น', 'ชัยภูมิ', 'นครพนม', 'นครราชสีมา', 'บึงกาฬ', 'บุรีรัมย์', 'มหาสารคาม', 'มุกดาหาร', 'ยโสธร', 'ร้อยเอ็ด', 'เลย', 'ศรีสะเกษ', 'สกลนคร', 'สุรินทร์', 'หนองคาย', 'หนองบัวลำภู', 'อำนาจเจริญ', 'อุดรธานี', 'อุบลราชธานี'],
+        'ภาคตะวันออก': ['จันทบุรี', 'ฉะเชิงเทรา', 'ชลบุรี', 'ตราด', 'ปราจีนบุรี', 'ระยอง', 'สระแก้ว'],
+        'ภาคตะวันตก': ['กาญจนบุรี', 'ตาก', 'ประจวบคีรีขันธ์', 'เพชรบุรี', 'ราชบุรี'],
+        'ภาคใต้': ['กระบี่', 'ชุมพร', 'ตรัง', 'นครศรีธรรมราช', 'พังงา', 'พัทลุง', 'ภูเก็ต', 'ระนอง', 'สงขลา', 'สตูล', 'สุราษฎร์ธานี']
+    }
+    
+    shipping_rates = list(ShippingRate.objects.all().values('origin_branch', 'destination_province', 'price'))
+    shipping_rates_json = json.dumps([
+        {'origin': r['origin_branch'], 'province': r['destination_province'], 'price': float(r['price'])} for r in shipping_rates
+    ])
 
     if request.method == 'POST':
         if qt.status != 'DRAFT':
@@ -740,7 +724,13 @@ def quotation_edit(request, qt_id):
             qt.payment_terms = request.POST.get('payment_terms', '')
             qt.note = request.POST.get('note', '')
             qt.discount = Decimal(request.POST.get('discount', '0') or 0)
+            
+            qt.shipping_origin = request.POST.get('shipping_origin', '')
+            qt.shipping_province = request.POST.get('shipping_province', '')
+            qt.shipping_is_island = request.POST.get('shipping_is_island') == 'on'
+            qt.shipping_is_oversize = request.POST.get('shipping_is_oversize') == 'on'
             qt.shipping_cost = Decimal(request.POST.get('shipping_cost', '0') or 0)
+            
             calculate_totals(qt)
 
             if 'finish_quote' in request.POST:
@@ -753,9 +743,9 @@ def quotation_edit(request, qt_id):
     return render(request, 'sales/quotation_edit.html', {
         'qt': qt, 'main_categories': main_categories, 'upsale_categories': upsale_categories,
         'products_json': json.dumps(products_list), 'upsales_json': json.dumps(upsales_list),
-        'item_total': item_total, 'balance_due': balance_due
+        'item_total': item_total, 'balance_due': balance_due,
+        'regions_json': json.dumps(regions_data), 'shipping_rates_json': shipping_rates_json  # 🌟 ส่งข้อมูลภาคไป
     })
-
 
 def calculate_totals(qt):
     item_sum = sum(item.quantity * item.unit_price for item in qt.items.all())
@@ -958,7 +948,6 @@ def invoice_list(request):
         'start_date': start_date, 'end_date': end_date, 'status_filter': status_filter
     })
 
-# 🌟 [UPDATE] สมองกลใหม่รองรับการจ่ายเงิน 100% หรือ บางส่วน (ดึงประวัติมาเช็ค)
 @login_required
 def confirm_payment(request, doc_type, doc_id):
     if doc_type == 'pos':
@@ -973,7 +962,6 @@ def confirm_payment(request, doc_type, doc_id):
     else:
         obj = get_object_or_404(Invoice, id=doc_id)
         if obj.status == 'PENDING':
-            # 🌟 อัปเดตสลิปทั้งหมดที่ยัง PENDING อยู่ให้เป็น VERIFIED (บัญชีตรวจผ่าน)
             pending_payments = obj.payment_history.filter(status='PENDING')
             pending_payments.update(status='VERIFIED')
 
@@ -990,7 +978,6 @@ def confirm_payment(request, doc_type, doc_id):
                 messages.success(request, f"✅ ยืนยันการแบ่งชำระเงินเอกสาร {obj.code} เรียบร้อยแล้ว! (ยอดคงค้าง: {obj.balance_amount:,.2f} บาท)")
     return redirect('invoice_list')
 
-# 🌟 [UPDATE] บันทึกรับชำระเงินลงตาราง InvoicePayment แบบแยกย่อย
 @login_required
 def record_invoice_payment(request, inv_id):
     inv = get_object_or_404(Invoice, pk=inv_id)
@@ -1005,7 +992,6 @@ def record_invoice_payment(request, inv_id):
             amount = Decimal('0.00')
 
         if amount > 0:
-            # 1. สร้างประวัติรับเงิน
             payment = InvoicePayment(
                 invoice=inv,
                 amount=amount,
@@ -1021,7 +1007,6 @@ def record_invoice_payment(request, inv_id):
                     payment.check_slip = request.FILES['check_slip']
             payment.save()
 
-            # 2. หักยอดเงินคงค้าง
             inv.balance_amount -= amount
             if inv.balance_amount < 0:
                 inv.balance_amount = Decimal('0.00')

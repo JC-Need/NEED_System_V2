@@ -25,10 +25,10 @@ class POSOrder(models.Model):
     check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
     check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
     check_slip = models.ImageField(upload_to='pos_checks/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายเช็ค")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PAID', verbose_name="สถานะ") 
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PAID', verbose_name="สถานะ")
     is_commission_calculated = models.BooleanField(default=False, verbose_name="คำนวณคอมฯแล้ว")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาที่ขาย")
-    
+
     def __str__(self): return self.code
 
     def save(self, *args, **kwargs):
@@ -64,11 +64,11 @@ class POSOrderItem(models.Model):
 
 class Quotation(models.Model):
     STATUS_CHOICES = [
-        ('DRAFT', 'รออนุมัติ'),     
-        ('APPROVED', 'อนุมัติแล้ว'), 
-        ('CONVERTED', 'เปิดบิลขายแล้ว'), 
+        ('DRAFT', 'รออนุมัติ'),
+        ('APPROVED', 'อนุมัติแล้ว'),
+        ('CONVERTED', 'เปิดบิลขายแล้ว'),
         ('REJECTED', 'ไม่อนุมัติ'),
-        ('CANCELLED', 'ยกเลิกแล้ว')  
+        ('CANCELLED', 'ยกเลิกแล้ว')
     ]
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสนอราคา")
     date = models.DateField(default=timezone.now, verbose_name="วันที่เอกสาร")
@@ -81,10 +81,17 @@ class Quotation(models.Model):
     employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ออกใบเสนอราคา")
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รวมราคาสินค้า")
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ส่วนลด")
+
+    # 🌟 [NEW] ฟิลด์เก็บข้อมูลการคำนวณค่าขนส่ง 🌟
+    shipping_origin = models.CharField(max_length=100, blank=True, null=True, verbose_name="สาขาต้นทาง (ผลิต)")
+    shipping_province = models.CharField(max_length=100, blank=True, null=True, verbose_name="จังหวัดปลายทาง")
+    shipping_is_island = models.BooleanField(default=False, verbose_name="ส่งข้ามเกาะ")
+    shipping_is_oversize = models.BooleanField(default=False, verbose_name="ตู้ยาวเกินมาตรฐาน (+1000)")
     shipping_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ค่าขนส่ง")
+
     tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ภาษีมูลค่าเพิ่ม")
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดสุทธิ")
-    
+
     deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดมัดจำที่รับแล้ว")
     deposit_date = models.DateField(null=True, blank=True, verbose_name="วันที่รับมัดจำ")
     deposit_method = models.CharField(max_length=50, blank=True, null=True, verbose_name="ช่องทางรับมัดจำ")
@@ -93,16 +100,16 @@ class Quotation(models.Model):
     is_deposit_verified = models.BooleanField(default=False, verbose_name="บัญชีตรวจสอบมัดจำแล้ว")
 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT', verbose_name="สถานะ")
-    
+
     payment_terms = models.TextField(blank=True, verbose_name="เงื่อนไขการชำระเงิน")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_quotations', verbose_name="ผู้อนุมัติ")
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่อนุมัติ")
 
     def __str__(self): return self.code
-    
+
     @property
     def customer_code(self): return self.customer.code if self.customer else None
 
@@ -148,7 +155,7 @@ class Invoice(models.Model):
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดสุทธิ")
     deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="หักมัดจำ")
     balance_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดคงค้างชำระ")
-    
+
     payment_method = models.CharField(max_length=50, choices=PAYMENT_CHOICES, blank=True, null=True, verbose_name="วิธีชำระเงิน")
     payment_date = models.DateField(null=True, blank=True, verbose_name="วันที่ชำระเงิน")
     transfer_slip = models.ImageField(upload_to='invoice_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
@@ -158,7 +165,7 @@ class Invoice(models.Model):
 
     status = models.CharField(max_length=20, choices=[('UNPAID', 'ยังไม่ชำระ'), ('PAID', 'ชำระแล้ว'), ('PENDING', 'รอตรวจสอบ')], default='UNPAID', verbose_name="สถานะ")
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     def __str__(self): return self.code
 
     def save(self, *args, **kwargs):
@@ -183,7 +190,7 @@ class Invoice(models.Model):
 class UpsaleCategory(models.Model):
     name = models.CharField(max_length=100, verbose_name="หมวดหมู่รายการเพิ่มเติม")
     is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
-    
+
     def __str__(self):
         return self.name
 
@@ -219,12 +226,12 @@ class InvoicePayment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดชำระ")
     payment_method = models.CharField(max_length=50, choices=Invoice.PAYMENT_CHOICES, verbose_name="วิธีชำระ")
     payment_date = models.DateField(default=timezone.now, verbose_name="วันที่ชำระ")
-    
+
     transfer_slip = models.ImageField(upload_to='invoice_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
     check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
     check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
     check_slip = models.ImageField(upload_to='invoice_checks/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายเช็ค")
-    
+
     status = models.CharField(max_length=20, choices=[('PENDING', 'รอตรวจสอบ'), ('VERIFIED', 'ตรวจสอบแล้ว')], default='PENDING', verbose_name="สถานะการตรวจ")
     created_at = models.DateTimeField(auto_now_add=True)
 

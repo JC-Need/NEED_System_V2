@@ -4,6 +4,7 @@ from master_data.models import Supplier
 from inventory.models import Product
 from hr.models import Employee
 import datetime
+from PIL import Image
 
 class PurchaseOrder(models.Model):
     STATUS_CHOICES = [
@@ -42,12 +43,9 @@ class PurchaseOrder(models.Model):
     def __str__(self):
         return f"{self.code} - {self.supplier}"
 
-    # 🌟 ฟังก์ชัน Save ที่ปรับปรุงใหม่ (Automated Data Flow) 🌟
     def save(self, *args, **kwargs):
-        # ถ้ารับของครบแล้ว (COMPLETED) ให้เปลี่ยนสถานะการจัดส่งเป็น 'ส่งแล้ว' (SHIPPED) อัตโนมัติ
         if self.receipt_status == 'COMPLETED' and self.delivery_status == 'PENDING':
             self.delivery_status = 'SHIPPED'
-
         super().save(*args, **kwargs)
 
 class PurchaseOrderItem(models.Model):
@@ -71,8 +69,12 @@ class PurchaseOrderPayment(models.Model):
     po = models.ForeignKey(PurchaseOrder, related_name='payments', on_delete=models.CASCADE)
     payment_date = models.DateField(default=timezone.now, verbose_name="วันที่ชำระเงิน")
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดชำระ")
-    payment_method = models.CharField(max_length=50, default="โอนเงิน", verbose_name="ช่องทางการชำระ")
+    payment_method = models.CharField(max_length=50, default="โอนเงินผ่านธนาคาร", verbose_name="ช่องทางการชำระ")
     reference_no = models.CharField(max_length=100, blank=True, verbose_name="เลขอ้างอิง / สลิป")
+    
+    # 🌟 [NEW] เพิ่มช่องเก็บสลิปโอนเงิน 🌟
+    slip_image = models.ImageField(upload_to='po_payment_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
+    
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -83,7 +85,17 @@ class PurchaseOrderPayment(models.Model):
     def __str__(self):
         return f"{self.po.code} - {self.amount}"
 
-# 🌟 ตารางใหม่: ใบเตรียมการสั่งซื้อ (PPO) ที่มัดรวม JOB 🌟
+    # 🌟 [NEW] ย่อรูปลงอัตโนมัติ ไม่ให้หนักเซิร์ฟเวอร์ 🌟
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.slip_image:
+            try:
+                img = Image.open(self.slip_image.path)
+                if img.height > 800 or img.width > 800:
+                    img.thumbnail((800, 800))
+                    img.save(self.slip_image.path, quality=85, optimize=True)
+            except Exception: pass
+
 class PurchasePreparation(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเตรียมสั่งซื้อ (PPO)")
     production_orders = models.ManyToManyField('manufacturing.ProductionOrder', related_name='ppos', verbose_name="อ้างอิงใบสั่งผลิต (JOB)")
@@ -112,20 +124,17 @@ class PurchasePreparation(models.Model):
     def __str__(self):
         return self.code
 
-# 🌟 ตารางใหม่: ใบสั่งซื้อต่างประเทศ (Overseas PO Tracker) 🌟
 class OverseasPO(models.Model):
     supplier_name = models.CharField(max_length=200, verbose_name="ชื่อร้านค้า (Supplier)")
     pi_number = models.CharField(max_length=50, verbose_name="เลขที่ PI")
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดสั่งซื้อรวม")
 
-    # การชำระเงิน
     is_fully_paid = models.BooleanField(default=False, verbose_name="ชำระครบแล้ว")
     deposit_date = models.DateField(null=True, blank=True, verbose_name="วันที่ชำระมัดจำ")
     deposit_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดมัดจำ")
     balance_date = models.DateField(null=True, blank=True, verbose_name="วันที่ชำระส่วนที่เหลือ")
     balance_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="ยอดส่วนที่เหลือ")
 
-    # การติดตามเอกสาร
     doc_fe = models.BooleanField(default=False, verbose_name="ได้รับเอกสาร FE")
     doc_bl = models.BooleanField(default=False, verbose_name="ได้รับเอกสาร BL")
     doc_pl = models.BooleanField(default=False, verbose_name="ได้รับเอกสาร PL")

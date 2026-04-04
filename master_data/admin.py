@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import CompanyInfo, Customer, Supplier, Province, Amphure, Tambon
+from .models import ShippingRate
 
 # 1. ข้อมูลบริษัท
 @admin.register(CompanyInfo)
@@ -35,3 +36,9 @@ class AmphureAdmin(admin.ModelAdmin):
 class TambonAdmin(admin.ModelAdmin):
     search_fields = ('name_th', 'zip_code')
     list_filter = ('amphure__province',)
+
+@admin.register(ShippingRate)
+class ShippingRateAdmin(admin.ModelAdmin):
+    list_display = ('origin_branch', 'destination_province', 'price')
+    list_filter = ('origin_branch',)
+    search_fields = ('destination_province',)

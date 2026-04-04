@@ -6,7 +6,7 @@
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
             <h4 class="fw-bold mb-1 text-dark"><i class="fas fa-folder-open text-primary me-2"></i>รายการใบเตรียมสั่งซื้อ (PPO)</h4>
-            <p class="text-muted small mb-0">ประวัติการรวมใบสั่งผลิต (JOB) เพื่อคำนวณวัตถุดิบ</p>
+            <p class="text-muted small mb-0">ประวัติการรวมใบสั่งผลิต และแถบติดตามความคืบหน้าการเปิด PO</p>
         </div>
         <div>
             <a href="{% url 'ppo_prepare' %}" class="btn btn-warning rounded-pill px-4 shadow-sm fw-bold">
@@ -25,7 +25,10 @@
                         <th class="py-3 border-0">วันที่สร้าง</th>
                         <th class="py-3 border-0">ใบสั่งผลิต (JOB) ที่ถูกรวม</th>
                         <th class="py-3 border-0 text-end">จำนวนเงินรวม (ประเมิน)</th>
-                        <th class="pe-4 py-3 border-0 text-end">จัดการ</th>
+                        
+                        <th class="py-3 border-0 text-center" style="width: 15%;">ความคืบหน้า (Progress)</th>
+                        
+                        <th class="pe-4 py-3 border-0 text-center">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -39,14 +42,33 @@
                             {% endfor %}
                         </td>
                         <td class="text-end fw-bold text-danger">{{ ppo.total_estimated_cost|floatformat:2|intcomma }} บาท</td>
-                        <td class="pe-4 text-end">
-                            <a href="{% url 'ppo_detail' ppo.id %}" class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm fw-bold">
-                                <i class="fas fa-search me-1"></i> ดูรายละเอียด
+                        
+                        <td class="text-center">
+                            {% if ppo.po_status == 'GREEN' %}
+                                <span class="badge bg-success rounded-pill px-3 py-2 shadow-sm w-100">
+                                    <i class="fas fa-check-circle me-1"></i> สั่งครบแล้ว (100%)
+                                </span>
+                            {% elif ppo.po_status == 'ORANGE' %}
+                                <span class="badge bg-warning text-dark rounded-pill px-3 py-2 shadow-sm w-100">
+                                    <i class="fas fa-clock me-1"></i> กำลังดำเนินการ ({{ ppo.progress_percent }}%)
+                                </span>
+                            {% elif ppo.po_status == 'RED' %}
+                                <span class="badge bg-danger rounded-pill px-3 py-2 shadow-sm w-100">
+                                    <i class="fas fa-exclamation-circle me-1"></i> รอเปิด PO (0%)
+                                </span>
+                            {% else %}
+                                <span class="badge bg-secondary rounded-pill px-3 py-2 shadow-sm w-100">ไม่มีวัตถุดิบ</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="pe-4 text-center">
+                            <a href="{% url 'ppo_detail' ppo.id %}" class="btn btn-sm btn-primary rounded-pill px-4 shadow-sm fw-bold">
+                                เข้าจัดการ <i class="fas fa-arrow-right ms-1"></i>
                             </a>
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="5" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีประวัติใบเตรียมสั่งซื้อ</td></tr>
+                    <tr><td colspan="6" class="text-center py-5 text-muted"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ยังไม่มีประวัติใบเตรียมสั่งซื้อ</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

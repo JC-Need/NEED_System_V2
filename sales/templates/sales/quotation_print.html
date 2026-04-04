@@ -105,7 +105,13 @@
                         <tr><td class="ref-label">รหัสลูกค้า:</td><td class="ref-value">{{ qt.customer_code|default:"Walk-in" }}</td></tr>
                         <tr><td class="ref-label">วันที่:</td><td class="ref-value">{{ qt.date|date:"d/m/Y" }}</td></tr>
                         <tr><td class="ref-label">ยืนยันราคาถึง:</td><td class="ref-value">{{ qt.valid_until|date:"d/m/Y" }}</td></tr>
-                        <tr><td class="ref-label">พนักงานขาย:</td><td class="ref-value">{{ qt.employee.first_name|default:"-" }}</td></tr>
+                        <tr>
+                            <td class="ref-label">พนักงานขาย:</td>
+                            <td class="ref-value">
+                                {{ qt.employee.first_name|default:"-" }} 
+                                {% if qt.employee.department %}/ {{ qt.employee.department.name }}{% endif %}
+                            </td>
+                        </tr>
                     </table>
                 </div>
             </div>
@@ -140,7 +146,6 @@
                     <tr>
                         <td class="text-center text-muted">{{ qt.items.all|length|add:forloop.counter }}</td>
                         <td>
-                            <span style="font-size: 10px; border: 1px solid #999; padding: 1px 4px; border-radius: 4px; margin-right: 5px; color: #555;">งานเสริม</span>
                             <span class="fw-bold text-dark">{{ u.description }}</span>
                         </td>
                         <td class="text-center fw-bold">{{ u.quantity|floatformat:0 }}</td>
