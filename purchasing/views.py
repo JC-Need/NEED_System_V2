@@ -16,7 +16,7 @@ from django.forms.models import inlineformset_factory
 from .models import PurchaseOrder, PurchaseOrderItem, PurchaseOrderPayment, PurchasePreparation, OverseasPO
 from .forms import PurchaseOrderForm, PurchaseOrderItemFormSet, PurchaseOrderItemForm
 from master_data.models import CompanyInfo, Supplier
-from inventory.models import Product, ProductSupplier
+from inventory.models import Product, ProductSupplier, SupplierPriceHistory, Category, RawMaterialCategory
 from manufacturing.models import BOM
 
 # ==========================================
@@ -212,13 +212,10 @@ def po_payment(request, po_id):
 
     if request.method == 'POST':
         amount_str = request.POST.get('amount', '0').replace(',', '')
-        try:
-            amount = float(amount_str)
-        except ValueError:
-            amount = 0
+        try: amount = float(amount_str)
+        except ValueError: amount = 0
 
         if amount > 0 and amount <= balance:
-            # 🌟 [NEW] เพิ่มการรับไฟล์สลิปโอนเงิน 🌟
             payment_record = PurchaseOrderPayment(
                 po=po,
                 payment_date=request.POST.get('payment_date', timezone.now().date()),
@@ -227,19 +224,14 @@ def po_payment(request, po_id):
                 reference_no=request.POST.get('reference_no', ''),
                 note=request.POST.get('note', '')
             )
-
-            # ถ้ามีการแนบไฟล์รูปมาด้วย ให้ดึงมาใส่ใน record
             if 'slip_image' in request.FILES:
-                payment_record.slip_image = request.FILES['slip_image']
+                 payment_record.slip_image = request.FILES['slip_image']
 
             payment_record.save()
 
-            # คำนวณสถานะบิล
             new_total_paid = float(total_paid) + float(amount)
-            if new_total_paid >= float(po.total_amount):
-                po.payment_status = 'PAID'
-            else:
-                po.payment_status = 'DEPOSIT'
+            if new_total_paid >= float(po.total_amount): po.payment_status = 'PAID'
+            else: po.payment_status = 'DEPOSIT'
             po.save()
 
             messages.success(request, f"✅ บันทึกชำระเงิน {amount:,.2f} บาท พร้อมแนบหลักฐานสำเร็จ!")
@@ -247,16 +239,8 @@ def po_payment(request, po_id):
         else:
             messages.error(request, "❌ จำนวนเงินไม่ถูกต้อง หรือเกินยอดคงค้าง")
 
-    return render(request, 'purchasing/po_payment.html', {
-        'po': po,
-        'payments': payments,
-        'total_paid': total_paid,
-        'balance': balance
-    })
+    return render(request, 'purchasing/po_payment.html', {'po': po, 'payments': payments, 'total_paid': total_paid, 'balance': balance})
 
-# ==========================================
-# 🌟 [NEW] ระบบ PPO โฉมใหม่ (คำนวณ % การสั่งซื้อ)
-# ==========================================
 @login_required
 def ppo_list(request):
     if not can_view_and_pay(request.user): return redirect('dashboard')
@@ -266,7 +250,6 @@ def ppo_list(request):
         total_amount = Decimal(0)
         total_needed_qty = Decimal(0)
 
-        # 1. รวบรวมความต้องการ
         mat_needed = {}
         for job in ppo.production_orders.all():
             bom = BOM.objects.filter(product=job.product).first()
@@ -278,39 +261,29 @@ def ppo_list(request):
                     total_amount += Decimal(str(item.quantity)) * Decimal(str(item.raw_material.cost_price))
                     total_needed_qty += Decimal(str(item.quantity))
 
-        # 2. หายอดที่เปิด PO ไปแล้ว
         ordered_qty = Decimal(0)
         created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code).exclude(status='CANCELLED')
         for po in created_pos:
             for po_item in po.items.all():
                 if po_item.product_id in mat_needed:
-                    ordered_qty += Decimal(str(po_item.quantity))
+                     ordered_qty += Decimal(str(po_item.quantity))
 
         ppo.total_estimated_cost = total_amount
         ppo.progress_percent = int((ordered_qty / total_needed_qty * 100)) if total_needed_qty > 0 else 0
         if ppo.progress_percent > 100: ppo.progress_percent = 100
 
-        # 3. กำหนดสถานะตามตัวเลขความคืบหน้า
-        if total_needed_qty == 0:
-            ppo.po_status = 'EMPTY'
-        elif ordered_qty == 0:
-            ppo.po_status = 'RED'
-        elif ppo.progress_percent >= 100:
-            ppo.po_status = 'GREEN'
-        else:
-            ppo.po_status = 'ORANGE'
+        if total_needed_qty == 0: ppo.po_status = 'EMPTY'
+        elif ordered_qty == 0: ppo.po_status = 'RED'
+        elif ppo.progress_percent >= 100: ppo.po_status = 'GREEN'
+        else: ppo.po_status = 'ORANGE'
 
     return render(request, 'purchasing/ppo_list.html', {'ppos': ppos})
 
-# ==========================================
-# 🌟 [NEW] ระบบสร้าง PO อัตโนมัติและแยกตามร้านค้า (Multi-sourcing)
-# ==========================================
 @login_required
 def ppo_detail(request, pk):
     if not can_view_and_pay(request.user): return redirect('dashboard')
     ppo = get_object_or_404(PurchasePreparation, pk=pk)
 
-    # 🛒 ฝั่งรับข้อมูลการกดบันทึก PO อัตโนมัติ (POST)
     if request.method == 'POST':
         if not can_create_po(request.user):
             messages.error(request, "❌ คุณไม่มีสิทธิ์สร้างใบสั่งซื้อ")
@@ -324,62 +297,51 @@ def ppo_detail(request, pk):
 
         created_po_codes = []
         for sup_id, items in order_data.items():
-            if not items: continue
-            supplier = Supplier.objects.filter(id=sup_id).first()
-            if not supplier: continue
+             if not items: continue
+             supplier = Supplier.objects.filter(id=sup_id).first()
+             if not supplier: continue
 
-            now = datetime.datetime.now()
-            thai_year = (now.year + 543) % 100
-            prefix = f"PO-{thai_year:02d}{now.strftime('%m')}"
-            last_po = PurchaseOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
-            seq = int(last_po.split('-')[-1]) + 1 if last_po else 1
-            po_code = f"{prefix}-{seq:03d}"
+             now = datetime.datetime.now()
+             thai_year = (now.year + 543) % 100
+             prefix = f"PO-{thai_year:02d}{now.strftime('%m')}"
+             last_po = PurchaseOrder.objects.filter(code__startswith=prefix).aggregate(Max('code'))['code__max']
+             seq = int(last_po.split('-')[-1]) + 1 if last_po else 1
+             po_code = f"{prefix}-{seq:03d}"
 
-            po = PurchaseOrder.objects.create(
-                code=po_code,
-                supplier=supplier,
-                buyer=getattr(request.user, 'employee', None),
-                ppo_ref=ppo.code,
-                status='DRAFT',
-                total_amount=0
-            )
+             po = PurchaseOrder.objects.create(code=po_code, supplier=supplier, buyer=getattr(request.user, 'employee', None), ppo_ref=ppo.code, status='DRAFT', total_amount=0)
 
-            total_amount = Decimal('0.00')
-            for item in items:
-                prod = Product.objects.filter(id=item['id']).first()
-                if prod:
-                    qty = Decimal(str(item['qty']))
-                    cost = Decimal(str(item['cost']))
-                    line_total = qty * cost
-                    PurchaseOrderItem.objects.create(po=po, product=prod, quantity=qty, unit_cost=cost, total_cost=line_total)
-                    total_amount += line_total
+             total_amount = Decimal('0.00')
+             for item in items:
+                 prod = Product.objects.filter(id=item['id']).first()
+                 if prod:
+                     qty = Decimal(str(item['qty']))
+                     cost = Decimal(str(item['cost']))
+                     line_total = qty * cost
+                     PurchaseOrderItem.objects.create(po=po, product=prod, quantity=qty, unit_cost=cost, total_cost=line_total)
+                     total_amount += line_total
 
-            po.total_amount = total_amount
-            po.save()
-            created_po_codes.append(po.code)
+             po.total_amount = total_amount
+             po.save()
+             created_po_codes.append(po.code)
 
         if created_po_codes: messages.success(request, f"✅ สร้างใบสั่งซื้อ (PO) สำเร็จ: {', '.join(created_po_codes)}")
         else: messages.warning(request, "⚠️ ไม่มีการสร้างใบสั่งซื้อใหม่")
-
         return redirect('ppo_detail', pk=pk)
 
-    # 🛒 ฝั่งแสดงผลตารางเพื่อกรอกข้อมูล (GET)
     material_reqs = {}
     for job in ppo.production_orders.all():
         bom = BOM.objects.filter(product=job.product).first()
         if bom:
             for item in bom.items.all():
                 mat_id = item.raw_material.id
-                if mat_id not in material_reqs:
-                    material_reqs[mat_id] = {'product': item.raw_material, 'needed': Decimal(0), 'ordered': Decimal(0)}
+                if mat_id not in material_reqs: material_reqs[mat_id] = {'product': item.raw_material, 'needed': Decimal(0), 'ordered': Decimal(0)}
                 material_reqs[mat_id]['needed'] += Decimal(str(item.quantity))
 
-    # คำนวณยอดที่สั่งไปแล้ว
     created_pos = PurchaseOrder.objects.filter(ppo_ref=ppo.code).exclude(status='CANCELLED')
     for po in created_pos:
         for po_item in po.items.all():
             if po_item.product_id in material_reqs:
-                material_reqs[po_item.product_id]['ordered'] += Decimal(str(po_item.quantity))
+                 material_reqs[po_item.product_id]['ordered'] += Decimal(str(po_item.quantity))
 
     materials_list = []
     grand_total = Decimal(0)
@@ -391,7 +353,6 @@ def ppo_detail(request, pk):
         ordered = float(data['ordered'])
         remaining = needed - ordered if needed - ordered > 0 else 0
 
-        # หากมีตาราง Multi-supplier ให้ดึงมาใช้
         suppliers = []
         if hasattr(mat, 'multi_suppliers') and mat.multi_suppliers.exists():
             for ps in mat.multi_suppliers.all():
@@ -400,20 +361,14 @@ def ppo_detail(request, pk):
             suppliers.append({'id': mat.supplier.id, 'name': mat.supplier.name, 'cost': float(mat.cost_price), 'is_default': True})
 
         materials_list.append({
-            'id': mat.id, 'code': mat.code, 'name': mat.name, 'needed': needed, 'ordered': ordered,
-            'remaining': remaining, 'cost': float(mat.cost_price), 'suppliers': suppliers
+             'id': mat.id, 'code': mat.code, 'name': mat.name, 'needed': needed, 'ordered': ordered,
+             'remaining': remaining, 'cost': float(mat.cost_price), 'suppliers': suppliers
         })
         grand_total += Decimal(str(needed)) * Decimal(str(mat.cost_price))
 
     all_suppliers_json = json.dumps(all_suppliers)
+    return render(request, 'purchasing/ppo_detail.html', {'ppo': ppo, 'materials_list': materials_list, 'grand_total': grand_total, 'all_suppliers_json': all_suppliers_json, 'all_suppliers': all_suppliers, 'created_pos': created_pos})
 
-    return render(request, 'purchasing/ppo_detail.html', {
-        'ppo': ppo, 'materials_list': materials_list, 'grand_total': grand_total,
-        'all_suppliers_json': all_suppliers_json, 'all_suppliers': all_suppliers, 'created_pos': created_pos
-    })
-
-
-# (ฟังก์ชัน approve, cancel, overseas_po ... ยังอยู่ครบเหมือนเดิมค่ะ)
 @login_required
 def po_approve(request, po_id):
     po = get_object_or_404(PurchaseOrder, id=po_id)
@@ -430,15 +385,12 @@ def po_cancel(request, po_id):
     po = get_object_or_404(PurchaseOrder, id=po_id)
     is_approver = check_is_approver(request.user)
     if is_approver and po.status == 'DRAFT':
-        po.status = 'CANCELLED'
-        po.save()
-        messages.warning(request, f"⚠️ ยกเลิกใบสั่งซื้อ {po.code} เรียบร้อยแล้ว")
+         po.status = 'CANCELLED'
+         po.save()
+         messages.warning(request, f"⚠️ ยกเลิกใบสั่งซื้อ {po.code} เรียบร้อยแล้ว")
     else: messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิก หรือสถานะเอกสารไม่ถูกต้อง")
     return redirect('po_list')
 
-# ==========================================
-# ✈️ ระบบสั่งซื้อต่างประเทศ (Overseas PO Tracker)
-# ==========================================
 @login_required
 def overseas_po_list(request):
     if not can_view_and_pay(request.user): return redirect('purchasing_dashboard')
@@ -488,3 +440,56 @@ def overseas_po_delete(request, pk):
     po.delete()
     messages.success(request, "🗑️ ลบรายการสั่งซื้อต่างประเทศเรียบร้อยแล้ว")
     return redirect('overseas_po_list')
+
+# ==========================================
+# 🌟 [UPDATE] ทำเนียบซัพพลายเออร์ (รองรับระบบค้นหาขั้นสูง) 🌟
+# ==========================================
+@login_required
+def supplier_list(request):
+    if not can_view_and_pay(request.user): return redirect('dashboard')
+    
+    query = request.GET.get('q', '')
+    category_id = request.GET.get('category', '')
+    rm_category_id = request.GET.get('rm_category', '')
+
+    suppliers = Supplier.objects.all().order_by('-id')
+    
+    # 1. กรองด้วยข้อความ (ค้นหาจากตาราง Supplier โดยตรง)
+    if query:
+        suppliers = suppliers.filter(
+            Q(code__icontains=query) | Q(name__icontains=query) |
+            Q(contact_name__icontains=query) | Q(phone__icontains=query)
+        )
+        
+    # 2. กรองด้วยหมวดหมู่ (ค้นหาทะลุผ่านตาราง ProductSupplier ไปหา Product)
+    if category_id:
+        suppliers = suppliers.filter(supplied_products__product__category_id=category_id).distinct()
+        
+    if rm_category_id:
+        suppliers = suppliers.filter(supplied_products__product__rm_category_id=rm_category_id).distinct()
+
+    # ดึงหมวดหมู่ทั้งหมดไปแสดงเป็นตัวเลือก (Dropdown)
+    categories = Category.objects.all().order_by('name')
+    rm_categories = RawMaterialCategory.objects.all().order_by('name')
+
+    context = {
+        'suppliers': suppliers, 'query': query,
+        'categories': categories, 'rm_categories': rm_categories,
+        'selected_cat': category_id, 'selected_rm_cat': rm_category_id
+    }
+        
+    return render(request, 'purchasing/supplier_list.html', context)
+
+@login_required
+def supplier_detail(request, pk):
+    if not can_view_and_pay(request.user): return redirect('dashboard')
+    supplier = get_object_or_404(Supplier, pk=pk)
+
+    supplied_products = ProductSupplier.objects.filter(supplier=supplier).select_related('product')
+    price_history = SupplierPriceHistory.objects.filter(supplier=supplier).order_by('-updated_at')
+
+    return render(request, 'purchasing/supplier_detail.html', {
+        'supplier': supplier,
+        'supplied_products': supplied_products,
+        'price_history': price_history
+    })

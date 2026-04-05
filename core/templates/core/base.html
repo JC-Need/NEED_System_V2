@@ -28,12 +28,21 @@
         .nav-link:hover { color: #d4af37 !important; transform: translateY(-2px); }
         .nav-link.active { color: #c5a059 !important; border-bottom: 2px solid #c5a059; }
         .nav-user { color: #555; font-weight: 600; }
+        
         .btn-logout { border: 1px solid #eee; color: #777; background: #f8f9fa; }
         .btn-logout:hover { background: #fee; color: #d9534f; border-color: #f5c6cb; }
 
         .dropdown-menu { border-radius: 12px; border: 1px solid #eee; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
         .dropdown-item { font-weight: 500; padding: 10px 20px; color: #555; transition: 0.2s; }
         .dropdown-item:hover { background-color: #f8f9fa; color: #c5a059; }
+
+        .btn-primary { background-color: #c5a059 !important; border-color: #c5a059 !important; color: white !important; }
+        .btn-primary:hover { background-color: #b38f4f !important; border-color: #b38f4f !important; }
+        .btn-outline-primary { color: #c5a059 !important; border-color: #c5a059 !important; }
+        .btn-outline-primary:hover { background-color: #c5a059 !important; color: white !important; }
+        .text-primary { color: #c5a059 !important; }
+        .bg-primary { background-color: #c5a059 !important; }
+        .border-primary { border-color: #c5a059 !important; }
     </style>
 </head>
 <body>
@@ -75,7 +84,7 @@
                     {% if request.user.is_superuser or request.user.groups.all.0.name == "Inventory_Team" or request.user.groups.all.0.name == "Inventory" %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-boxes me-1"></i> คลังสินค้า
+                             <i class="fas fa-boxes me-1"></i> คลังสินค้า
                         </a>
                         <ul class="dropdown-menu border-0 shadow-lg">
                             <li><a class="dropdown-item" href="{% url 'inventory_dashboard' %}"><i class="fas fa-chart-line me-2 text-success"></i> แดชบอร์ดคลังสินค้า</a></li>
@@ -85,8 +94,15 @@
                     {% endif %}
 
                     {% if request.user.is_superuser or request.user.groups.all.0.name == "Purchasing_Team" or request.user.groups.all.0.name == "Purchasing" %}
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'purchasing_dashboard' %}"><i class="fas fa-shopping-cart me-1"></i> จัดซื้อ (PO)</a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="purchasingDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-shopping-cart me-1"></i> ระบบจัดซื้อ (PO)
+                        </a>
+                        <ul class="dropdown-menu border-0 shadow-lg">
+                            <li><a class="dropdown-item" href="{% url 'purchasing_dashboard' %}"><i class="fas fa-chart-line me-2 text-primary"></i> แดชบอร์ดจัดซื้อ</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'supplier_list' %}"><i class="fas fa-address-book me-2 text-warning"></i> ทำเนียบซัพพลายเออร์</a></li>
+                        </ul>
                     </li>
                     {% endif %}
 
@@ -107,9 +123,9 @@
                             <i class="fas fa-users me-1"></i> ระบบบุคลากร
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="{% url 'employee_dashboard' %}"><i class="fas fa-id-card me-2 text-primary"></i> แดชบอร์ดพนักงาน (ฉัน)</a></li>
+                             <li><a class="dropdown-item" href="{% url 'employee_dashboard' %}"><i class="fas fa-id-card me-2 text-primary"></i> แดชบอร์ดพนักงาน (ฉัน)</a></li>
                             {% if request.user.is_superuser or request.user.groups.all.0.name == "Manager_Team" or request.user.groups.all.0.name == "HR_Team" %}
-                            <li><hr class="dropdown-divider"></li>
+                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{% url 'manager_dashboard' %}"><i class="fas fa-user-tie me-2 text-warning"></i> อนุมัติการลา (หัวหน้างาน)</a></li>
                             {% endif %}
                             {% if request.user.is_superuser or request.user.groups.all.0.name == "HR_Team" %}

@@ -19,6 +19,9 @@ urlpatterns = [
 
     path('ajax/add-category/', views.ajax_add_category, name='ajax_add_category'),
     path('ajax/add-supplier/', views.ajax_add_supplier, name='ajax_add_supplier'),
+    
+    # 🌟 [NEW] เส้นทางสำหรับเพิ่มหมวดหมู่วัตถุดิบ (แผนก) ผ่านหน้าจอ Modal 🌟
+    path('ajax/add-rm-category/', views.ajax_add_rm_category, name='ajax_add_rm_category'),
 
     # 🌟 เส้นทางใหม่: สำหรับรับสินค้าจาก PO (GR) 🌟
     path('receive-po/', views.po_receive_list, name='po_receive_list'),

@@ -74,14 +74,16 @@ class Customer(models.Model):
             self.code = f"{prefix}-{seq:03d}"
         super().save(*args, **kwargs)
 
-# --- ส่วนที่ 4: ผู้ขาย (Supplier) ---
+# --- ส่วนที่ 4: 🌟 อัปเกรดข้อมูลผู้ขาย (Supplier) 🌟 ---
 class Supplier(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="รหัสผู้ขาย")
-    name = models.CharField(max_length=200, verbose_name="ชื่อผู้ขาย")
-    contact_name = models.CharField(max_length=100, blank=True, verbose_name="ชื่อผู้ติดต่อ")
-    tax_id = models.CharField(max_length=20, blank=True, verbose_name="เลขผู้เสียภาษี")
-    phone = models.CharField(max_length=50, blank=True, verbose_name="เบอร์โทร")
-    address = models.TextField(blank=True, verbose_name="ที่อยู่")
+    name = models.CharField(max_length=200, verbose_name="ชื่อบริษัท/ร้านค้า (ซัพพลายเออร์)")
+    tax_id = models.CharField(max_length=20, blank=True, verbose_name="เลขประจำตัวผู้เสียภาษี")
+    contact_name = models.CharField(max_length=100, blank=True, verbose_name="ชื่อผู้ติดต่อ (เซลส์)")
+    phone = models.CharField(max_length=50, blank=True, verbose_name="เบอร์โทรศัพท์")
+    email = models.EmailField(blank=True, null=True, verbose_name="อีเมล")
+    address = models.TextField(blank=True, verbose_name="ที่อยู่ร้านค้า")
+    credit_term = models.IntegerField(default=0, verbose_name="เครดิตเทอม (วัน)")
 
     class Meta:
         verbose_name_plural = "3. ฐานข้อมูลผู้ขาย"
@@ -104,7 +106,7 @@ class Supplier(models.Model):
         super().save(*args, **kwargs)
 
 # ==========================================
-# 🌟 [NEW] ส่วนที่ 5: เรทค่าจัดส่ง (Shipping Rate) 🌟
+# ส่วนที่ 5: เรทค่าจัดส่ง (Shipping Rate)
 # ==========================================
 class ShippingRate(models.Model):
     origin_branch = models.CharField(max_length=100, choices=[('บางพระ', 'บางพระ (ชลบุรี)'), ('นครปฐม', 'นครปฐม'), ('อยุธยา', 'อยุธยา')], verbose_name="สาขาต้นทาง (ผลิต)")
@@ -114,7 +116,7 @@ class ShippingRate(models.Model):
     class Meta:
         verbose_name = "ตั้งค่าเรทค่าขนส่ง"
         verbose_name_plural = "4. ตั้งค่าเรทค่าขนส่ง"
-        unique_together = ('origin_branch', 'destination_province') # ป้องกันการตั้งราคาซ้ำซ้อนในสาขาเดียวกัน
+        unique_together = ('origin_branch', 'destination_province') 
         
     def __str__(self):
         return f"จาก {self.origin_branch} -> ส่ง {self.destination_province} : ฿{self.price}"

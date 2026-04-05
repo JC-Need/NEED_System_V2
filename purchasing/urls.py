@@ -13,6 +13,10 @@ urlpatterns = [
     path('ppo/list/', views.ppo_list, name='ppo_list'),
     path('ppo/<int:pk>/', views.ppo_detail, name='ppo_detail'),
     
+    # 🌟 [NEW] เส้นทางสำหรับทำเนียบและโปรไฟล์ซัพพลายเออร์ 🌟
+    path('suppliers/', views.supplier_list, name='supplier_list'),
+    path('suppliers/<int:pk>/', views.supplier_detail, name='supplier_detail'),
+
     # 🌟 เส้นทางใหม่: ระบบจัดซื้อต่างประเทศ 🌟
     path('overseas/', views.overseas_po_list, name='overseas_po_list'),
     path('overseas/save/', views.overseas_po_save, name='overseas_po_save'),

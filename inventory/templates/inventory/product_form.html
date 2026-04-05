@@ -27,23 +27,30 @@
                         </div>
 
                         <div class="row g-3 mb-3">
-                            <div class="col-md-6">
+                            <div class="{% if p_type == 'RM' %}col-md-6{% else %}col-md-12{% endif %}">
                                 {{ form.category|as_crispy_field }}
                             </div>
+                            
+                            {% if p_type == 'RM' %}
                             <div class="col-md-6">
-                                {{ form.supplier|as_crispy_field }}
+                                {{ form.rm_category|as_crispy_field }}
                             </div>
+                            {% endif %}
                         </div>
 
                         <div class="row g-3 mb-3 p-3 bg-light rounded-3 border">
                             <div class="col-md-4">
                                 {{ form.cost_price|as_crispy_field }}
                             </div>
+                            
+                            {% if p_type == 'FG' %}
                             <div class="col-md-4">
                                 {{ form.sell_price|as_crispy_field }}
                             </div>
+                            {% endif %}
+                            
                             <div class="col-md-4">
-                                {{ form.min_level|as_crispy_field }}
+                                 {{ form.min_level|as_crispy_field }}
                             </div>
                         </div>
 
@@ -51,19 +58,58 @@
                             <div class="col-md-6">
                                 {{ form.image|as_crispy_field }}
                             </div>
+                             
+                            {% if p_type == 'FG' %}
                             <div class="col-md-6">
-                                {{ form.standard_blueprint|as_crispy_field }}
+                                 {{ form.standard_blueprint|as_crispy_field }}
                                 <small class="text-muted"><i class="fas fa-info-circle"></i> ใช้แนบไฟล์ PDF (เช่น SUP3.pdf) สำหรับส่งให้ฝ่ายผลิต</small>
                             </div>
+                             {% endif %}
                         </div>
 
                         <div class="mb-4">
                             {{ form.is_active|as_crispy_field }}
                         </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-5 mb-3 border-bottom pb-2">
+                            <h6 class="fw-bold m-0"><i class="fas fa-store text-warning me-2"></i>รายชื่อซัพพลายเออร์ (สามารถระบุได้มากกว่า 1 ร้านค้า)</h6>
+                            <button type="button" class="btn btn-warning btn-sm rounded-pill text-dark fw-bold shadow-sm px-3" data-bs-toggle="modal" data-bs-target="#supplierModal">
+                                <i class="fas fa-plus me-1"></i> เพิ่มร้านค้าใหม่
+                            </button>
+                        </div>
+
+                        {{ formset.management_form }}
+                        <div class="table-responsive mb-4">
+                            <table class="table table-bordered bg-white table-sm" id="supplier-table">
+                                <thead class="bg-light text-muted small text-center">
+                                    <tr>
+                                        <th style="width: 40%">เลือกร้านค้า</th>
+                                        <th style="width: 25%">รหัสอ้างอิงร้าน (ถ้ามี)</th>
+                                        <th style="width: 20%">ราคาทุนร้านนี้</th>
+                                        <th style="width: 10%">ร้านหลัก</th>
+                                        <th style="width: 5%">ลบ</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for form_sup in formset %}
+                                     <tr class="align-middle">
+                                        <td class="d-none">{{ form_sup.id }}</td>
+                                        <td>{{ form_sup.supplier }}</td>
+                                        <td>{{ form_sup.supplier_part_no }}</td>
+                                        <td>{{ form_sup.cost_price }}</td>
+                                         <td class="text-center">{{ form_sup.is_default }}</td>
+                                        <td class="text-center text-danger">
+                                            {% if form_sup.instance.pk %}{{ form_sup.DELETE }}{% endif %}
+                                        </td>
+                                     </tr>
+                                    {% endfor %}
+                                </tbody>
+                             </table>
+                        </div>
 
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm">
-                                <i class="fas fa-save me-2"></i> บันทึกข้อมูล
+                                 <i class="fas fa-save me-2"></i> บันทึกข้อมูล
                             </button>
                             <a href="{% url 'inventory_dashboard' %}" class="btn btn-light text-muted rounded-pill text-center text-decoration-none">ยกเลิก</a>
                         </div>
@@ -78,8 +124,8 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content rounded-4 border-0 shadow">
             <div class="modal-header border-bottom-0">
-                <h5 class="modal-title fw-bold text-primary"><i class="fas fa-tags me-2"></i>เพิ่มหมวดหมู่ใหม่</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title fw-bold text-primary"><i class="fas fa-tags me-2"></i>เพิ่มหมวดหมู่สินค้า</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body py-0">
                 <input type="text" id="newCategoryName" class="form-control form-control-lg shadow-sm" placeholder="กรอกชื่อหมวดหมู่ที่นี่...">
@@ -92,9 +138,75 @@
     </div>
 </div>
 
+<div class="modal fade" id="rmCategoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header border-bottom-0">
+                <h5 class="modal-title fw-bold text-primary"><i class="fas fa-tags me-2"></i>เพิ่มหมวดหมู่วัตถุดิบ (แผนก)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-0">
+                <input type="text" id="newRMCategoryName" class="form-control form-control-lg shadow-sm" placeholder="เช่น ไฟฟ้า, ประปา, สี...">
+            </div>
+            <div class="modal-footer border-top-0 mt-3">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="button" id="btnSaveRMCategory" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold">บันทึก</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="supplierModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-warning border-bottom-0">
+                <h5 class="modal-title fw-bold text-dark"><i class="fas fa-store me-2 text-dark"></i>ขึ้นทะเบียนร้านค้า/ซัพพลายเออร์ใหม่</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body py-4">
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <label class="form-label small fw-bold">ชื่อบริษัท/ร้านค้า *</label>
+                        <input type="text" id="supName" class="form-control border-warning" placeholder="บจก. / หจก. / ร้าน...">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">เลขประจำตัวผู้เสียภาษี</label>
+                        <input type="text" id="supTax" class="form-control" placeholder="เลข 13 หลัก">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">ชื่อผู้ติดต่อ (เซลส์)</label>
+                        <input type="text" id="supContact" class="form-control" placeholder="ชื่อผู้ที่ต้องติดต่อประสานงาน">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">เบอร์โทรศัพท์</label>
+                        <input type="text" id="supPhone" class="form-control" placeholder="08X-XXX-XXXX">
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label small fw-bold">อีเมล</label>
+                        <input type="email" id="supEmail" class="form-control" placeholder="email@domain.com">
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label small fw-bold">ที่อยู่ตั้งร้านค้า</label>
+                        <input type="text" id="supAddress" class="form-control" placeholder="ที่อยู่สำหรับเปิดบิล / ส่งของ">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small fw-bold">เครดิตเทอม (วัน)</label>
+                        <input type="number" id="supCredit" class="form-control" value="0" min="0">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer border-top-0">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                <button type="button" id="btnSaveSupplier" class="btn btn-warning text-dark rounded-pill px-5 shadow-sm fw-bold">บันทึกและขึ้นทะเบียน</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         
+        // --- 1. ระบบจัดการปุ่ม [+] เพิ่มหมวดหมู่ ---
         function addPlusButtonModal(selectId, modalId) {
             const selectEl = document.getElementById(selectId);
             if (selectEl) {
@@ -103,52 +215,93 @@
                 selectEl.parentNode.insertBefore(wrapper, selectEl);
                 wrapper.appendChild(selectEl);
                 
-                const btnHTML = `<button class="btn btn-outline-primary fw-bold" type="button" data-bs-toggle="modal" data-bs-target="${modalId}" title="เพิ่มหมวดหมู่แบบด่วน" style="border-left: 0;"><i class="fas fa-plus"></i></button>`;
+                const btnHTML = `<button class="btn btn-outline-primary fw-bold" type="button" data-bs-toggle="modal" data-bs-target="${modalId}" title="เพิ่มด่วน" style="border-left: 0;"><i class="fas fa-plus"></i></button>`;
                 wrapper.insertAdjacentHTML('beforeend', btnHTML);
                 
                 selectEl.style.borderTopRightRadius = '0';
                 selectEl.style.borderBottomRightRadius = '0';
             }
         }
-
-        function addPlusButtonLink(selectId, targetUrl) {
-            const selectEl = document.getElementById(selectId);
-            if (selectEl) {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'input-group shadow-sm rounded';
-                selectEl.parentNode.insertBefore(wrapper, selectEl);
-                wrapper.appendChild(selectEl);
-                
-                const btnHTML = `<a href="${targetUrl}" target="_blank" class="btn btn-outline-primary fw-bold d-flex align-items-center" title="ไปหน้าจัดการร้านค้า" style="border-left: 0;"><i class="fas fa-plus"></i></a>`;
-                wrapper.insertAdjacentHTML('beforeend', btnHTML);
-                
-                selectEl.style.borderTopRightRadius = '0';
-                selectEl.style.borderBottomRightRadius = '0';
-            }
-        }
-
+        
         addPlusButtonModal('id_category', '#categoryModal');
-        addPlusButtonLink('id_supplier', '/master_data/suppliers/');
+        addPlusButtonModal('id_rm_category', '#rmCategoryModal'); // 🌟 ผูกปุ่มให้แผนกวัตถุดิบ
 
+        // บันทึกหมวดหมู่สินค้า
         const btnSaveCat = document.getElementById('btnSaveCategory');
         if(btnSaveCat) {
             btnSaveCat.addEventListener('click', function() {
                 const name = document.getElementById('newCategoryName').value.trim();
                 if(!name) return;
-                
                 fetch('{% url "ajax_add_category" %}', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                    },
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
                     body: JSON.stringify({name: name})
                 }).then(res => res.json()).then(data => {
                     if(data.success) {
-                        const select = document.getElementById('id_category');
-                        select.add(new Option(data.name, data.id, true, true));
+                        document.getElementById('id_category').add(new Option(data.name, data.id, true, true));
                         bootstrap.Modal.getInstance(document.getElementById('categoryModal')).hide();
                         document.getElementById('newCategoryName').value = '';
+                    } else alert('Error: ' + data.error);
+                });
+            });
+        }
+
+        // บันทึกแผนกวัตถุดิบ (RM Category)
+        const btnSaveRMCat = document.getElementById('btnSaveRMCategory');
+        if(btnSaveRMCat) {
+            btnSaveRMCat.addEventListener('click', function() {
+                const name = document.getElementById('newRMCategoryName').value.trim();
+                if(!name) return;
+                fetch('{% url "ajax_add_rm_category" %}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+                    body: JSON.stringify({name: name})
+                }).then(res => res.json()).then(data => {
+                    if(data.success) {
+                        document.getElementById('id_rm_category').add(new Option(data.name, data.id, true, true));
+                        bootstrap.Modal.getInstance(document.getElementById('rmCategoryModal')).hide();
+                        document.getElementById('newRMCategoryName').value = '';
+                    } else alert('Error: ' + data.error);
+                });
+            });
+        }
+
+        // --- 2. 🌟 บันทึกร้านค้าฉบับสมบูรณ์ (Master Data) ---
+        const btnSaveSup = document.getElementById('btnSaveSupplier');
+        if(btnSaveSup) {
+            btnSaveSup.addEventListener('click', function() {
+                const name = document.getElementById('supName').value.trim();
+                if(!name) { alert("กรุณาระบุชื่อร้านค้าค่ะ"); return; }
+                
+                const supData = {
+                    name: name,
+                    tax_id: document.getElementById('supTax').value.trim(),
+                    contact_name: document.getElementById('supContact').value.trim(),
+                    phone: document.getElementById('supPhone').value.trim(),
+                    email: document.getElementById('supEmail').value.trim(),
+                    address: document.getElementById('supAddress').value.trim(),
+                    credit_term: document.getElementById('supCredit').value || 0
+                };
+                
+                fetch('{% url "ajax_add_supplier" %}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value },
+                    body: JSON.stringify(supData)
+                }).then(res => res.json()).then(data => {
+                    if(data.success) {
+                        const selects = document.querySelectorAll('#supplier-table select[name$="-supplier"]');
+                        selects.forEach(select => select.add(new Option(data.name, data.id, false, false)));
+                        
+                        bootstrap.Modal.getInstance(document.getElementById('supplierModal')).hide();
+                        
+                        // ล้างค่าฟอร์ม
+                        document.getElementById('supName').value = '';
+                        document.getElementById('supTax').value = '';
+                        document.getElementById('supContact').value = '';
+                        document.getElementById('supPhone').value = '';
+                        document.getElementById('supEmail').value = '';
+                        document.getElementById('supAddress').value = '';
+                        document.getElementById('supCredit').value = '0';
                     } else {
                         alert('เกิดข้อผิดพลาด: ' + data.error);
                     }
@@ -156,33 +309,34 @@
             });
         }
 
+        // --- 3. ระบบฟอร์แมตตัวเลขและการแก้ปัญหาเลข 0 ---
         const numberInputs = document.querySelectorAll('.number-input');
         numberInputs.forEach(input => {
             input.addEventListener('focus', function() {
                 let val = this.value.replace(/,/g, '');
-                if (parseFloat(val) === 0 || val === '') {
-                    this.value = '';
-                } else {
-                    this.value = val;
-                }
+                this.value = (parseFloat(val) === 0 || val === '') ? '' : val;
             });
-
-            input.addEventListener('input', function() {
-                this.value = this.value.replace(/[^0-9.]/g, '');
-            });
-
+            input.addEventListener('input', function() { this.value = this.value.replace(/[^0-9.]/g, ''); });
             input.addEventListener('blur', function() {
-                if (this.value === '' || isNaN(this.value)) {
-                    this.value = '0.00';
-                } else {
-                    let val = parseFloat(this.value);
-                    this.value = val.toLocaleString('en-US', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                    });
-                }
+                if (this.value === '' || isNaN(this.value)) this.value = '0.00';
+                else this.value = parseFloat(this.value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             });
         });
+
+        const supplierTable = document.getElementById('supplier-table');
+        if (supplierTable) {
+            supplierTable.addEventListener('focusin', function(e) {
+                if (e.target && e.target.nodeName === 'INPUT' && (e.target.type === 'number' || e.target.type === 'text')) {
+                    if (parseFloat(e.target.value) === 0) e.target.value = '';
+                }
+            });
+            supplierTable.addEventListener('focusout', function(e) {
+                if (e.target && e.target.nodeName === 'INPUT' && (e.target.type === 'number' || e.target.type === 'text')) {
+                    if (e.target.value.trim() === '') e.target.value = 0;
+                }
+            });
+        }
+
     });
 </script>
 {% endblock %}
