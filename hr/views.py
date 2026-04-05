@@ -86,28 +86,28 @@ def check_in(request):
         try:
             employee = request.user.employee
             today = date.today()
-            
+
             # 🌟 [NEW] รับค่าพิกัด GPS จากหน้าบ้าน
             lat = request.POST.get('latitude')
             lng = request.POST.get('longitude')
-            
+
             attendance, created = Attendance.objects.get_or_create(employee=employee, date=today)
 
             if not attendance.time_in:
                 attendance.time_in = timezone.localtime(timezone.now()).time()
-                
+
                 # 🌟 [NEW] บันทึกพิกัดลงฐานข้อมูล
                 if lat: attendance.latitude = lat
                 if lng: attendance.longitude = lng
-                
+
                 attendance.save()
-                
+
                 msg = f'ลงเวลาเข้างานเรียบร้อย ({attendance.time_in.strftime("%H:%M")})'
                 if lat and lng:
                     msg += ' พร้อมบันทึกพิกัด GPS สำเร็จ ✅'
                 else:
                     msg += ' (ไม่พบข้อมูลพิกัด GPS)'
-                    
+
                 messages.success(request, msg)
         except Exception as e:
             print(f"Error checking in: {e}")
@@ -283,10 +283,73 @@ def employee_edit(request, emp_id):
 
     return render(request, 'hr/employee_edit.html', {'form': form, 'employee': employee})
 
+# เลื่อนหาฟังก์ชัน network_tree เดิม แล้ววางทับด้วยโค้ดชุดนี้นะคะ
 @user_passes_test(is_hr_or_admin, login_url='/')
 def network_tree(request):
-    root_employees = Employee.objects.filter(introducer__isnull=True).order_by('id')
-    return render(request, 'hr/network_tree.html', {'root_employees': root_employees})
+    # 🌟 [NEW] ศูนย์บัญชาการผลตอบแทน (Compensation Command Center) 🌟
+    from sales.models import POSOrder, Invoice  # นำเข้าเพื่อใช้วิเคราะห์ยอดขายรอจ่าย
+
+    groups = SalesGroup.objects.all().order_by('id')
+    now = timezone.now()
+
+    groups_data = []
+    for group in groups:
+        members = group.members.all().order_by('group_role', 'first_name')
+        members_data = []
+
+        # นับจำนวนลูกทีมแต่ละระดับเพื่อหารแบ่ง % (ป้องกันการหาร 0)
+        l1_count = members.filter(group_role='LEVEL1').count() or 1
+        l2_count = members.filter(group_role='LEVEL2').count() or 1
+
+        for emp in members:
+            # 1. ยอดรับไปแล้วทั้งหมด (ดึงประวัติการโอนคอมมิชชันสำเร็จ)
+            total_comm = CommissionLog.objects.filter(recipient=emp).aggregate(Sum('amount'))['amount__sum'] or 0
+
+            # 2. ยอดรอจ่ายเดือนนี้ (ประเมินจากบิลเดือนปัจจุบัน ที่สถานะยังไม่ PAID)
+            unpaid_pos = POSOrder.objects.filter(
+                employee=emp, status__in=['PENDING', 'UNPAID'],
+                created_at__year=now.year, created_at__month=now.month
+            ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+
+            unpaid_inv = Invoice.objects.filter(
+                employee=emp, status__in=['PENDING', 'UNPAID'],
+                date__year=now.year, date__month=now.month
+            ).aggregate(Sum('grand_total'))['grand_total__sum'] or 0
+
+            pending_sales = float(unpaid_pos) + float(unpaid_inv)
+
+            pending_comm = 0
+            if pending_sales > 0:
+                group_comm = pending_sales * float(group.commission_rate) / 100
+                if group.group_type == 'TEAM':
+                    if emp.group_role == 'LEADER':
+                        pending_comm = group_comm * float(group.share_leader) / 100
+                    elif emp.group_role == 'LEVEL1':
+                        pending_comm = (group_comm * float(group.share_level1) / 100) / l1_count
+                    elif emp.group_role == 'LEVEL2':
+                        pending_comm = (group_comm * float(group.share_level2) / 100) / l2_count
+                elif group.group_type == 'INDEPENDENT':
+                    fund_share = group_comm * float(group.share_fund) / 100
+                    pending_comm = group_comm - fund_share
+
+            members_data.append({
+                'emp': emp,
+                'total_comm': total_comm,
+                'pending_comm': pending_comm
+            })
+
+        groups_data.append({
+            'group': group,
+            'members_data': members_data
+        })
+
+    unassigned_employees = Employee.objects.filter(sales_group__isnull=True).order_by('-start_date')
+
+    context = {
+        'groups_data': groups_data,
+        'unassigned_employees': unassigned_employees
+    }
+    return render(request, 'hr/network_tree.html', context)
 
 
 # ==========================================
@@ -576,7 +639,7 @@ def attendance_map(request):
 
     if search_q:
         attendances = attendances.filter(
-            Q(employee__first_name__icontains=search_q) | 
+            Q(employee__first_name__icontains=search_q) |
             Q(employee__last_name__icontains=search_q) |
             Q(employee__emp_id__icontains=search_q)
         )
@@ -587,3 +650,37 @@ def attendance_map(request):
         'search_q': search_q,
     }
     return render(request, 'hr/attendance_map.html', context)
+
+@user_passes_test(is_hr_or_admin, login_url='/')
+def org_chart_tree(request):
+    """สมองกลสำหรับหน้าแผนผังองค์กร (Tree View)"""
+    root_employees = Employee.objects.filter(introducer__isnull=True).order_by('id')
+    return render(request, 'hr/org_chart_tree.html', {'root_employees': root_employees})
+
+@user_passes_test(is_hr_or_admin, login_url='/')
+@require_POST
+def api_assign_to_team(request):
+    """สมองกลสำหรับย้ายพนักงานเข้าทีม ปลดออกจากทีม และกำหนดตำแหน่ง"""
+    emp_id = request.POST.get('emp_id')
+    group_id = request.POST.get('group_id')
+    role = request.POST.get('role')
+
+    try:
+        employee = get_object_or_404(Employee, emp_id=emp_id)
+
+        if group_id:
+            # 🌟 กรณีมี group_id แปลว่า ย้ายเข้าทีม
+            employee.sales_group_id = group_id
+            if role:
+                employee.group_role = role
+            msg = f"✅ ย้ายคุณ {employee.first_name} เข้าทีมเรียบร้อยแล้วค่ะ"
+        else:
+            # 🌟 กรณีไม่มี group_id แปลว่า ปลดออกจากทีม กลับไปรอจัดสรร
+            employee.sales_group = None
+            employee.group_role = 'MEMBER'
+            msg = f"🔄 นำคุณ {employee.first_name} กลับไปรอจัดสรรทีมเรียบร้อยแล้วค่ะ"
+
+        employee.save()
+        return JsonResponse({'status': 'success', 'message': msg})
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=400)

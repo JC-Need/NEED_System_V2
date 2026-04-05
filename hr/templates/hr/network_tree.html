@@ -1,192 +1,243 @@
 {% extends 'core/base.html' %}
-{% load static %}
+{% load humanize %}
 
 {% block content %}
 <style>
-    /* --- CSS สำหรับ Interactive Tree --- */
-    .tree-container {
-        max-width: 1000px;
-        margin: 0 auto;
-        padding: 40px;
-        font-family: 'Sarabun', sans-serif;
+    /* จัดการความสูงและ Scrollbar ฝั่งซ้าย */
+    .scrollable-panel {
+        max-height: 80vh;
+        overflow-y: auto;
+        padding-right: 10px;
     }
+    .scrollable-panel::-webkit-scrollbar { width: 6px; }
+    .scrollable-panel::-webkit-scrollbar-thumb { background-color: #d1d3e2; border-radius: 10px; }
 
-    /* เส้นหลักแนวตั้ง */
-    .tree-list {
-        list-style: none;
-        padding-left: 20px;
-        position: relative;
-    }
+    .command-card { border: none; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); background: #fff; margin-bottom: 25px; overflow: hidden; }
+    .badge-role { width: 100px; text-align: center; }
+    .fund-box { background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%); border: 1px dashed #d1d3e2; border-radius: 12px; }
     
-    .tree-list ul {
-        list-style: none;
-        padding-left: 30px; /* ขยับลูกเข้าไป */
-        border-left: 2px dashed #ccc; /* เส้นประแนวตั้ง */
-        margin-left: 10px;
-        display: none; /* 🔥 ซ่อนลูกทีมไว้ก่อน (Default Hidden) */
-    }
+    /* ปรับแต่ง Header ฝั่งขวาให้สวยงาม */
+    .unassigned-header { background: #858796; color: white; padding: 15px 20px; }
     
-    /* แสดงลูกทีมเมื่อมี class 'active' */
-    .tree-list ul.active {
-        display: block;
-        animation: fadeIn 0.3s ease-in-out;
-    }
-
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-
-    .tree-item {
-        margin: 10px 0;
-        position: relative;
-    }
-
-    /* เส้นขีดขวางแนวนอนหาลูก */
-    .tree-item::before {
-        content: '';
-        position: absolute;
-        top: 25px; left: -32px;
-        width: 30px; height: 2px;
-        background: #ccc;
-    }
-    
-    /* ซ่อนเส้นของ Root ตัวแรก */
-    .is-root::before { display: none; }
-    .is-root > ul { border-left: 2px dashed #ccc; margin-left: 25px; }
-
-    /* การ์ดพนักงาน */
-    .node-card {
-        display: inline-flex;
-        align-items: center;
-        background: #fff;
-        border: 1px solid #e3e6f0;
-        border-radius: 12px;
-        padding: 8px 15px;
-        text-decoration: none;
-        color: #5a5c69;
-        transition: all 0.2s;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        min-width: 280px;
-        position: relative;
-        cursor: pointer;
-    }
-
-    .node-card:hover {
-        transform: translateX(5px);
-        border-color: #4e73df;
-        box-shadow: 0 5px 15px rgba(78, 115, 223, 0.15);
-    }
-
-    /* ปุ่ม Toggle (+/-) */
-    .toggle-btn {
-        width: 24px; height: 24px;
-        background: #4e73df;
-        color: white;
-        border-radius: 50%;
+    /* ปุ่มลบคนออกจากทีม */
+    .btn-remove-member {
+        width: 32px; height: 32px; padding: 0;
         display: flex; align-items: center; justify-content: center;
-        font-size: 14px;
-        position: absolute;
-        right: -12px; top: 50%;
-        transform: translateY(-50%);
-        z-index: 10;
-        cursor: pointer;
-        transition: all 0.2s;
-        border: 2px solid #fff;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        border-radius: 50%; opacity: 0.6; transition: all 0.2s;
     }
-    
-    .toggle-btn:hover { background: #2e59d9; transform: translateY(-50%) scale(1.1); }
-    .toggle-btn.rotated { background: #e74a3b; transform: translateY(-50%) rotate(45deg); }
-
-    /* สีแถบด้านซ้าย */
-    .rank-director { border-left: 4px solid #e74a3b; }
-    .rank-manager { border-left: 4px solid #f6c23e; }
-    .rank-supervisor { border-left: 4px solid #4e73df; }
-    .rank-member { border-left: 4px solid #1cc88a; }
-
-    .node-img {
-        width: 40px; height: 40px;
-        border-radius: 50%;
-        object-fit: cover;
-        margin-right: 12px;
-        border: 2px solid #f8f9fa;
-    }
+    .list-group-item:hover .btn-remove-member { opacity: 1; }
 </style>
 
-<div class="container py-5">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+<div class="container-xxl py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4 border-bottom pb-3">
         <div>
-            <h3 class="fw-bold mb-0 text-dark"><i class="fas fa-network-wired text-primary me-2"></i>โครงสร้างทีมงาน</h3>
-            <p class="text-muted small">คลิกที่ปุ่ม <i class="fas fa-plus-circle text-primary"></i> เพื่อดูสมาชิกในทีม</p>
+            <h3 class="fw-bold mb-1 text-dark"><i class="fas fa-chart-pie text-primary me-2"></i>ศูนย์บัญชาการผลตอบแทน (Compensation Center)</h3>
+            <p class="text-muted small mb-0">ควบคุมโครงสร้างทีม จัดการส่วนแบ่ง และย้ายพนักงานเข้า-ออกสังกัดแบบ Real-time</p>
         </div>
-        <div class="d-flex gap-2">
-            <button onclick="expandAll()" class="btn btn-sm btn-outline-primary rounded-pill px-3">
-                <i class="fas fa-expand-arrows-alt me-1"></i> กางทั้งหมด
-            </button>
-            <button onclick="collapseAll()" class="btn btn-sm btn-outline-secondary rounded-pill px-3">
-                <i class="fas fa-compress-arrows-alt me-1"></i> ย่อทั้งหมด
-            </button>
-            <a href="{% url 'hr_executive_dashboard' %}" class="btn btn-sm btn-light border rounded-pill px-3">
-                <i class="fas fa-arrow-left me-1"></i> กลับ
+        <div>
+            <a href="{% url 'sales_group_settings' %}" class="btn btn-primary rounded-pill px-4 shadow-sm fw-bold btn-sm">
+                <i class="fas fa-cog me-2"></i>ตั้งค่ากลุ่ม & เรทค่าคอมฯ
+            </a>
+            <a href="{% url 'org_chart_tree' %}" class="btn btn-outline-success rounded-pill px-4 ms-2 fw-bold btn-sm">
+                <i class="fas fa-sitemap me-2"></i>ดูแผนผังต้นไม้
             </a>
         </div>
     </div>
 
-    <div class="card border-0 shadow-sm rounded-4 bg-light">
-        <div class="card-body p-5 overflow-auto" style="min-height: 500px;">
-            
-            <ul class="tree-list m-0 p-0">
-                {% for root in root_employees %}
-                    {% include "hr/includes/tree_node_vertical.html" with node=root is_root=True %}
-                {% empty %}
-                    <div class="text-center py-5 text-muted">
-                        <i class="fas fa-users-slash fa-3x mb-3 opacity-25"></i>
-                        <p>ยังไม่มีข้อมูลโครงสร้างทีม</p>
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="scrollable-panel">
+                {% for g_data in groups_data %}
+                <div class="command-card shadow-sm border border-light">
+                    <div class="bg-dark text-white px-4 py-3 d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="fw-bold m-0">{{ g_data.group.name }}</h5>
+                            <small class="opacity-75"><i class="fas fa-layer-group me-1"></i>{{ g_data.group.get_group_type_display }}</small>
+                        </div>
+                        <span class="badge bg-white text-dark rounded-pill px-3 py-2 shadow-sm">
+                            เรทคอมมิชชัน: <strong>{{ g_data.group.commission_rate }}%</strong>
+                        </span>
                     </div>
-                {% endfor %}
-            </ul>
 
+                    <div class="p-4">
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-7">
+                                <div class="d-flex flex-wrap gap-1">
+                                    <span class="badge bg-light text-dark border small p-2"><i class="fas fa-user-tie text-primary me-1"></i>หัวหน้า: {{ g_data.group.share_leader }}%</span>
+                                    <span class="badge bg-light text-dark border small p-2"><i class="fas fa-user text-success me-1"></i>ระดับ 1: {{ g_data.group.share_level1 }}%</span>
+                                    <span class="badge bg-light text-dark border small p-2"><i class="fas fa-user text-warning me-1"></i>ระดับ 2: {{ g_data.group.share_level2 }}%</span>
+                                    <span class="badge bg-light text-dark border small p-2"><i class="fas fa-piggy-bank text-info me-1"></i>กองทุน: {{ g_data.group.share_fund }}%</span>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="fund-box p-2 text-center border-info">
+                                    <small class="text-muted fw-bold small">ยอดเงินกองทุนสะสม</small>
+                                    <h5 class="fw-bold text-info m-0">฿{{ g_data.group.fund_balance|floatformat:2|intcomma }}</h5>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="list-group list-group-flush">
+                            {% for m in g_data.members_data %}
+                            <div class="list-group-item px-0 d-flex justify-content-between align-items-center py-2 border-light">
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-secondary bg-opacity-10 text-secondary rounded-circle me-3 d-flex justify-content-center align-items-center fw-bold" style="width: 40px; height: 40px;">
+                                        {{ m.emp.first_name|slice:":1" }}
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-0 fw-bold text-dark" style="font-size: 0.95rem;">{{ m.emp.first_name }} {{ m.emp.last_name }}</h6>
+                                        <small class="text-muted">{{ m.emp.get_group_role_display }}</small>
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <div class="text-end me-3">
+                                        <span class="badge bg-danger bg-opacity-10 text-danger rounded-pill px-2 py-1 mb-1 border border-danger border-opacity-10" style="font-size: 0.75rem;">
+                                            รอจ่าย: ฿{{ m.pending_comm|floatformat:2|intcomma }}
+                                        </span><br>
+                                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-2 py-1 border border-success border-opacity-10" style="font-size: 0.75rem;">
+                                            รับแล้ว: ฿{{ m.total_comm|floatformat:2|intcomma }}
+                                        </span>
+                                    </div>
+                                    <button onclick="removeFromTeam('{{ m.emp.emp_id }}', '{{ m.emp.first_name }}')" class="btn btn-outline-danger btn-remove-member shadow-sm" title="นำพนักงานออกจากทีม">
+                                        <i class="fas fa-user-minus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <div class="text-center py-3 text-muted small">ยังไม่มีสมาชิกในทีมนี้</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="command-card shadow-sm border border-light position-sticky" style="top: 85px;">
+                <div class="unassigned-header d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold m-0"><i class="fas fa-user-plus me-2"></i>พนักงานรอจัดสรรทีม ({{ unassigned_employees.count }})</h6>
+                </div>
+                <div class="p-3 scrollable-panel" style="max-height: 65vh;">
+                    {% for emp in unassigned_employees %}
+                    <div class="list-group-item px-2 py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-light text-dark rounded-circle me-3 d-flex justify-content-center align-items-center fw-bold" style="width: 35px; height: 35px;">
+                                {{ emp.first_name|slice:":1" }}
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold fs-6">{{ emp.first_name }}</h6>
+                                <small class="text-muted">{{ emp.position.title|slice:":20" }}</small>
+                            </div>
+                        </div>
+                        <button onclick="openAssignModal('{{ emp.emp_id }}', '{{ emp.first_name }}')" class="btn btn-outline-info btn-sm rounded-pill px-2" style="font-size: 0.7rem;">
+                            <i class="fas fa-plus me-1"></i>ย้ายเข้าทีม
+                        </button>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-check-circle fa-2x mb-2 text-success opacity-50"></i>
+                        <p class="mb-0 small">จัดสรรพนักงานครบทุกคนแล้วค่ะ</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="assignModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-header bg-info text-white rounded-top-4">
+                <h5 class="modal-title fw-bold"><i class="fas fa-user-tag me-2"></i>ย้ายพนักงานเข้าทีม</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="assignForm">
+                {% csrf_token %}
+                <input type="hidden" name="emp_id" id="modal_emp_id">
+                <div class="modal-body p-4">
+                    <p class="text-muted">คุณกำลังจะจัดสรร <strong><span id="modal_emp_name"></span></strong> เข้ากลุ่มทำงาน</p>
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">เลือกทีมเป้าหมาย:</label>
+                        <select name="group_id" class="form-select border-info" required>
+                            <option value="">-- กรุณาเลือกทีม --</option>
+                            {% for g_data in groups_data %}
+                                <option value="{{ g_data.group.id }}">{{ g_data.group.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">บทบาทในทีม:</label>
+                        <select name="role" class="form-select border-info" required>
+                            <option value="MEMBER">สมาชิก/พนักงานขายทั่วไป</option>
+                            <option value="LEVEL1">พนักงานระดับ 1</option>
+                            <option value="LEVEL2">พนักงานระดับ 2</option>
+                            <option value="LEADER">หัวหน้ากลุ่ม</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer border-0 p-4 pt-0">
+                    <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                    <button type="submit" class="btn btn-info text-white rounded-pill px-5 fw-bold shadow-sm">ยืนยันการย้าย</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
 <script>
-    // ฟังก์ชันย่อ/ขยายเมื่อกดปุ่ม
-    function toggleNode(btn) {
-        const nextUl = btn.closest('li').querySelector('ul');
-        if (nextUl) {
-            nextUl.classList.toggle('active');
-            btn.classList.toggle('rotated');
+    // เปิดหน้าต่างย้ายเข้าทีม
+    function openAssignModal(empId, empName) {
+        document.getElementById('modal_emp_id').value = empId;
+        document.getElementById('modal_emp_name').innerText = empName;
+        new bootstrap.Modal(document.getElementById('assignModal')).show();
+    }
+
+    // 🌟 [NEW] ฟังก์ชันนำพนักงานออกจากทีมกลับไปรอจัดสรร 🌟
+    function removeFromTeam(empId, empName) {
+        if(confirm(`คุณแน่ใจหรือไม่ว่าต้องการนำคุณ ${empName} ออกจากทีมนี้ กลับไปสู่พนักงานรอจัดสรร?`)) {
+            const formData = new FormData();
+            formData.append('emp_id', empId);
+            formData.append('group_id', ''); // ส่งค่าว่างไปให้สมองกลรู้ว่านี่คือการ "ปลด"
+            formData.append('role', 'MEMBER');
             
-            // เปลี่ยนไอคอน
-            const icon = btn.querySelector('i');
-            if(nextUl.classList.contains('active')){
-                icon.classList.remove('fa-plus');
-                icon.classList.add('fa-times');
-            } else {
-                icon.classList.remove('fa-times');
-                icon.classList.add('fa-plus');
-            }
+            fetch("{% url 'api_assign_to_team' %}", {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.reload(); 
+                } else {
+                    alert("เกิดข้อผิดพลาด: " + data.message);
+                }
+            });
         }
     }
 
-    // กางทั้งหมด
-    function expandAll() {
-        document.querySelectorAll('.tree-list ul').forEach(ul => ul.classList.add('active'));
-        document.querySelectorAll('.toggle-btn').forEach(btn => {
-            btn.classList.add('rotated');
-            btn.innerHTML = '<i class="fas fa-times"></i>';
+    // ฟังก์ชันกดยืนยันย้ายเข้าทีม
+    document.getElementById('assignForm').onsubmit = function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        
+        fetch("{% url 'api_assign_to_team' %}", {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-CSRFToken': '{{ csrf_token }}' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                window.location.reload(); 
+            } else {
+                alert("เกิดข้อผิดพลาด: " + data.message);
+            }
         });
-    }
-
-    // ย่อทั้งหมด
-    function collapseAll() {
-        document.querySelectorAll('.tree-list ul').forEach(ul => ul.classList.remove('active'));
-        document.querySelectorAll('.toggle-btn').forEach(btn => {
-            btn.classList.remove('rotated');
-            btn.innerHTML = '<i class="fas fa-plus"></i>';
-        });
-    }
+    };
 </script>
 {% endblock %}

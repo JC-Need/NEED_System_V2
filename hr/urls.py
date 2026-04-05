@@ -17,13 +17,14 @@ urlpatterns = [
 
     # --- 🔴 โซนฝ่ายบุคคล/ผู้บริหาร (HR/Admin) ---
     path('analytics/', views.hr_executive_dashboard, name='hr_executive_dashboard'),
-    
+
     # 🌟 [NEW] หน้าจอตรวจสอบเวลาเข้างานและพิกัด GPS 🌟
     path('attendance-tracking/', views.attendance_map, name='attendance_map'),
 
     path('employee/add/', views.employee_add, name='employee_create'),
     path('employee/edit/<str:emp_id>/', views.employee_edit, name='employee_edit'),
     path('network/tree/', views.network_tree, name='network_tree'),
+    path('network/org-chart/', views.org_chart_tree, name='org_chart_tree'), # 🌟 [NEW] แผนผังองค์กร (Tree View)
 
     # --- API สำหรับปุ่ม Quick Add (+) ---
     path('api/create-position/', views.api_create_position, name='api_create_position'),
@@ -40,8 +41,9 @@ urlpatterns = [
     path('api/reset-password/', views.api_reset_password, name='api_reset_password'),
     path('api/toggle-user-group/', views.api_toggle_user_group, name='api_toggle_user_group'),
     path('sales-groups/', views.sales_group_settings, name='sales_group_settings'),
-    
+
     # 🌟 เส้นทางทำเนียบพนักงาน และ API แก้ไขทีมขายไว 🌟
     path('directory/', views.employee_directory, name='employee_directory'),
     path('api/update-sales-role/', views.api_update_sales_role, name='api_update_sales_role'),
+    path('api/assign-to-team/', views.api_assign_to_team, name='api_assign_to_team'),
 ]

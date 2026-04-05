@@ -57,7 +57,7 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/"><i class="fas fa-home me-1"></i> หน้าหลัก</a>
                     </li>
-                    
+
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="salesDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-store me-1"></i> ระบบขาย
@@ -114,6 +114,9 @@
                             {% endif %}
                             {% if request.user.is_superuser or request.user.groups.all.0.name == "HR_Team" %}
                             <li><a class="dropdown-item" href="{% url 'hr_executive_dashboard' %}"><i class="fas fa-chart-line me-2 text-danger"></i> ข้อมูลองค์กร (HR)</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'network_tree' %}"><i class="fas fa-chart-pie me-2 text-primary"></i> ศูนย์บัญชาการผลตอบแทน</a></li>
+                            <li><a class="dropdown-item" href="{% url 'org_chart_tree' %}"><i class="fas fa-sitemap me-2 text-success"></i> แผนผังองค์กร (Tree View)</a></li>
                             {% endif %}
                         </ul>
                     </li>
