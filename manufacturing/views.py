@@ -135,13 +135,25 @@ def planner_board(request):
 def inventory_board(request):
     orders = ProductionOrder.objects.filter(status='WAITING_INVENTORY', is_closed=False).order_by('status', '-id')
     
+    # 🌟 [NEW] ระบบ Virtual Stock จำลองการหักคิววัตถุดิบ 🌟
+    virtual_stock = {}
+    
     for order in orders:
         shortage = []
         for item in order.materials.all():
+            mat_id = item.raw_material.id
             required_qty = float(item.quantity)
-            stock_qty = float(item.raw_material.stock_qty)
-            if stock_qty < required_qty:
-                shortage.append(f"{item.raw_material.name} (ขาดอีก {required_qty - stock_qty:.2f})")
+            
+            if mat_id not in virtual_stock:
+                # 🌟 [FIX] ป้องกันสต็อกติดลบ ถ้าติดลบให้มองเป็น 0
+                virtual_stock[mat_id] = max(0, float(item.raw_material.stock_qty))
+                
+            if virtual_stock[mat_id] < required_qty:
+                missing = required_qty - virtual_stock[mat_id]
+                shortage.append(f"{item.raw_material.name} (ขาดอีก {missing:.2f})")
+                virtual_stock[mat_id] = 0 # ใช้โควต้าหมดแล้ว
+            else:
+                virtual_stock[mat_id] -= required_qty # หักโควต้าออกสำหรับคิวถัดไป
         
         order.has_shortage = len(shortage) > 0
         order.shortage_list = ", ".join(shortage)
@@ -227,6 +239,7 @@ def ppo_prepare(request):
                         sup_name = supplier.name if supplier else "ไม่ได้ระบุร้านค้า"
                         mat_id = item.raw_material.id
                         if sup_id not in materials_by_supplier: materials_by_supplier[sup_id] = {'name': sup_name, 'items': {}}
+                        
                         if mat_id not in materials_by_supplier[sup_id]['items']:
                             materials_by_supplier[sup_id]['items'][mat_id] = {'product_id': item.raw_material.id, 'product_name': item.raw_material.name, 'product_code': item.raw_material.code, 'qty': 0, 'cost': float(item.raw_material.cost_price), 'total': 0}
                         materials_by_supplier[sup_id]['items'][mat_id]['qty'] += total_needed
@@ -250,8 +263,12 @@ def materials_ready(request, pk):
     shortage = []
     for item in job_materials:
         required_qty = float(item.quantity)
-        if float(item.raw_material.stock_qty) < required_qty:
-            shortage.append(f"{item.raw_material.name} (ขาด {required_qty - float(item.raw_material.stock_qty):.2f})")
+        
+        # 🌟 [FIX] ป้องกันสต็อกติดลบ ก่อนตัดจริง 🌟
+        actual_stock = max(0, float(item.raw_material.stock_qty))
+        
+        if actual_stock < required_qty:
+            shortage.append(f"{item.raw_material.name} (ขาด {required_qty - actual_stock:.2f})")
     
     if shortage:
         err_msg = " / ".join(shortage)
