@@ -78,13 +78,16 @@
                             <li><a class="dropdown-item" href="{% url 'quotation_list' %}"><i class="fas fa-file-invoice me-2 text-secondary"></i> รายการใบเสนอราคา</a></li>
                             <li><a class="dropdown-item" href="{% url 'deposit_list' %}"><i class="fas fa-hand-holding-usd me-2 text-info"></i> รายการใบรับเงินมัดจำ</a></li>
                             <li><a class="dropdown-item" href="{% url 'invoice_list' %}"><i class="fas fa-receipt me-2 text-success"></i> รายการใบขาย (ชำระเต็ม)</a></li>
+                            
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item fw-bold text-dark" href="{% url 'customer_list' %}"><i class="fas fa-users me-2 text-primary"></i> ฐานข้อมูลลูกค้า</a></li>
                         </ul>
                     </li>
 
                     {% if request.user.is_superuser or request.user.groups.all.0.name == "Inventory_Team" or request.user.groups.all.0.name == "Inventory" %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown">
-                             <i class="fas fa-boxes me-1"></i> คลังสินค้า
+                            <i class="fas fa-boxes me-1"></i> คลังสินค้า
                         </a>
                         <ul class="dropdown-menu border-0 shadow-lg">
                             <li><a class="dropdown-item" href="{% url 'inventory_dashboard' %}"><i class="fas fa-chart-line me-2 text-success"></i> แดชบอร์ดคลังสินค้า</a></li>

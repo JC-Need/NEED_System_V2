@@ -1,6 +1,7 @@
 from django import forms
 from django.core.exceptions import ValidationError
 from .models import Customer, Supplier
+from .models import CompanyInfo
 
 class CustomerForm(forms.ModelForm):
     phone = forms.CharField(label="เบอร์โทรศัพท์", required=False, widget=forms.TextInput(attrs={'class': 'form-control', 'id': 'input_phone', 'placeholder': 'ตัวอย่าง: 0812345678', 'autocomplete': 'off'}))
@@ -49,3 +50,19 @@ class SupplierForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for field in self.fields:
             self.fields[field].widget.attrs.update({'class': 'form-control'})
+
+class CompanyInfoForm(forms.ModelForm):
+    class Meta:
+        model = CompanyInfo
+        fields = '__all__'
+        widgets = {
+            'name_th': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ชื่อบริษัท (ภาษาไทย)'}),
+            'name_en': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ชื่อบริษัท (ภาษาอังกฤษ)'}),
+            'tax_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เลขประจำตัวผู้เสียภาษี'}),
+            'branch': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น สำนักงานใหญ่'}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'website': forms.URLInput(attrs={'class': 'form-control'}),
+            'weekly_job_quota': forms.NumberInput(attrs={'class': 'form-control fw-bold text-primary', 'style': 'font-size: 1.5rem; text-align: center;'}),
+        }

@@ -30,7 +30,7 @@ def production_list(request):
     search_status = request.GET.get('status', '') # 🌟 ตัวรับค่าจาก Dropdown สถานะระบบ
 
     orders = ProductionOrder.objects.select_related(
-        'product', 'quotation_ref', 'salesperson', 
+        'product', 'quotation_ref', 'salesperson',
         'production_team', 'delivery_status', 'transporter'
     ).prefetch_related('completed_departments').all().order_by('-id')
 
@@ -39,7 +39,7 @@ def production_list(request):
         orders = orders.filter(start_date__gte=start_date)
     if end_date:
         orders = orders.filter(start_date__lte=end_date)
-    
+
     if search_status:
         orders = orders.filter(status=search_status)
 
@@ -49,7 +49,7 @@ def production_list(request):
             Q(customer_name__icontains=search_q) |
             Q(quotation_ref__code__icontains=search_q)
         )
-        
+
     if search_salesperson:
         orders = orders.filter(salesperson_id=search_salesperson)
     if search_team:
@@ -88,21 +88,21 @@ def production_list(request):
         current_emp = getattr(request.user, 'employee', None)
         is_manager = False
         is_planner = False
-        
+
         user_groups = list(request.user.groups.values_list('name', flat=True))
         if any('Manager' in g for g in user_groups): is_manager = True
         if any('Planner' in g or 'Production' in g for g in user_groups): is_planner = True
-        
+
         if current_emp:
             rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
             job_title = current_emp.position.title.lower() if current_emp.position else ""
             dept_name = current_emp.department.name if current_emp.department else ""
-            
+
             if rank in ['manager', 'director'] or 'manager' in job_title:
                 is_manager = True
             if 'วางแผน' in dept_name or 'ผลิต' in dept_name:
                 is_planner = True
-                
+
         if is_manager and is_planner:
             can_add_master_data = True
 
@@ -128,33 +128,34 @@ def production_list(request):
 
 @login_required
 def planner_board(request):
-    orders = ProductionOrder.objects.filter(status='PLANNED', is_closed=False).order_by('-id')
+    # 🌟 [UPDATE] จัดเรียงการ์ดงาน โดยเอางานที่ใกล้ถึงวัน Deadline (เหลือน้อยวันที่สุด) ขึ้นก่อนเสมอ 🌟
+    orders = ProductionOrder.objects.filter(status='PLANNED', is_closed=False).order_by('deadline_date', '-id')
     return render(request, 'manufacturing/planner_board.html', {'orders': orders})
 
 @login_required
 def inventory_board(request):
     orders = ProductionOrder.objects.filter(status='WAITING_INVENTORY', is_closed=False).order_by('status', '-id')
-    
+
     # 🌟 [NEW] ระบบ Virtual Stock จำลองการหักคิววัตถุดิบ 🌟
     virtual_stock = {}
-    
+
     for order in orders:
         shortage = []
         for item in order.materials.all():
             mat_id = item.raw_material.id
             required_qty = float(item.quantity)
-            
+
             if mat_id not in virtual_stock:
                 # 🌟 [FIX] ป้องกันสต็อกติดลบ ถ้าติดลบให้มองเป็น 0
                 virtual_stock[mat_id] = max(0, float(item.raw_material.stock_qty))
-                
+
             if virtual_stock[mat_id] < required_qty:
                 missing = required_qty - virtual_stock[mat_id]
                 shortage.append(f"{item.raw_material.name} (ขาดอีก {missing:.2f})")
                 virtual_stock[mat_id] = 0 # ใช้โควต้าหมดแล้ว
             else:
                 virtual_stock[mat_id] -= required_qty # หักโควต้าออกสำหรับคิวถัดไป
-        
+
         order.has_shortage = len(shortage) > 0
         order.shortage_list = ", ".join(shortage)
 
@@ -239,15 +240,15 @@ def ppo_prepare(request):
                         sup_name = supplier.name if supplier else "ไม่ได้ระบุร้านค้า"
                         mat_id = item.raw_material.id
                         if sup_id not in materials_by_supplier: materials_by_supplier[sup_id] = {'name': sup_name, 'items': {}}
-                        
+
                         if mat_id not in materials_by_supplier[sup_id]['items']:
                             materials_by_supplier[sup_id]['items'][mat_id] = {'product_id': item.raw_material.id, 'product_name': item.raw_material.name, 'product_code': item.raw_material.code, 'qty': 0, 'cost': float(item.raw_material.cost_price), 'total': 0}
                         materials_by_supplier[sup_id]['items'][mat_id]['qty'] += total_needed
                         materials_by_supplier[sup_id]['items'][mat_id]['total'] = materials_by_supplier[sup_id]['items'][mat_id]['qty'] * materials_by_supplier[sup_id]['items'][mat_id]['cost']
             for sup_id in materials_by_supplier: materials_by_supplier[sup_id]['items'] = list(materials_by_supplier[sup_id]['items'].values())
-            
+
             jobs.update(is_materials_ordered=True, status='WAITING_INVENTORY')
-        else: 
+        else:
             messages.warning(request, "⚠️ กรุณาติ๊กเลือกอย่างน้อย 1 ใบสั่งผลิต (JOB) เพื่อคำนวณวัตถุดิบ")
     return render(request, 'manufacturing/ppo_prepare.html', {'available_jobs': available_jobs, 'ppo_code': ppo_code, 'materials_by_supplier': materials_by_supplier, 'selected_job_ids': [int(i) for i in selected_job_ids]})
 
@@ -263,26 +264,26 @@ def materials_ready(request, pk):
     shortage = []
     for item in job_materials:
         required_qty = float(item.quantity)
-        
+
         # 🌟 [FIX] ป้องกันสต็อกติดลบ ก่อนตัดจริง 🌟
         actual_stock = max(0, float(item.raw_material.stock_qty))
-        
+
         if actual_stock < required_qty:
             shortage.append(f"{item.raw_material.name} (ขาด {required_qty - actual_stock:.2f})")
-    
+
     if shortage:
         err_msg = " / ".join(shortage)
         messages.error(request, f"❌ ไม่สามารถตัดสต็อกได้! วัตถุดิบในคลังไม่พอ: {err_msg}")
         return redirect('inventory_board')
-    
+
     doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบเตรียมผลิต {order.product.name}", created_by=request.user)
     for item in job_materials:
         StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=float(item.quantity), movement_type='OUT', created_by=request.user)
-        
+
         item.raw_material.stock_qty = float(item.raw_material.stock_qty) - float(item.quantity)
-        
+
         item.raw_material.save()
-    
+
     order.status = 'IN_PROGRESS'
     order.save()
     messages.success(request, f"✅ ตัดสต็อกสำเร็จ! สถานะเปลี่ยนเป็น 'งานอยู่ระหว่างผลิต' แล้ว")
@@ -299,12 +300,12 @@ def production_process(request, pk):
     if order.status == 'COMPLETED':
         messages.warning(request, "⚠️ รายการนี้ผลิตเสร็จและรับเข้าคลังไปแล้ว!")
         return redirect('production_list')
-    
+
     alloc_code = f"{order.product.code}-{order.code}"
     alloc_name = f"{order.product.name} [{order.code}]"
     if order.customer_name:
         alloc_name += f" (ลค. {order.customer_name})"
-        
+
     allocated_product, created = Product.objects.get_or_create(
         code=alloc_code,
         defaults={
@@ -320,26 +321,26 @@ def production_process(request, pk):
     )
 
     doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code}", created_by=request.user)
-    
+
     StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=order.quantity, movement_type='IN', created_by=request.user)
-    
+
     allocated_product.stock_qty += order.quantity
     allocated_product.save()
 
     order.status = 'COMPLETED'
     order.finish_date = timezone.now().date()
     order.save()
-    
+
     messages.success(request, f"🎉 สำเร็จ! รับ {allocated_product.name} ({order.quantity} หลัง) เข้าคลังเรียบร้อยแล้ว!")
     return redirect('production_list')
 
 @login_required
 def production_detail(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
-    materials = order.materials.all() 
-    has_bom = BOM.objects.filter(product=order.product).exists() 
+    materials = order.materials.all()
+    has_bom = BOM.objects.filter(product=order.product).exists()
     raw_materials = Product.objects.filter(product_type='RM', is_active=True).order_by('code')
-    
+
     return render(request, 'manufacturing/production_detail.html', {
         'order': order,
         'materials': materials,
@@ -366,16 +367,16 @@ def upload_blueprint(request, pk):
 @login_required
 def load_standard_bom(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
-    
+
     if order.materials.exists():
         messages.warning(request, "⚠️ มีการดึงรายการสูตรผลิตในใบสั่งผลิตนี้ไปแล้ว")
         return redirect('production_detail', pk=order.pk)
-        
+
     bom = BOM.objects.filter(product=order.product).first()
     if not bom:
         messages.error(request, "❌ ไม่พบสูตรผลิตมาตรฐาน (BOM) สำหรับสินค้ารุ่นนี้")
         return redirect('production_detail', pk=order.pk)
-        
+
     for item in bom.items.all():
         ProductionOrderMaterial.objects.create(
             production_order=order,
@@ -392,14 +393,14 @@ def add_additional_material(request, pk):
     if request.method == 'POST':
         product_id = request.POST.get('raw_material')
         qty = float(request.POST.get('quantity', 0))
-        
+
         if product_id and qty > 0:
             rm = get_object_or_404(Product, pk=product_id)
             ProductionOrderMaterial.objects.create(
                 production_order=order,
                 raw_material=rm,
                 quantity=qty,
-                is_additional=True 
+                is_additional=True
             )
             messages.success(request, f"➕ เพิ่มวัตถุดิบส่วนเพิ่ม: {rm.name} จำนวน {qty} ลงในบิลเรียบร้อยแล้ว")
         else:

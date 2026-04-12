@@ -58,7 +58,7 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
     if group.group_type == 'TEAM':
         exact_leader_share = total_group_comm * (group.share_leader / Decimal('100'))
         leader_share = exact_leader_share.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
-        fund_to_add += (exact_leader_share - leader_share) 
+        fund_to_add += (exact_leader_share - leader_share)
         leader = Employee.objects.filter(sales_group=group, group_role='LEADER').first()
         if leader:
             CommissionLog.objects.create(recipient=leader, source_employee=seller, level=1, amount=leader_share, sale_ref_id=sale_ref_id)
@@ -71,7 +71,7 @@ def process_commission_logic(sale_amount, seller, sale_ref_id):
             exact_split = exact_l1_share / Decimal(str(l1_members.count()))
             split = exact_split.quantize(Decimal('0.00'), rounding=ROUND_DOWN)
             remainder = exact_l1_share - (split * Decimal(str(l1_members.count())))
-            fund_to_add += remainder 
+            fund_to_add += remainder
             for m in l1_members:
                 CommissionLog.objects.create(recipient=m, source_employee=seller, level=2, amount=split, sale_ref_id=sale_ref_id)
         else:
@@ -139,7 +139,7 @@ def get_sales_queryset(model_class, user, target_employees):
         dept_name = user.employee.department.name if user.employee.department else ""
         rank = user.employee.business_rank.lower() if user.employee.business_rank else ""
         if 'บัญชี' in dept_name or rank in ['manager', 'director']: return model_class.objects.all()
-    
+
     emp_ids = list(target_employees.values_list('id', flat=True))
     return model_class.objects.filter(employee_id__in=emp_ids)
 
@@ -166,7 +166,7 @@ def api_dashboard_data(request):
     target_employees, scope_title = get_target_employees(request.user)
     emp = getattr(request.user, 'employee', None)
     today = timezone.now().date()
-    
+
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
     group_by = request.GET.get('group_by', 'day')
@@ -184,12 +184,12 @@ def api_dashboard_data(request):
         pos_qs_all = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
         inv_qs_all = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
 
-        total_sales = float((pos_qs_all.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0) + 
+        total_sales = float((pos_qs_all.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0) +
                             (inv_qs_all.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0))
-        
+
         today_inclusive = today + timedelta(days=1)
         total_orders_today = (
-            get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=today, created_at__lt=today_inclusive).count() + 
+            get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=today, created_at__lt=today_inclusive).count() +
             get_sales_queryset(Invoice, request.user, target_employees).filter(date=today).count()
         )
 
@@ -208,7 +208,7 @@ def api_dashboard_data(request):
             if group_by == 'day':
                 chart_title = "แนวโน้มยอดขายรวมทั้งบริษัท (รายวัน)"
                 chart_type = "line"
-                
+
                 period_dict = {}
                 for p in pos_raw:
                     if p['created_at']:
@@ -233,7 +233,7 @@ def api_dashboard_data(request):
                 for i in inv_raw:
                     t = i['employee__department__name'] or 'ไม่ระบุทีม'
                     team_dict[t] = team_dict.get(t, 0) + float(i['grand_total'] or 0)
-                
+
                 sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
                 chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
 
@@ -247,14 +247,14 @@ def api_dashboard_data(request):
             for i in inv_raw:
                 m = i['employee__first_name'] or 'ไม่ระบุ'
                 mem_dict[m] = mem_dict.get(m, 0) + float(i['grand_total'] or 0)
-            
+
             sorted_data = sorted(mem_dict.items(), key=lambda x: x[1], reverse=True)
             chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
 
         else:
             chart_title = "แนวโน้มยอดขายส่วนตัว"
             chart_type = "bar"
-            
+
             period_dict = {}
             for p in pos_raw:
                 if p['created_at']:
@@ -264,10 +264,10 @@ def api_dashboard_data(request):
                 if i['date']:
                     key = i['date'].strftime("%Y-%m") if group_by == 'month' else i['date'].strftime("%Y-%m-%d")
                     period_dict[key] = period_dict.get(key, 0) + float(i['grand_total'] or 0)
-                    
+
             sorted_keys = sorted(period_dict.keys())
             if group_by == 'month':
-                chart_labels = [f"{k[5:7]}/{k[:4]}" for k in sorted_keys] 
+                chart_labels = [f"{k[5:7]}/{k[:4]}" for k in sorted_keys]
             else:
                 chart_labels = [f"{k[-2:]}/{k[5:7]}" for k in sorted_keys]
             chart_data = [period_dict[k] for k in sorted_keys]
@@ -275,8 +275,8 @@ def api_dashboard_data(request):
         cached_data = {
             'total_sales': total_sales, 'total_orders_today': total_orders_today,
             'pending_approval': pending_approval, 'pending_closing': pending_closing,
-            'in_production': in_production, 'chart_labels': chart_labels, 
-            'chart_data': chart_data, 'chart_title': chart_title, 
+            'in_production': in_production, 'chart_labels': chart_labels,
+            'chart_data': chart_data, 'chart_title': chart_title,
             'chart_type': chart_type, 'scope_title': scope_title
         }
         cache.set(cache_key, cached_data, timeout=300)
@@ -285,13 +285,13 @@ def api_dashboard_data(request):
                       .filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
                       .select_related('employee', 'employee__department')
                       .order_by('-created_at')[:10])
-    
+
     recent_inv = list(get_sales_queryset(Invoice, request.user, target_employees)
                       .filter(date__gte=start_date, date__lte=end_date)
                       .select_related('employee', 'employee__department', 'quotation_ref')
                       .prefetch_related('quotation_ref__production_orders')
                       .order_by('-created_at')[:10])
-    
+
     combined = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
     recent_sales_data = []
     for item in combined:
@@ -387,6 +387,31 @@ def create_job_order(request, qt_id):
     target_date_str = request.POST.get('target_date') if request.method == 'POST' else None
     target_date = parse_date(target_date_str) if target_date_str else None
 
+    # 🌟 [NEW] ระบบดึงค่าโควตาจากตาราง CompanyInfo 🌟
+    company_info = CompanyInfo.objects.first()
+    max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
+
+    deposit_date = qt.deposit_date if qt.deposit_date else timezone.now().date()
+    current_check_date = deposit_date
+    weeks_pushed = 0
+    assigned_cohort = ""
+
+    while True:
+        iso_year, iso_week, _ = current_check_date.isocalendar()
+        check_cohort = f"{iso_year}-W{iso_week:02d}"
+        job_count = ProductionOrder.objects.filter(cohort_week=check_cohort).count()
+
+        if job_count < max_quota: # ⚡ เช็คจากตัวแปร max_quota แทนเลข 25 ตายตัว
+            assigned_cohort = check_cohort
+            break
+
+        weeks_pushed += 1
+        current_check_date += datetime.timedelta(days=7)
+
+    sla_days = 22 + (weeks_pushed * 7)
+    calculated_deadline = deposit_date + datetime.timedelta(days=sla_days)
+    calculated_start_date = deposit_date + datetime.timedelta(days=(weeks_pushed * 7))
+
     sales_obj = None
     branch_obj = None
     if qt.employee:
@@ -400,16 +425,23 @@ def create_job_order(request, qt_id):
         quotation_ref=qt,
         customer_name=qt.customer_name,
         note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}",
-        salesperson=sales_obj,      
-        branch=branch_obj,         
-        delivery_date=target_date   
+        salesperson=sales_obj,
+        branch=branch_obj,
+        start_date=calculated_start_date,
+        delivery_date=target_date if target_date else calculated_deadline,
+        deadline_date=calculated_deadline,
+        cohort_week=assigned_cohort
     )
 
     if first_item.product and first_item.product.standard_blueprint:
         job.blueprint_file = first_item.product.standard_blueprint
         job.save()
 
-    messages.success(request, f"🏭 ส่งข้อมูลเปิดใบสั่งผลิต (Job Order: {job.code}) ให้แผนกปฏิบัติการเรียบร้อยแล้ว!")
+    if weeks_pushed > 0:
+        messages.warning(request, f"⚠️ คิวผลิตสัปดาห์แรกล้น ({max_quota} งาน)! ระบบปัดคิวงาน {job.code} ไปสัปดาห์ถัดไป (SLA: {calculated_deadline.strftime('%d/%m/%Y')})")
+    else:
+        messages.success(request, f"🏭 ส่งข้อมูลเปิดใบสั่งผลิต (Job Order: {job.code}) เรียบร้อยแล้ว! (SLA: {calculated_deadline.strftime('%d/%m/%Y')})")
+
     return redirect('quotation_list')
 
 @login_required
@@ -433,12 +465,12 @@ def convert_quote_to_invoice(request, qt_id):
     )
     qt.status = 'CONVERTED'
     qt.save()
-    
+
     for job in qt.production_orders.all():
         if not job.is_closed:
             job.is_closed = True
             job.save()
-            
+
     messages.success(request, f"✅ เปิดใบขายสินค้า {new_code} เรียบร้อย (ยอดคงค้างชำระ: {balance:,.2f} บาท) และอัปเดตปิดจ๊อบให้โรงงานแล้ว!")
     return redirect('invoice_list')
 
@@ -666,7 +698,7 @@ def quotation_edit(request, qt_id):
     item_total = main_item_total + upsale_total
 
     balance_due = qt.grand_total - qt.deposit_amount
-    
+
     # 🌟 [NEW] จัดกลุ่มจังหวัดตามภาค ส่งให้หน้าจอในรูปแบบ Dictionary 🌟
     regions_data = {
         'ภาคเหนือ': ['เชียงราย', 'เชียงใหม่', 'น่าน', 'พะเยา', 'แพร่', 'แม่ฮ่องสอน', 'ลำปาง', 'ลำพูน', 'อุตรดิตถ์'],
@@ -676,7 +708,7 @@ def quotation_edit(request, qt_id):
         'ภาคตะวันตก': ['กาญจนบุรี', 'ตาก', 'ประจวบคีรีขันธ์', 'เพชรบุรี', 'ราชบุรี'],
         'ภาคใต้': ['กระบี่', 'ชุมพร', 'ตรัง', 'นครศรีธรรมราช', 'พังงา', 'พัทลุง', 'ภูเก็ต', 'ระนอง', 'สงขลา', 'สตูล', 'สุราษฎร์ธานี']
     }
-    
+
     shipping_rates = list(ShippingRate.objects.all().values('origin_branch', 'destination_province', 'price'))
     shipping_rates_json = json.dumps([
         {'origin': r['origin_branch'], 'province': r['destination_province'], 'price': float(r['price'])} for r in shipping_rates
@@ -724,13 +756,13 @@ def quotation_edit(request, qt_id):
             qt.payment_terms = request.POST.get('payment_terms', '')
             qt.note = request.POST.get('note', '')
             qt.discount = Decimal(request.POST.get('discount', '0') or 0)
-            
+
             qt.shipping_origin = request.POST.get('shipping_origin', '')
             qt.shipping_province = request.POST.get('shipping_province', '')
             qt.shipping_is_island = request.POST.get('shipping_is_island') == 'on'
             qt.shipping_is_oversize = request.POST.get('shipping_is_oversize') == 'on'
             qt.shipping_cost = Decimal(request.POST.get('shipping_cost', '0') or 0)
-            
+
             calculate_totals(qt)
 
             if 'finish_quote' in request.POST:
@@ -1028,7 +1060,7 @@ def invoice_print(request, inv_id):
     tax_amount = Decimal('0.00')
     discount = Decimal('0.00')
     shipping_cost = Decimal('0.00')
-    
+
     note = "-ไม่มี-"
     if inv.status == 'PAID':
         p_date = inv.payment_date.strftime('%d/%m/%Y') if inv.payment_date else '-'

@@ -1,0 +1,72 @@
+{% extends 'core/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-building text-primary me-2"></i>{{ title }}</h3>
+            <p class="text-muted small mb-0">จัดการข้อมูลองค์กร และจำกัดโควตาการรับงานของแผนกผลิต</p>
+        </div>
+    </div>
+
+    <form method="POST" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="row g-4">
+            
+            <div class="col-md-8">
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-header bg-white border-0 py-3">
+                        <h6 class="fw-bold m-0"><i class="fas fa-info-circle text-info me-2"></i>ข้อมูลพื้นฐาน</h6>
+                    </div>
+                    <div class="card-body bg-light bg-opacity-50">
+                        <div class="row">
+                            <div class="col-md-6 mb-3">{{ form.name_th|as_crispy_field }}</div>
+                            <div class="col-md-6 mb-3">{{ form.name_en|as_crispy_field }}</div>
+                            <div class="col-md-6 mb-3">{{ form.tax_id|as_crispy_field }}</div>
+                            <div class="col-md-6 mb-3">{{ form.branch|as_crispy_field }}</div>
+                            <div class="col-md-12 mb-3">{{ form.address|as_crispy_field }}</div>
+                            <div class="col-md-6 mb-3">{{ form.phone|as_crispy_field }}</div>
+                            <div class="col-md-6 mb-3">{{ form.email|as_crispy_field }}</div>
+                            <div class="col-md-12 mb-3">{{ form.website|as_crispy_field }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card border-info shadow-sm rounded-4 mb-4">
+                    <div class="card-body text-center py-4">
+                        <i class="fas fa-industry fa-3x text-info opacity-50 mb-3"></i>
+                        <h5 class="fw-bold text-dark">โควตารับงานผลิต</h5>
+                        <p class="small text-muted mb-4">จำนวน Job สูงสุดที่โรงงานสามารถรับได้ใน 1 สัปดาห์ (ถ้าเกิน ระบบจะปัดคิวและขยาย SLA จัดส่งให้อัตโนมัติ)</p>
+                        
+                        <div class="px-5">
+                            {{ form.weekly_job_quota }}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card border-0 shadow-sm rounded-4">
+                    <div class="card-body">
+                        <h6 class="fw-bold"><i class="fas fa-images text-secondary me-2"></i>รูปภาพองค์กร</h6>
+                        <hr>
+                        <div class="mb-3">{{ form.logo|as_crispy_field }}</div>
+                        <div class="mb-3">{{ form.navbar_image|as_crispy_field }}</div>
+                        <div class="mb-3">{{ form.login_image|as_crispy_field }}</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="mt-4 text-end">
+            <button type="submit" class="btn btn-primary rounded-pill px-5 fw-bold shadow-sm">
+                <i class="fas fa-save me-2"></i> บันทึกการตั้งค่า
+            </button>
+        </div>
+    </form>
+
+</div>
+{% endblock %}

@@ -35,7 +35,11 @@ class CompanyInfo(models.Model):
     navbar_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้บนแถบเมนู")
     seal = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="ตราประทับบริษัท (Seal)")
 
-    class Meta: verbose_name_plural = "1. ตั้งค่าข้อมูลบริษัท"
+    # 🌟 [NEW] เพิ่มช่องสำหรับตั้งค่าโควตาผลิตต่อสัปดาห์ 🌟
+    weekly_job_quota = models.IntegerField(default=25, verbose_name="โควตางานผลิตต่อสัปดาห์ (Jobs)")
+
+    class Meta:
+        verbose_name_plural = "1. ตั้งค่าข้อมูลบริษัท"
     def __str__(self): return self.name_th
 
 # --- ส่วนที่ 3: ข้อมูลลูกค้า (Customer) ---
@@ -61,7 +65,7 @@ class Customer(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    class Meta: 
+    class Meta:
         verbose_name_plural = "2. ฐานข้อมูลลูกค้า"
         ordering = ['-created_at']
     def __str__(self): return f"{self.code} - {self.name}"
@@ -92,7 +96,7 @@ class Supplier(models.Model):
         return f"{self.code} - {self.name}"
 
     def save(self, *args, **kwargs):
-        if not self.code:  
+        if not self.code:
             last_supplier = Supplier.objects.filter(code__startswith='SUP-').order_by('code').last()
             if last_supplier and last_supplier.code:
                 try:
@@ -116,7 +120,7 @@ class ShippingRate(models.Model):
     class Meta:
         verbose_name = "ตั้งค่าเรทค่าขนส่ง"
         verbose_name_plural = "4. ตั้งค่าเรทค่าขนส่ง"
-        unique_together = ('origin_branch', 'destination_province') 
-        
+        unique_together = ('origin_branch', 'destination_province')
+
     def __str__(self):
         return f"จาก {self.origin_branch} -> ส่ง {self.destination_province} : ฿{self.price}"

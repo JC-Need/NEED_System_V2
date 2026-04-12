@@ -5,8 +5,36 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
-from .models import Customer, Province, Amphure, Tambon, Supplier
-from .forms import CustomerForm, SupplierForm
+# 🌟 [UPDATE] นำเข้า CompanyInfo และ CompanyInfoForm
+from .models import Customer, Province, Amphure, Tambon, Supplier, CompanyInfo
+from .forms import CustomerForm, SupplierForm, CompanyInfoForm
+
+# --- Company Settings (ตั้งค่าองค์กรและโควตา) ---
+
+@login_required
+def company_settings(request):
+    # ดึงข้อมูลบริษัทแถวแรกขึ้นมา ถ้ายังไม่มีในฐานข้อมูลเลยให้สร้างใหม่ 1 แถวอัตโนมัติ
+    company = CompanyInfo.objects.first()
+    if not company:
+        company = CompanyInfo.objects.create(name_th="บริษัท NEED System จำกัด", tax_id="0000000000000")
+
+    if request.method == 'POST':
+        # 🌟 ใส่ request.FILES ด้วย เพราะเรามีฟิลด์สำหรับอัปโหลดโลโก้บริษัท
+        form = CompanyInfoForm(request.POST, request.FILES, instance=company)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "✅ บันทึกข้อมูลบริษัท และอัปเดตโควตาการผลิตเรียบร้อยแล้ว!")
+            return redirect('company_settings')
+        else:
+            messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ถูกต้อง")
+    else:
+        form = CompanyInfoForm(instance=company)
+
+    return render(request, 'master_data/company/company_settings.html', {
+        'form': form,
+        'title': 'ตั้งค่าข้อมูลบริษัท & โควตาการผลิต'
+    })
+
 
 # --- Customer Management ---
 
@@ -117,9 +145,9 @@ def supplier_list(request):
             Q(code__icontains=search) |
             Q(phone__icontains=search) | 
             Q(tax_id__icontains=search)
-        ).order_by('-id')  # ★ แก้ไขตรงนี้: เปลี่ยนจาก -created_at เป็น -id
+        ).order_by('-id')  
     else:
-        supplier_qs = Supplier.objects.all().order_by('-id')  # ★ แก้ไขตรงนี้: เปลี่ยนจาก -created_at เป็น -id
+        supplier_qs = Supplier.objects.all().order_by('-id')  
 
     paginator = Paginator(supplier_qs, 20)
     page = request.GET.get('page')

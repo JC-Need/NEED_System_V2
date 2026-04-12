@@ -21,9 +21,17 @@
             </h2>
             <p class="text-muted mb-0">ข้อมูล <span id="label-date-range">วันนี้</span> | <span class="badge bg-info text-dark">{{ scope_title }}</span></p>
         </div>
+        
         <div class="d-flex gap-2">
-            <a href="{% url 'quotation_create' %}" class="btn btn-dark rounded-pill px-3 fw-bold shadow-sm"><i class="fas fa-plus me-1"></i> ใบเสนอราคา</a>
-            <a href="{% url 'sales_hub' %}" class="btn btn-primary rounded-pill px-3 fw-bold shadow-sm"><i class="fas fa-cash-register me-1"></i> เปิดบิลขาย / POS</a>
+            <a href="{% url 'customer_list' %}" class="btn btn-outline-secondary rounded-pill px-3 fw-bold shadow-sm bg-white">
+                <i class="fas fa-users me-1 text-primary"></i> ฐานข้อมูลลูกค้า
+            </a>
+            <a href="{% url 'quotation_create' %}" class="btn btn-dark rounded-pill px-3 fw-bold shadow-sm">
+                <i class="fas fa-plus me-1"></i> ใบเสนอราคา
+            </a>
+            <a href="{% url 'sales_hub' %}" class="btn btn-primary rounded-pill px-3 fw-bold shadow-sm">
+                <i class="fas fa-cash-register me-1"></i> เปิดบิลขาย / POS
+            </a>
         </div>
     </div>
 
@@ -136,14 +144,13 @@
     document.addEventListener("DOMContentLoaded", function() {
         fpStart = flatpickr("#filter_start", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
         fpEnd = flatpickr("#filter_end", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
-        initChart('line'); // เริ่มต้นด้วย Line Chart สำหรับเทรนด์รายวัน
+        initChart('line'); 
         fetchDashboardData();
     });
 
     function initChart(type) {
         const ctx = document.getElementById('mainSalesChart').getContext('2d');
         if (mainChart) mainChart.destroy();
-        
         mainChart = new Chart(ctx, {
             type: type,
             data: { labels: [], datasets: [{ 
@@ -180,7 +187,7 @@
         const start = document.getElementById('filter_start').value;
         const end = document.getElementById('filter_end').value;
         const url = `{% url 'api_dashboard_data' %}?start_date=${start}&end_date=${end}&group_by=${currentGroupBy}`;
-
+        
         fetch(url).then(r => r.json()).then(data => {
             document.getElementById('val-total-sales').innerText = '฿' + data.total_sales.toLocaleString(undefined, {minimumFractionDigits:2});
             document.getElementById('val-total-orders').innerText = data.total_orders_today;
@@ -188,7 +195,6 @@
             document.getElementById('val-pending-closing').innerText = data.pending_closing;
             document.getElementById('val-in-production').innerText = data.in_production;
 
-            // 🌟 ตรวจสอบและสลับประเภทกราฟ
             if (mainChart.config.type !== data.chart_type) {
                 initChart(data.chart_type);
             }

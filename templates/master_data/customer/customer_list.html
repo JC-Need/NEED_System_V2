@@ -10,9 +10,14 @@
                 ทั้งหมด <span class="fw-bold text-primary">{{ customers.paginator.count }}</span> รายการ 
             </p>
         </div>
-        <a href="{% url 'customer_create' %}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold">
-            <i class="fas fa-plus me-2"></i>เพิ่มลูกค้าใหม่
-        </a>
+        <div class="d-flex gap-2">
+            <a href="{% url 'customer_create' %}" class="btn btn-primary shadow-sm rounded-pill px-4 fw-bold">
+                <i class="fas fa-plus me-2"></i>เพิ่มลูกค้าใหม่
+            </a>
+            <a href="{% url 'sales_dashboard' %}" class="btn btn-light border shadow-sm rounded-pill px-4 fw-bold text-secondary">
+                <i class="fas fa-arrow-left me-2"></i>กลับหน้า Sales Overview
+            </a>
+        </div>
     </div>
 
     <div class="card border-0 shadow-sm mb-4 rounded-3 bg-white">
@@ -104,10 +109,10 @@
                     <li class="page-item disabled"><span class="page-link border-0 fw-bold px-3">หน้า {{ customers.number }} / {{ customers.paginator.num_pages }}</span></li>
                     {% if customers.has_next %}
                         <li class="page-item">
-                            <a class="page-link border-0 text-dark" href="?page={{ customers.next_page_number }}&search={{ search }}">
+                             <a class="page-link border-0 text-dark" href="?page={{ customers.next_page_number }}&search={{ search }}">
                                 <i class="fas fa-chevron-right"></i>
                             </a>
-                        </li>
+                         </li>
                     {% endif %}
                 </ul>
             </nav>

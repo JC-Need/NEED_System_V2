@@ -18,4 +18,5 @@ urlpatterns = [
     path('api/provinces/', views.get_provinces, name='get_provinces'),
     path('api/amphures/', views.get_amphures, name='get_amphures'),
     path('api/tambons/', views.get_tambons, name='get_tambons'),
+    path('company/settings/', views.company_settings, name='company_settings'),
 ]
