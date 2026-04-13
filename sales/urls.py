@@ -16,9 +16,9 @@ urlpatterns = [
     path('quotation/delete-item/<int:item_id>/', views.delete_item, name='delete_item'),
     path('quotation/print/<int:qt_id>/', views.quotation_print, name='quotation_print'),
     path('quotation/approve/<int:qt_id>/', views.quotation_approve, name='quotation_approve'),
-    path('quotation/cancel/<int:qt_id>/', views.quotation_cancel, name='quotation_cancel'), 
+    path('quotation/cancel/<int:qt_id>/', views.quotation_cancel, name='quotation_cancel'),
     path('quotation/clone/<int:qt_id>/', views.quotation_clone, name='quotation_clone'),
-    
+
     # 🌟 เพิ่ม Endpoint สำหรับส่งข้อมูลไปสร้างใบสั่งผลิต 🌟
     path('quotation/create-job/<int:qt_id>/', views.create_job_order, name='create_job_order'),
 
@@ -38,4 +38,5 @@ urlpatterns = [
     path('api/customer-create/', views.api_create_customer, name='api_create_customer'),
     path('export/excel/', views.export_sales_excel, name='export_sales_excel'),
     path('api/dashboard-data/', views.api_dashboard_data, name='api_dashboard_data'),
+    path('timeline/', views.sales_timeline, name='sales_timeline'),
 ]

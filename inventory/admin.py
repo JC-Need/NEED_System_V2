@@ -1,12 +1,20 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from django.urls import reverse
-from .models import Category, Product, InventoryDoc, StockMovement, FinishedGood, RawMaterial
+
+# 🌟 [UPDATE] เพิ่ม RawMaterialCategory เข้ามา
+from .models import Category, RawMaterialCategory, Product, InventoryDoc, StockMovement, FinishedGood, RawMaterial
 
 # 1. หมวดหมู่
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ('name',)
+
+# 🌟 [NEW] 1.1 หมวดหมู่วัตถุดิบ (แผนกต่างๆ)
+@admin.register(RawMaterialCategory)
+class RawMaterialCategoryAdmin(admin.ModelAdmin):
+    list_display = ('name',)
+    search_fields = ('name',)
 
 # ฟังก์ชันช่วยแสดงรูปภาพ (ใช้ร่วมกัน)
 def show_image_preview(obj):
@@ -43,13 +51,42 @@ class FinishedGoodAdmin(admin.ModelAdmin):
         obj.product_type = 'FG' # บังคับเป็น FG
         super().save_model(request, obj, form, change)
 
+    # 🌟 [NEW] ระบบดักจับและจำกัดสิทธิ์สำหรับฝ่ายขาย (Read-Only) 🌟
+    def is_sales_user(self, request):
+        if request.user.is_superuser:
+            return False # Admin ผ่านได้ปกติ
+        # เช็คว่าล็อกอินมีข้อมูล Employee ผูกอยู่ และอยู่แผนกขายหรือไม่
+        if hasattr(request.user, 'employee') and request.user.employee:
+            dept_name = request.user.employee.department.name if request.user.employee.department else ''
+            if 'ขาย' in dept_name or 'Sales' in dept_name:
+                return True
+        return False
+
+    def has_view_permission(self, request, obj=None):
+        return True # ให้ทุกคน (รวมถึงเซลส์) มองเห็นและกดเข้าไปดูรายละเอียดได้
+
+    def has_add_permission(self, request):
+        if self.is_sales_user(request):
+            return False # ห้ามเซลส์เพิ่มสินค้าใหม่
+        return super().has_add_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        if self.is_sales_user(request):
+            return False # ห้ามเซลส์แก้ไขข้อมูล (ระบบจะเปลี่ยนหน้าจอเป็น Read-Only อัตโนมัติ)
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        if self.is_sales_user(request):
+            return False # ห้ามเซลส์ลบสินค้า
+        return super().has_delete_permission(request, obj)
+
 # ✅ 2.2 เมนูวัตถุดิบ (RM)
 @admin.register(RawMaterial)
 class RawMaterialAdmin(admin.ModelAdmin):
-    # เน้นโชว์ "ราคาทุน"
-    list_display = ('code', show_image_preview, 'name', 'category', 'cost_price', 'stock_qty', 'is_active', show_barcode_btn)
-    list_filter = ('category', 'is_active')
-    search_fields = ('code', 'name')
+    # 🌟 [UPDATE] เน้นโชว์ "ราคาทุน" และดึงคอลัมน์ supplier มาแสดง
+    list_display = ('code', show_image_preview, 'name', 'rm_category', 'cost_price', 'stock_qty', 'supplier', 'is_active', show_barcode_btn)
+    list_filter = ('rm_category', 'supplier', 'is_active')
+    search_fields = ('code', 'name', 'supplier__name', 'supplier__code')
 
     def get_queryset(self, request):
         return super().get_queryset(request).filter(product_type='RM')

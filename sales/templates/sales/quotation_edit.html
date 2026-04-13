@@ -77,9 +77,9 @@
             </div>
 
             <div id="box-main-product" class="card border-primary border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
-                <div class="card-body p-4 bg-primary bg-opacity-10">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold text-primary m-0"><i class="fas fa-home me-1"></i> เลือกสินค้าหลัก</h6>
+                <div class="card-body p-4 bg-light"> 
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+                        <h6 class="fw-bold text-dark m-0"><span class="badge bg-primary me-2"><i class="fas fa-home"></i></span> เลือกสินค้าหลัก</h6>
                         <button type="button" class="btn-close" onclick="$('#box-main-product').slideUp();"></button>
                     </div>
                     <form method="post" autocomplete="off" class="smart-form">
@@ -89,7 +89,7 @@
 
                         <div class="row g-2 mb-3">
                             <div class="col-md-4">
-                                <label class="text-muted fw-bold small mb-1">กรองตามหมวดหมู่</label>
+                                <label class="text-dark fw-bold small mb-1">กรองตามหมวดหมู่</label> 
                                 <select id="main_category_selector" class="form-select form-select-sm select2">
                                     <option value="">-- ทั้งหมด --</option>
                                     {% for cat in main_categories %}
@@ -98,7 +98,7 @@
                                 </select>
                             </div>
                             <div class="col-md-8">
-                                <label class="text-muted fw-bold small mb-1">เลือกสินค้า</label>
+                                <label class="text-dark fw-bold small mb-1">เลือกสินค้า</label> 
                                 <select id="product_selector" class="form-select form-select-sm select2">
                                     <option value="">-- กรุณาเลือกหมวดหมู่ก่อน --</option>
                                 </select>
@@ -106,20 +106,20 @@
                         </div>
 
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-6">
-                                <label class="text-muted fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label>
-                                <input type="text" name="item_name" id="input_name" class="form-control form-control-sm" required autocomplete="off">
+                            <div class="col-md-5"> 
+                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label> 
+                                <input type="text" name="item_name" id="input_name" class="form-control form-control-sm border-dark border-opacity-25" required autocomplete="off">
                             </div>
                             <div class="col-md-3">
-                                <label class="text-muted fw-bold small mb-1">ราคา/หน่วย</label>
-                                <input type="text" name="price" id="input_price" class="form-control form-control-sm text-end number-format" required autocomplete="off">
+                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label> 
+                                <input type="text" name="price" id="input_price" class="form-control form-control-sm text-end number-format border-dark border-opacity-25" required autocomplete="off">
                             </div>
                             <div class="col-md-2">
-                                <label class="text-muted fw-bold small mb-1">จำนวน</label>
-                                <input type="text" name="quantity" class="form-control form-control-sm text-center number-only" value="1" required autocomplete="off">
+                                <label class="text-dark fw-bold small mb-1">จำนวน</label> 
+                                <input type="text" name="quantity" class="form-control form-control-sm text-center number-only border-dark border-opacity-25" value="1" required autocomplete="off">
                             </div>
-                            <div class="col-md-1">
-                                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold"><i class="fas fa-check"></i></button>
+                            <div class="col-md-2"> 
+                                <button type="submit" class="btn btn-dark text-white btn-sm w-100 fw-bold shadow-sm"><i class="fas fa-check me-1"></i> บันทึก</button>
                             </div>
                         </div>
                     </form>
@@ -127,9 +127,9 @@
             </div>
 
             <div id="box-upsale" class="card border-warning border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
-                <div class="card-body p-4 bg-warning bg-opacity-10">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="fw-bold text-dark m-0"><i class="fas fa-tools me-1"></i> เลือกของสั่งเพิ่ม (Upsale)</h6>
+                <div class="card-body p-4 bg-light"> 
+                    <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+                        <h6 class="fw-bold text-dark m-0"><span class="badge bg-warning text-dark me-2"><i class="fas fa-tools"></i></span> เลือกของสั่งเพิ่ม (Upsale)</h6>
                         <button type="button" class="btn-close" onclick="$('#box-upsale').slideUp();"></button>
                     </div>
                     <form method="post" autocomplete="off" class="smart-form">
@@ -138,7 +138,7 @@
 
                         <div class="row g-2 mb-3">
                             <div class="col-md-4">
-                                <label class="text-muted fw-bold small mb-1">หมวดหมู่งานเสริม</label>
+                                <label class="text-dark fw-bold small mb-1">หมวดหมู่งานเสริม</label> 
                                 <select id="upsale_category_selector" class="form-select form-select-sm select2">
                                     <option value="">-- ทั้งหมด --</option>
                                     {% for cat in upsale_categories %}
@@ -147,7 +147,7 @@
                                 </select>
                             </div>
                             <div class="col-md-8">
-                                <label class="text-muted fw-bold small mb-1">เลือกรายการ (อ้างอิงราคาจากแคตตาล็อก)</label>
+                                <label class="text-dark fw-bold small mb-1">เลือกรายการ (อ้างอิงราคาจากแคตตาล็อก)</label> 
                                 <select id="upsale_item_selector" class="form-select form-select-sm select2-tags">
                                     <option value="">-- พิมพ์หา หรือ เลือกรายการ --</option>
                                 </select>
@@ -155,20 +155,20 @@
                         </div>
 
                         <div class="row g-2 align-items-end">
-                            <div class="col-md-6">
-                                <label class="text-muted fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label>
-                                <input type="text" name="upsale_desc" id="input_upsale_desc" class="form-control form-control-sm" required autocomplete="off">
+                            <div class="col-md-5"> 
+                                <label class="text-dark fw-bold small mb-1">ชื่อที่จะโชว์ในบิล *</label> 
+                                <input type="text" name="upsale_desc" id="input_upsale_desc" class="form-control form-control-sm border-dark border-opacity-25" required autocomplete="off">
                             </div>
                             <div class="col-md-3">
-                                <label class="text-muted fw-bold small mb-1">ราคา/หน่วย</label>
-                                <input type="text" name="upsale_price" id="upsale_price" class="form-control form-control-sm text-end number-format" required autocomplete="off">
+                                <label class="text-dark fw-bold small mb-1">ราคา/หน่วย</label> 
+                                <input type="text" name="upsale_price" id="upsale_price" class="form-control form-control-sm text-end number-format border-dark border-opacity-25" required autocomplete="off">
                             </div>
                             <div class="col-md-2">
-                                <label class="text-muted fw-bold small mb-1">จำนวน</label>
-                                <input type="text" name="upsale_qty" class="form-control form-control-sm text-center number-only" value="1" required autocomplete="off">
+                                <label class="text-dark fw-bold small mb-1">จำนวน</label> 
+                                <input type="text" name="upsale_qty" class="form-control form-control-sm text-center number-only border-dark border-opacity-25" value="1" required autocomplete="off">
                             </div>
-                            <div class="col-md-1">
-                                <button type="submit" class="btn btn-warning text-dark btn-sm w-100 fw-bold"><i class="fas fa-check"></i></button>
+                            <div class="col-md-2"> 
+                                <button type="submit" class="btn btn-dark text-white btn-sm w-100 fw-bold shadow-sm"><i class="fas fa-check me-1"></i> บันทึก</button>
                             </div>
                         </div>
                     </form>
@@ -199,7 +199,7 @@
                                 <td class="ps-4 text-center fw-bold text-muted">{{ forloop.counter }}</td>
                                 <td class="text-secondary fw-bold">{{ item.product.code|default:"-" }}</td>
                                 <td class="fw-bold text-primary">{{ item.item_name }}</td>
-                                <td class="text-center"><span class="badge bg-light text-dark border px-3">{{ item.quantity }}</span></td>
+                                <td class="text-center"><span class="badge bg-light text-dark border px-3">{{ item.quantity|floatformat:0 }}</span></td>
                                 <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
                                 <td class="text-end pe-4 fw-bold text-primary">{{ item.amount|floatformat:2|intcomma }}</td>
                                 {% if qt.status == 'DRAFT' %}
@@ -214,8 +214,8 @@
                             <tr class="bg-warning bg-opacity-10">
                                 <td class="ps-4 text-center fw-bold text-muted">{{ qt.items.all|length|add:forloop.counter }}</td>
                                 <td><span class="badge bg-light text-muted border rounded-pill px-2">งานเสริม</span></td>
-                                <td class="fw-bold text-dark"><small class="text-muted border rounded px-1 me-1">เพิ่ม</small> {{ u.description }}</td>
-                                <td class="text-center"><span class="badge bg-white text-dark border px-3">{{ u.quantity }}</span></td>
+                                <td class="fw-bold text-dark">{{ u.description }}</td>
+                                <td class="text-center"><span class="badge bg-white text-dark border px-3">{{ u.quantity|floatformat:0 }}</span></td>
                                 <td class="text-end">{{ u.unit_price|floatformat:2|intcomma }}</td>
                                 <td class="text-end pe-4 fw-bold text-dark">{{ u.total_price|floatformat:2|intcomma }}</td>
                                 {% if qt.status == 'DRAFT' %}
@@ -314,7 +314,7 @@
                                     <tr>
                                         <td class="text-end text-muted align-middle">ค่าจัดส่ง:</td>
                                         <td class="text-end">
-                                            <input type="text" name="shipping_cost" id="live_shipping" value="{% if qt.shipping_cost > 0 %}{{ qt.shipping_cost }}{% endif %}" class="form-control form-control-sm text-end d-inline-block number-format fw-bold text-success" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' %}readonly{% endif %}>
+                                            <input type="text" name="shipping_cost" id="live_shipping" value="{% if qt.shipping_cost > 0 %}{{ qt.shipping_cost }}{% endif %}" class="form-control form-control-sm text-end d-inline-block number-format fw-bold text-success" style="width: 110px;" placeholder="0.00" autocomplete="off" readonly>
                                         </td>
                                     </tr>
                                     <tr class="border-top">
@@ -419,7 +419,6 @@
             }
         });
 
-
         // 🌟 --- ส่วนจัดการ: เลือกภาค -> คัดกรองจังหวัด --- 🌟
         
         // 1. โหลดรายชื่อภาคเข้า Dropdown
@@ -471,16 +470,22 @@
             let shippingInput = $('#live_shipping');
             let alertBox = $('#shipping_alert');
 
-            // 1. ถ้ายังระบุพิกัดไม่ครบ ให้เปิดช่องให้กรอกมือไปก่อน
+            // 🌟 [UPDATE] ค่าเริ่มต้นคือ ล็อกไม่ให้พิมพ์
+            {% if qt.status == 'DRAFT' %}
+            shippingInput.prop('readonly', true);
+            {% endif %}
+
+            // 1. ถ้ายังระบุพิกัดไม่ครบ ให้กลับไปสถานะเริ่มต้น (ล็อกไว้)
             if (!origin || !province) {
-                shippingInput.prop('readonly', false);
                 return;
             }
 
             // 2. เช็กเงื่อนไขพิเศษ (ข้ามเกาะ หรือ 3 จังหวัดชายแดน) -> ปลดล็อก
             if (isIsland || riskProvinces.includes(province)) {
                 alertBox.removeClass('d-none');
-                shippingInput.prop('readonly', false); 
+                {% if qt.status == 'DRAFT' %}
+                shippingInput.prop('readonly', false); // ปลดล็อกให้พิมพ์เองได้
+                {% endif %}
                 shippingInput.removeClass('text-success').addClass('text-danger');
             } else {
                 alertBox.addClass('d-none');
@@ -494,18 +499,24 @@
                     
                     {% if qt.status == 'DRAFT' %}
                     shippingInput.val(formatNumber(price));
-                    shippingInput.prop('readonly', true); // ค้นหาเจอ -> ล็อกช่องทันที
+                    shippingInput.prop('readonly', true); // ล็อกไว้อัตโนมัติ
                     calculateLiveTotals();
                     {% endif %}
                 } else {
-                    shippingInput.prop('readonly', false); // ไม่มีในฐานข้อมูลให้กรอกเอง
+                    // ไม่มีในฐานข้อมูลก็ล็อกไว้ เป็น 0.00
+                    {% if qt.status == 'DRAFT' %}
+                    shippingInput.val('0.00');
+                    shippingInput.prop('readonly', true); // ล็อกไว้
+                    calculateLiveTotals();
+                    {% endif %}
                 }
             }
         }
 
-        // จับตาดูความเคลื่อนไหว ถ้าเปลี่ยนพิกัดให้คำนวณใหม่
+        // 🌟 [UPDATE] เรียกให้เช็กสถานะการล็อก 1 ครั้งตอนเปิดหน้ามาเลย
         {% if qt.status == 'DRAFT' %}
         $('#shipping_origin, #shipping_province, #shipping_is_island, #shipping_is_oversize').on('change', calculateSmartShipping);
+        calculateSmartShipping(); 
         {% endif %}
 
 
@@ -544,8 +555,7 @@
             let discount = unformatNumber($('#live_discount').val());
             
             let grandTotal = (baseItemTotal + shipping) - discount;
-            if (grandTotal < 0) grandTotal = 0; 
-            
+            if (grandTotal < 0) grandTotal = 0;
             let subtotal = grandTotal / 1.07;
             let taxAmount = grandTotal - subtotal;
             
@@ -561,6 +571,7 @@
             // ปลดล็อก select ก่อน Submit เพื่อให้ส่งค่าไปเซฟได้
             $(this).find('select').prop('disabled', false); 
         });
+
     });
 </script>
 {% endblock %}

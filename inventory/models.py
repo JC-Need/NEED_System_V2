@@ -33,7 +33,6 @@ class Product(models.Model):
     name = models.CharField(max_length=200, verbose_name="ชื่อสินค้า")
     
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, verbose_name="หมวดหมู่สินค้า")
-    # 🌟 [NEW] ฟิลด์สำหรับผูกแผนกวัตถุดิบ
     rm_category = models.ForeignKey(RawMaterialCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่วัตถุดิบ (แผนก)")
     
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาทุน")
@@ -63,8 +62,9 @@ class Product(models.Model):
         super().save(*args, **kwargs)
 
     class Meta:
-        verbose_name = "2. รายการสินค้า"
-        verbose_name_plural = "2. จัดการสินค้า (Products)"
+        # 🌟 [UPDATE] ปรับชื่อให้รู้ว่าเป็นหลังบ้าน
+        verbose_name = "2. จัดการคลังสินค้า/วัตถุดิบ (Master)"
+        verbose_name_plural = "2. จัดการคลังสินค้า/วัตถุดิบ (Master)"
 
 # ==========================================
 # 3. หัวเอกสารคลังสินค้า (Inventory Document)
@@ -123,7 +123,11 @@ class StockMovement(models.Model):
         verbose_name_plural = "4. รายการเคลื่อนไหว (Details)"
 
 class FinishedGood(Product):
-    class Meta: proxy = True; verbose_name = "2.1 สินค้าสำเร็จรูป (FG)"; verbose_name_plural = "2.1 สินค้าสำเร็จรูป (FG)"
+    class Meta: 
+        proxy = True
+        # 🌟 [UPDATE] ปรับชื่อให้พนักงานขายเข้าใจง่าย
+        verbose_name = "2.1 แคตตาล็อกสินค้าพร้อมขาย (สำหรับฝ่ายขาย)"
+        verbose_name_plural = "2.1 แคตตาล็อกสินค้าพร้อมขาย (สำหรับฝ่ายขาย)"
 
 class RawMaterial(Product):
     class Meta: proxy = True; verbose_name = "2.2 วัตถุดิบ (RM)"; verbose_name_plural = "2.2 วัตถุดิบ (RM)"

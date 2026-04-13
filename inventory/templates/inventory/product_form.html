@@ -50,21 +50,34 @@
                             {% endif %}
                             
                             <div class="col-md-4">
-                                 {{ form.min_level|as_crispy_field }}
+                                {{ form.min_level|as_crispy_field }}
                             </div>
                         </div>
 
                         <div class="row g-3 mb-3">
                             <div class="col-md-6">
                                 {{ form.image|as_crispy_field }}
+                                {% if form.instance.image %}
+                                <div class="mt-3 p-2 border rounded bg-white text-center shadow-sm">
+                                    <p class="small text-muted mb-2 fw-bold">รูปภาพปัจจุบัน:</p>
+                                    <img src="{{ form.instance.image.url }}" class="img-fluid rounded" style="max-height: 180px; object-fit: contain;">
+                                </div>
+                                {% endif %}
                             </div>
-                             
+                            
                             {% if p_type == 'FG' %}
                             <div class="col-md-6">
-                                 {{ form.standard_blueprint|as_crispy_field }}
-                                <small class="text-muted"><i class="fas fa-info-circle"></i> ใช้แนบไฟล์ PDF (เช่น SUP3.pdf) สำหรับส่งให้ฝ่ายผลิต</small>
+                                {{ form.standard_blueprint|as_crispy_field }}
+                                <small class="text-muted"><i class="fas fa-info-circle"></i> ใช้แนบไฟล์ PDF สำหรับส่งให้ฝ่ายผลิต</small>
+                                {% if form.instance.standard_blueprint %}
+                                <div class="mt-3">
+                                    <a href="{{ form.instance.standard_blueprint.url }}" target="_blank" class="btn btn-outline-info rounded-pill w-100">
+                                        <i class="fas fa-file-pdf me-2"></i>ดูไฟล์แบบแปลนปัจจุบัน
+                                    </a>
+                                </div>
+                                {% endif %}
                             </div>
-                             {% endif %}
+                            {% endif %}
                         </div>
 
                         <div class="mb-4">
@@ -93,11 +106,15 @@
                                 <tbody>
                                     {% for form_sup in formset %}
                                      <tr class="align-middle">
-                                        <td class="d-none">{{ form_sup.id }}</td>
+                                        <td class="d-none">
+                                            {% for hidden in form_sup.hidden_fields %}
+                                                {{ hidden }}
+                                            {% endfor %}
+                                        </td>
                                         <td>{{ form_sup.supplier }}</td>
                                         <td>{{ form_sup.supplier_part_no }}</td>
                                         <td>{{ form_sup.cost_price }}</td>
-                                         <td class="text-center">{{ form_sup.is_default }}</td>
+                                        <td class="text-center">{{ form_sup.is_default }}</td>
                                         <td class="text-center text-danger">
                                             {% if form_sup.instance.pk %}{{ form_sup.DELETE }}{% endif %}
                                         </td>
@@ -206,7 +223,6 @@
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         
-        // --- 1. ระบบจัดการปุ่ม [+] เพิ่มหมวดหมู่ ---
         function addPlusButtonModal(selectId, modalId) {
             const selectEl = document.getElementById(selectId);
             if (selectEl) {
@@ -224,9 +240,8 @@
         }
         
         addPlusButtonModal('id_category', '#categoryModal');
-        addPlusButtonModal('id_rm_category', '#rmCategoryModal'); // 🌟 ผูกปุ่มให้แผนกวัตถุดิบ
+        addPlusButtonModal('id_rm_category', '#rmCategoryModal');
 
-        // บันทึกหมวดหมู่สินค้า
         const btnSaveCat = document.getElementById('btnSaveCategory');
         if(btnSaveCat) {
             btnSaveCat.addEventListener('click', function() {
@@ -246,7 +261,6 @@
             });
         }
 
-        // บันทึกแผนกวัตถุดิบ (RM Category)
         const btnSaveRMCat = document.getElementById('btnSaveRMCategory');
         if(btnSaveRMCat) {
             btnSaveRMCat.addEventListener('click', function() {
@@ -266,7 +280,6 @@
             });
         }
 
-        // --- 2. 🌟 บันทึกร้านค้าฉบับสมบูรณ์ (Master Data) ---
         const btnSaveSup = document.getElementById('btnSaveSupplier');
         if(btnSaveSup) {
             btnSaveSup.addEventListener('click', function() {
@@ -294,7 +307,6 @@
                         
                         bootstrap.Modal.getInstance(document.getElementById('supplierModal')).hide();
                         
-                        // ล้างค่าฟอร์ม
                         document.getElementById('supName').value = '';
                         document.getElementById('supTax').value = '';
                         document.getElementById('supContact').value = '';
@@ -309,7 +321,6 @@
             });
         }
 
-        // --- 3. ระบบฟอร์แมตตัวเลขและการแก้ปัญหาเลข 0 ---
         const numberInputs = document.querySelectorAll('.number-input');
         numberInputs.forEach(input => {
             input.addEventListener('focus', function() {
@@ -336,7 +347,6 @@
                 }
             });
         }
-
     });
 </script>
 {% endblock %}

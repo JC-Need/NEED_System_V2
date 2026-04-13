@@ -1,0 +1,240 @@
+{% extends 'core/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<style>
+    .text-strong { color: #1e2b3c !important; }
+    .text-medium { color: #596573 !important; }
+    
+    .timeline-card { transition: all 0.3s; background-color: #ffffff; border: 1px solid #e9ecef; border-left: 6px solid #dee2e6; }
+    .timeline-card:hover { transform: translateX(5px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
+    
+    .status-node { width: 14px; height: 14px; border-radius: 50%; background: #e9ecef; position: relative; border: 2px solid #fff; box-shadow: 0 0 0 1px #dee2e6; }
+    .status-node.active { background: #ffc107; box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3); border-color: #fff; }
+    .status-node.completed { background: #198754; box-shadow: 0 0 0 1px #198754; }
+    
+    .status-line { height: 3px; background: #e9ecef; flex-grow: 1; margin: 0 5px; }
+    .status-line.completed { background: #198754; }
+
+    .traffic-block { height: 16px; border-radius: 4px; transition: all 0.3s; }
+    .bg-light-block { background-color: #e9ecef; }
+    
+    .nav-pills .nav-link { color: #596573; font-weight: 600; background: #fff; border: 1px solid #dee2e6; margin: 0 4px; border-radius: 50rem; padding: 8px 20px; transition: all 0.2s;}
+    .nav-pills .nav-link:hover { background-color: #f8f9fa; }
+    .nav-pills .nav-link.active { background-color: #2c3e50 !important; color: #ffffff !important; border-color: #2c3e50; box-shadow: 0 4px 10px rgba(44, 62, 80, 0.2); }
+    
+    /* สไตล์สำหรับการ์ดพยากรณ์ SLA */
+    .sla-card { transition: all 0.3s; border: 2px solid transparent; }
+    .sla-card:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(0,0,0,0.08) !important; }
+    .sla-card.is-full { border-color: #f5c2c7; background-color: #fffafb; }
+    .sla-card.is-avail { border-color: #badbcc; background-color: #f8fff9; }
+
+    /* 🌟 [NEW] คลาสบังคับสีกล่องเวลาจัดส่งให้อ่านง่าย 100% 🌟 */
+    .delivery-box {
+        background-color: #fff3cd !important; /* พื้นหลังสีเหลืองอ่อน */
+        border: 1px solid #ffe69c !important; /* ขอบสีเหลือง/ทอง */
+        color: #4d3a00 !important; /* ตัวหนังสือสีน้ำตาลเข้มเกือบดำ */
+    }
+</style>
+
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-strong mb-1"><i class="fas fa-stream text-warning me-2"></i>สถานะงานผลิต & Timeline</h3>
+            <p class="text-medium small mb-0">ติดตามความคืบหน้างานผลิต และแผนการจัดส่งรายสัปดาห์</p>
+        </div>
+        <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 bg-white"><i class="fas fa-arrow-left me-1"></i> กลับหน้า Dashboard</a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12 mb-4">
+            <div class="card shadow-sm rounded-4 p-4 bg-white" style="border: none; border-top: 5px solid var(--bs-{{ overall_color }});">
+                <div class="d-flex justify-content-between align-items-end mb-2">
+                    <h6 class="fw-bold text-strong mb-0"><i class="fas fa-industry text-{{ overall_color }} me-2"></i>กำลังผลิตภาพรวมทั้งบริษัท (โควตา: {{ max_quota }} หลัง/สัปดาห์)</h6>
+                    <span class="badge bg-dark px-3 py-2 rounded-pill text-white shadow-sm">สัปดาห์ปัจจุบัน</span>
+                </div>
+                
+                <div class="d-flex gap-1 mt-3">
+                    {% for color in quota_blocks %}
+                        <div class="flex-grow-1 traffic-block {% if color == 'light' %}bg-light-block{% else %}bg-{{ color }}{% endif %}"></div>
+                    {% endfor %}
+                </div>
+                
+                <div class="mt-3 text-strong fw-bold" style="font-size: 0.85rem;">
+                    <i class="fas fa-info-circle text-{{ overall_color }} me-1"></i> ขณะนี้มีการจองคิวงานในระบบรวม <span class="text-{{ overall_color }} fs-6">{{ current_usage }}</span> หลัง
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-12 mb-4">
+            <h5 class="fw-bold text-strong mb-3"><i class="fas fa-calendar-alt text-primary me-2"></i>ประมาณการวันที่ผลิตและการจัดส่งสินค้า</h5>
+            <div class="row g-3">
+                {% for f in forecast_data %}
+                <div class="col-md-6 col-lg-3">
+                    <div class="card h-100 shadow-sm rounded-4 sla-card {% if f.is_full %}is-full{% else %}is-avail{% endif %}">
+                        <div class="card-body p-3">
+                            <div class="fw-bold text-strong mb-2" style="font-size: 0.95rem;">
+                                📌 สัปดาห์ที่ {{ f.week_num }}: <span class="text-primary">สั่งซื้อ ({{ f.order_range }})</span>
+                            </div>
+                            
+                            <div class="mb-3">
+                                {% if f.is_full %}
+                                    <div class="badge bg-danger text-white w-100 py-2 shadow-sm fs-6 text-start px-3"><i class="fas fa-times-circle me-1"></i> 🔴 สถานะคิว: เต็ม/จำกัด</div>
+                                {% else %}
+                                    <div class="badge bg-success text-white w-100 py-2 shadow-sm fs-6 text-start px-3"><i class="fas fa-check-circle me-1"></i> 🟢 สถานะคิว: ว่าง (รับได้อีก {{ f.avail }} หลัง)</div>
+                                {% endif %}
+                            </div>
+
+                            <div class="text-strong" style="font-size: 0.85rem; line-height: 1.8;">
+                                <div><i class="fas fa-cog text-secondary me-1"></i> <strong>ช่วงเวลาจัดเตรียมวัตถุดิบ:</strong><br><span class="ms-4 text-muted">{{ f.prep_range }}</span></div>
+                                <div class="mt-2"><i class="fas fa-cogs text-warning me-1"></i> <strong>ช่วงเวลาผลิต:</strong><br><span class="ms-4 text-muted">{{ f.prod_range }}</span></div>
+                                
+                                <div class="mt-3 p-2 rounded delivery-box">
+                                    <div class="fw-bold"><i class="fas fa-truck text-warning me-1"></i> <strong>ช่วงเวลาจัดส่ง:</strong></div>
+                                    <div class="ms-4 fw-bold" style="font-size: 0.95rem;">{{ f.deliv_range }}</div>
+                                    <div class="ms-4" style="font-size: 0.75rem; opacity: 0.8;">(ทยอยส่งตามคิว)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <div class="card border-0 shadow-sm rounded-4 overflow-hidden bg-white">
+        <div class="card-header bg-white border-bottom pt-4 pb-3 px-4">
+            <ul class="nav nav-pills gap-2" id="pills-tab" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" id="tab-unassigned" data-bs-toggle="pill" data-bs-target="#pool" type="button">
+                        <i class="fas fa-layer-group me-1"></i> กองกลาง (รอจ่ายงาน) <span class="badge bg-danger ms-1 rounded-pill">{{ unassigned_jobs.count }}</span>
+                    </button>
+                </li>
+                {% for branch in branch_data %}
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="pill" data-bs-target="#branch-{{ branch.id }}" type="button">
+                        <i class="fas fa-warehouse me-1"></i> {{ branch.name }}
+                    </button>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        
+        <div class="card-body p-4" style="background-color: #f8f9fa;">
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="pool">
+                    {% for job in unassigned_jobs %}
+                    <div class="card mb-3 shadow-sm rounded-4 timeline-card" style="border-left-color: #ffc107;">
+                        <div class="card-body p-4">
+                            <div class="row align-items-center">
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-start mb-2">
+                                        <span class="badge bg-warning text-dark me-2 shadow-sm">W{{ job.cohort_week|slice:"-2:"|default:"--" }}</span>
+                                        <h6 class="fw-bold mb-0 text-strong" style="font-size: 1.1rem;">{{ job.customer_name|default:"ไม่ระบุชื่อลูกค้า" }}</h6>
+                                    </div>
+                                    <p class="text-medium small mb-2"><i class="fas fa-home me-1"></i> {{ job.product.name }} <span class="fw-bold text-strong">({{ job.quantity }} หลัง)</span></p>
+                                    <div class="text-danger small fw-bold bg-danger bg-opacity-10 d-inline-block px-2 py-1 rounded"><i class="fas fa-calendar-check me-1"></i> กำหนดส่ง: {{ job.deadline_date|date:"d/m/Y"|default:"-" }}</div>
+                                </div>
+                                <div class="col-md-6 border-start border-end px-4">
+                                    <div class="d-flex align-items-center">
+                                        <div class="text-center" style="width: 70px;">
+                                            <div class="status-node {% if job.status != 'CANCELLED' %}completed{% endif %} mx-auto"></div>
+                                            <div class="text-strong mt-2 fw-bold" style="font-size: 11px;">เปิด JOB</div>
+                                        </div>
+                                        <div class="status-line completed"></div>
+                                        <div class="text-center" style="width: 70px;">
+                                            <div class="status-node active mx-auto"></div>
+                                            <div class="text-warning mt-2 fw-bold" style="font-size: 11px;">รอเลือกสาขา</div>
+                                        </div>
+                                        <div class="status-line"></div>
+                                        <div class="text-center" style="width: 70px;">
+                                            <div class="status-node mx-auto"></div>
+                                            <div class="text-medium mt-2" style="font-size: 11px;">เริ่มผลิต</div>
+                                        </div>
+                                        <div class="status-line"></div>
+                                        <div class="text-center" style="width: 70px;">
+                                            <div class="status-node mx-auto"></div>
+                                            <div class="text-medium mt-2" style="font-size: 11px;">จัดส่ง</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-2 text-end">
+                                    <button class="btn btn-sm btn-dark rounded-pill px-3 shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#detail-{{ job.id }}">
+                                        ดูแผนจัดส่ง <i class="fas fa-chevron-down ms-1"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="collapse mt-3" id="detail-{{ job.id }}">
+                                <div class="p-3 rounded-3 border delivery-box">
+                                    <h6 class="fw-bold mb-2 small"><i class="fas fa-truck-loading me-2"></i>รายละเอียดการเกลี่ยยอดส่งของ (หาร 5 วัน)</h6>
+                                    <pre class="mb-0 font-monospace" style="white-space: pre-wrap; font-size: 12px;">{{ job.note|slice:"100:"|default:"-ไม่มีบันทึกแผน-" }}</pre>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center py-5 text-medium bg-white rounded-4 border border-dashed">
+                        <i class="fas fa-check-circle fa-3x opacity-25 mb-3 text-success"></i>
+                        <h6 class="fw-bold">ไม่มีงานค้างในกองกลาง</h6>
+                        <p class="small">งานทั้งหมดถูกจ่ายให้โรงงานสาขาเรียบร้อยแล้ว</p>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                {% for branch in branch_data %}
+                <div class="tab-pane fade" id="branch-{{ branch.id }}">
+                    <div class="card border-0 bg-white shadow-sm rounded-4 p-4 mb-4 border-top" style="border-top: 4px solid var(--bs-{{ branch.status_color }}) !important;">
+                        <div class="d-flex justify-content-between align-items-end mb-2">
+                            <h6 class="fw-bold text-strong mb-0"><i class="fas fa-chart-pie text-{{ branch.status_color }} me-2"></i>กำลังผลิต: {{ branch.name }} (โควตา: {{ branch.quota }} หลัง/สัปดาห์)</h6>
+                            <span class="badge bg-{{ branch.status_color }} rounded-pill">{{ branch.usage }} / {{ branch.quota }}</span>
+                        </div>
+                        <div class="d-flex gap-1 mt-2">
+                            {% for color in branch.blocks %}
+                                <div class="flex-grow-1 traffic-block {% if color == 'light' %}bg-light-block{% else %}bg-{{ color }}{% endif %}" style="height: 12px;"></div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    {% for job in active_jobs %}
+                        {% if job.branch_id == branch.id %}
+                        <div class="card mb-3 shadow-sm rounded-4 timeline-card" style="border-left-color: #2c3e50;">
+                            <div class="card-body p-4">
+                                <div class="row align-items-center">
+                                    <div class="col-md-4">
+                                        <div class="d-flex align-items-start mb-2">
+                                            <span class="badge bg-secondary text-white me-2 shadow-sm">W{{ job.cohort_week|slice:"-2:"|default:"--" }}</span>
+                                            <h6 class="fw-bold mb-1 text-strong" style="font-size: 1.1rem;">{{ job.customer_name|default:"ไม่ระบุชื่อลูกค้า" }}</h6>
+                                        </div>
+                                        <p class="text-medium small mb-2"><i class="fas fa-home me-1"></i> {{ job.product.name }} <span class="fw-bold text-strong">({{ job.quantity }} หลัง)</span></p>
+                                        <div class="text-strong small fw-bold mt-2 bg-light d-inline-block px-2 py-1 rounded border"><i class="fas fa-cogs text-secondary me-1"></i> ผลิตอยู่ที่: {{ branch.name }}</div>
+                                    </div>
+                                    <div class="col-md-6 border-start px-4">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span class="text-strong fw-bold" style="font-size: 11px;">ความคืบหน้าการผลิต</span>
+                                            <span class="text-strong fw-bold" style="font-size: 11px;">{{ job.progress_percentage }}%</span>
+                                        </div>
+                                        <div class="progress progress-rounded mb-2" style="height: 8px;">
+                                            <div class="progress-bar bg-success" style="width: {{ job.progress_percentage }}%;"></div>
+                                        </div>
+                                        <div class="text-danger fw-bold bg-danger bg-opacity-10 d-inline-block px-2 py-1 rounded" style="font-size: 11px;"><i class="fas fa-flag-checkered me-1"></i> กำหนดส่ง: {{ job.deadline_date|date:"d/m/Y"|default:"-" }}</div>
+                                    </div>
+                                    <div class="col-md-2 text-end">
+                                        {% if job.quotation_ref %}
+                                            <a href="{% url 'quotation_edit' job.quotation_ref.id %}" class="btn btn-sm btn-outline-dark rounded-pill px-4 fw-bold shadow-sm">ดูใบงาน</a>
+                                        {% else %}
+                                            <span class="badge bg-light text-medium border fw-normal px-2 py-1"><i class="fas fa-unlink me-1"></i>ไม่มีใบอ้างอิง</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

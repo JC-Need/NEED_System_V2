@@ -46,8 +46,12 @@ class EmployeeAdmin(admin.ModelAdmin):
     )
 
 # 2. Master Data
+# 🌟 [UPDATE] อัปเดตหน้าจัดการ Department ให้โชว์แผนกหลัก-ย่อย 🌟
 @admin.register(Department)
-class DepartmentAdmin(admin.ModelAdmin): pass
+class DepartmentAdmin(admin.ModelAdmin): 
+    list_display = ('name', 'parent')
+    list_filter = ('parent',)
+    search_fields = ('name',)
 
 @admin.register(Position)
 class PositionAdmin(admin.ModelAdmin):

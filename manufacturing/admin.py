@@ -3,13 +3,24 @@ from django.contrib import messages
 from django.utils.html import format_html
 from django.urls import reverse
 
+from inventory.models import Product # 🌟 [NEW] นำเข้าตาราง Product เพื่อใช้อ้างอิงสินค้าหลัก
+
 from .models import (
     BOM, BOMItem, ProductionOrder, Branch, Salesperson,
-    ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
+    ProductionStatus, ProductionTeam, DeliveryStatus, Transporter,
+    MfgBranch 
 )
 
 # ==========================================
-# 🌟 เพิ่มเมนูจัดการ สาขา และ พนักงานขาย 🌟
+# 🌟 เพิ่มเมนูจัดการ โรงงานผลิต
+# ==========================================
+@admin.register(MfgBranch)
+class MfgBranchAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name')
+    search_fields = ('name',)
+
+# ==========================================
+# 🌟 เพิ่มเมนูจัดการ สาขาหน้าร้าน และ พนักงานขาย
 # ==========================================
 @admin.register(Branch)
 class BranchAdmin(admin.ModelAdmin):
@@ -23,14 +34,12 @@ class SalespersonAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 # ==========================================
-# 🌟 เพิ่มเมนูจัดการสถานะหน้าตารางกระดานผลิต 🌟
+# 🌟 เพิ่มเมนูจัดการสถานะหน้าตารางกระดานผลิต
 # ==========================================
-
-# 👇 ทำให้สามารถกรอกตัวเลขลำดับ (sequence) ได้ง่ายๆ จากหน้าแรก 👇
 @admin.register(ProductionStatus)
 class ProductionStatusAdmin(admin.ModelAdmin):
     list_display = ('name', 'sequence')
-    list_editable = ('sequence',) # เปิดให้แก้เลข 1,2,3 ได้เลย
+    list_editable = ('sequence',) 
     ordering = ('sequence', 'id')
 
 admin.site.register(ProductionTeam)
@@ -54,14 +63,23 @@ class BOMAdmin(admin.ModelAdmin):
 # ==========================================
 # ส่วน Action และ ProductionOrder 
 # ==========================================
-@admin.action(description='✅ ยืนยันผลิตเสร็จ (ตัดวัตถุดิบ + เพิ่มสินค้า)')
+@admin.action(description='✅ ยืนยันผลิตเสร็จ (ตัดวัตถุดิบ + เพิ่มสต็อกสินค้าหลัก)')
 def action_complete_production(modeladmin, request, queryset):
     for po in queryset:
         if po.status == 'COMPLETED': continue
+        
+        # 🌟 [FIX] ตรวจจับและดึง "สินค้าหลัก" ในกรณีที่เป็นสินค้ารหัสชั่วคราว (-JOB)
+        target_product = po.product
+        if target_product and '-JOB' in target_product.code:
+            base_code = target_product.code.split('-JOB')[0]
+            master_product = Product.objects.filter(code=base_code).first()
+            if master_product:
+                target_product = master_product
+
         try:
-            bom = BOM.objects.get(product=po.product)
+            bom = BOM.objects.get(product=target_product)
         except BOM.DoesNotExist:
-            messages.error(request, f"❌ ไม่พบสูตร BOM ของ {po.product.name}")
+            messages.error(request, f"❌ ไม่พบสูตร BOM ของ {target_product.name}")
             continue
 
         can_produce = True
@@ -78,12 +96,13 @@ def action_complete_production(modeladmin, request, queryset):
             item.raw_material.stock_qty -= req
             item.raw_material.save()
             
-        po.product.stock_qty += po.quantity
-        po.product.save()
+        # 🌟 [FIX] เพิ่มสต็อกเข้าที่สินค้าหลักเสมอ
+        target_product.stock_qty += po.quantity
+        target_product.save()
 
         po.status = 'COMPLETED'
         po.save()
-        messages.success(request, f"✅ ผลิต {po.code} สำเร็จ!")
+        messages.success(request, f"✅ ผลิต {po.code} สำเร็จ! (เพิ่มสต็อกให้ {target_product.code} แล้ว)")
 
 @admin.register(ProductionOrder)
 class ProductionOrderAdmin(admin.ModelAdmin):

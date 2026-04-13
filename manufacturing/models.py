@@ -5,24 +5,36 @@ from hr.models import Employee
 import datetime
 
 # ==========================================
-# 🌟 ตารางสำหรับเก็บข้อมูลลูกค้าและทีมงาน 🌟
+# 🌟 ตารางสำหรับเก็บข้อมูลหน้าร้าน (Sales Team) 🌟
 # ==========================================
 class Branch(models.Model):
-    name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อสาขา")
+    name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อสาขา (หน้าร้าน)")
     def __str__(self): return self.name
 
 class Salesperson(models.Model):
-    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='salespersons', verbose_name="สาขา")
+    branch = models.ForeignKey(Branch, on_delete=models.CASCADE, related_name='salespersons', verbose_name="สาขาหน้าร้าน")
     name = models.CharField(max_length=100, verbose_name="ชื่อพนักงานขาย")
     def __str__(self): return f"{self.name} ({self.branch.name})"
 
 # ==========================================
-# 🌟 ตารางใหม่: สำหรับระบบกระดานติดตามงาน 🌟
+# 🌟 ตารางใหม่: สำหรับสถานที่ผลิต (โรงงาน / Factory) 🌟
+# ==========================================
+class MfgBranch(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อโรงงาน / สถานที่ผลิต")
+    weekly_quota = models.IntegerField(default=10, verbose_name="โควตาการผลิต (หลัง/สัปดาห์)")
+    
+    class Meta:
+        verbose_name = "โรงงาน / สถานที่ผลิต"
+        verbose_name_plural = "ตั้งค่าโรงงานผลิต"
+    def __str__(self): return self.name
+
+# ==========================================
+# 🌟 ตาราง: สำหรับระบบกระดานติดตามงาน 🌟
 # ==========================================
 class ProductionStatus(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="สถานะการผลิตหน้างาน (แผนก)")
     sequence = models.IntegerField(default=99, verbose_name="ลำดับการแสดงผล")
-    class Meta: ordering = ['sequence', 'id'] 
+    class Meta: ordering = ['sequence', 'id']
     def __str__(self): return self.name
 
 class ProductionTeam(models.Model):
@@ -67,29 +79,42 @@ class ProductionOrder(models.Model):
         ('COMPLETED', 'ผลิตเสร็จแล้ว (เข้าสต็อก)'),
         ('CANCELLED', 'ยกเลิก')
     ]
+    
+    # 🌟 [NEW] ตัวเลือกสถานะการขออนุมัติวันจัดส่ง 🌟
+    DATE_APPROVAL_CHOICES = [
+        ('NOT_REQUIRED', 'ไม่ต้องอนุมัติ'),
+        ('PENDING', 'รออนุมัติวัน'),
+        ('APPROVED', 'อนุมัติวันแล้ว'),
+        ('REJECTED', 'ไม่อนุมัติ (ยึดตามระบบ)')
+    ]
 
     code = models.CharField(max_length=20, unique=True, blank=True, verbose_name="เลขที่ใบสั่งผลิต (JOB)")
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้าที่จะผลิต")
-    quantity = models.IntegerField(default=1, verbose_name="จำนวนที่ผลิต (ล็อกที่ 1 เสมอ)")
+    quantity = models.IntegerField(default=1, verbose_name="จำนวนที่ผลิต (ตามใบเสนอราคา)")
     quotation_ref = models.ForeignKey('sales.Quotation', on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="อ้างอิงใบเสนอราคา/มัดจำ")
     blueprint_file = models.FileField(upload_to='blueprints/%Y/%m/', null=True, blank=True, verbose_name="ไฟล์แบบแปลน (PDF/รูปภาพ)")
-    
+
     start_date = models.DateField(default=timezone.now, verbose_name="วันที่เริ่มผลิต")
     finish_date = models.DateField(null=True, blank=True, verbose_name="วันที่เสร็จ (เข้าคลัง)")
     delivery_date = models.DateField(null=True, blank=True, verbose_name="กำหนดจัดส่งสินค้า")
-    
-    # 🌟 [NEW] ข้อมูลสำหรับคุมคิว 25 งาน/สัปดาห์ และ SLA 22 วัน 🌟
+
     cohort_week = models.CharField(max_length=15, blank=True, null=True, verbose_name="สัปดาห์คิวผลิต (Cohort)")
     deadline_date = models.DateField(null=True, blank=True, verbose_name="เส้นตายจัดส่ง (SLA)")
 
-    branch = models.ForeignKey(Branch, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สาขาที่ขาย")
+    # 🌟 [NEW] ฟิลด์สำหรับระบบขออนุมัติวันพิเศษ 🌟
+    auto_calculated_date = models.DateField(null=True, blank=True, verbose_name="วันที่ระบบคำนวณ (Safe Date)")
+    requested_date = models.DateField(null=True, blank=True, verbose_name="วันที่เซลส์ขอ (Requested Date)")
+    date_approval_status = models.CharField(max_length=20, choices=DATE_APPROVAL_CHOICES, default='NOT_REQUIRED', verbose_name="สถานะการอนุมัติวัน")
+
+    branch = models.ForeignKey(MfgBranch, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สถานที่ผลิต / โรงงาน")
     salesperson = models.ForeignKey(Salesperson, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="พนักงานขาย")
+    
     customer_name = models.CharField(max_length=200, blank=True, verbose_name="ชื่อลูกค้า / สถานที่ส่ง")
     completed_departments = models.ManyToManyField(ProductionStatus, blank=True, verbose_name="แผนกที่ดำเนินการเสร็จแล้ว")
     production_team = models.ForeignKey(ProductionTeam, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมช่างผลิต")
     delivery_status = models.ForeignKey(DeliveryStatus, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สถานะจัดส่ง")
     transporter = models.ForeignKey(Transporter, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมขนส่ง")
-    
+
     responsible_person = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ควบคุมการผลิต")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PLANNED', verbose_name="สถานะระบบ")
     is_materials_ordered = models.BooleanField(default=False, verbose_name="สั่งซื้อวัตถุดิบแล้ว")
@@ -103,7 +128,6 @@ class ProductionOrder(models.Model):
     def __str__(self): return f"{self.code} - {self.product.name}"
 
     def save(self, *args, **kwargs):
-        self.quantity = 1 
         if not self.code:
             today = datetime.date.today()
             thai_year = (today.year + 543) % 100
@@ -122,7 +146,6 @@ class ProductionOrder(models.Model):
         if total_depts == 0: return 0
         return int((self.completed_departments.count() / total_depts) * 100)
 
-    # 🌟 [NEW] สูตรคำนวณวันคงเหลือ เพื่อแสดงแถบสีในการ์ด Planner 🌟
     @property
     def days_remaining(self):
         if not self.deadline_date or self.is_closed: return 0
@@ -132,9 +155,9 @@ class ProductionOrder(models.Model):
     def sla_status_color(self):
         if self.is_closed: return "success"
         rem = self.days_remaining
-        if rem < 0: return "danger" # เลยกำหนด (แดง)
-        if rem <= 5: return "warning" # ใกล้ถึงกำหนด (เหลือง/ส้ม)
-        return "primary" # ปลอดภัย (น้ำเงิน)
+        if rem < 0: return "danger" 
+        if rem <= 5: return "warning" 
+        return "primary" 
 
 # ==========================================
 # 3. รายการวัตถุดิบที่ใช้จริงต่อ 1 งาน (Job Material List)

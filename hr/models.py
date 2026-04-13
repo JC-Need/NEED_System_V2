@@ -6,7 +6,15 @@ import datetime
 # --- Master Data HR ---
 class Department(models.Model):
     name = models.CharField(max_length=100, verbose_name="ชื่อแผนก")
-    def __str__(self): return self.name
+    # 🌟 [NEW] เพิ่มฟิลด์ parent เพื่อทำระบบ แผนกหลัก-แผนกย่อย 🌟
+    parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='sub_departments', verbose_name="สังกัดแผนกหลัก (ถ้ามี)")
+
+    def __str__(self): 
+        # ถ้ามีแผนกแม่ ให้โชว์แบบ "แผนกแม่ > แผนกลูก"
+        if self.parent:
+            return f"{self.parent.name} > {self.name}"
+        return self.name
+        
     class Meta: verbose_name_plural = "ข้อมูลแผนก"
 
 class Position(models.Model):

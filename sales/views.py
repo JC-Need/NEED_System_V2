@@ -1,6 +1,8 @@
+import math
 import json
 import datetime
 import openpyxl
+from django.db.models import Sum
 from decimal import Decimal, ROUND_DOWN
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
@@ -20,7 +22,7 @@ from inventory.models import Product, Category
 from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
-from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch as MfgBranch, ProductionStatus
+from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus
 
 # ==========================================
 # 🧠 ระบบคำนวณคอมมิชชัน
@@ -208,7 +210,6 @@ def api_dashboard_data(request):
             if group_by == 'day':
                 chart_title = "แนวโน้มยอดขายรวมทั้งบริษัท (รายวัน)"
                 chart_type = "line"
-
                 period_dict = {}
                 for p in pos_raw:
                     if p['created_at']:
@@ -367,6 +368,37 @@ def record_deposit(request, qt_id):
 
     return redirect('quotation_edit', qt_id=qt.id)
 
+# 🌟 [NEW] ฟังก์ชัน Helper คำนวณวันจัดส่งอัตโนมัติ 🌟
+def get_auto_delivery_date(qt):
+    first_item = qt.items.filter(product__isnull=False).first()
+    if not first_item: return timezone.now().date()
+    
+    company_info = CompanyInfo.objects.first()
+    max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
+
+    deposit_date = qt.deposit_date if qt.deposit_date else timezone.now().date()
+    current_check_date = deposit_date
+    weeks_pushed = 0
+
+    while True:
+        iso_year, iso_week, _ = current_check_date.isocalendar()
+        check_cohort = f"{iso_year}-W{iso_week:02d}"
+        
+        total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+
+        if total_qty_in_week + first_item.quantity <= max_quota:
+            break
+
+        weeks_pushed += 1
+        current_check_date += datetime.timedelta(days=7)
+
+    base_lead_time = 14 + (weeks_pushed * 7)
+    delivery_start_date = deposit_date + datetime.timedelta(days=base_lead_time)
+    days_to_monday = delivery_start_date.weekday()
+    monday_of_delivery_week = delivery_start_date - datetime.timedelta(days=days_to_monday)
+
+    return monday_of_delivery_week + datetime.timedelta(days=4)
+
 @login_required
 def create_job_order(request, qt_id):
     qt = get_object_or_404(Quotation, pk=qt_id)
@@ -384,10 +416,6 @@ def create_job_order(request, qt_id):
         messages.error(request, "❌ ไม่พบข้อมูลสินค้า (FG) ในใบเสนอราคา ไม่สามารถสร้างใบสั่งผลิตได้")
         return redirect('quotation_list')
 
-    target_date_str = request.POST.get('target_date') if request.method == 'POST' else None
-    target_date = parse_date(target_date_str) if target_date_str else None
-
-    # 🌟 [NEW] ระบบดึงค่าโควตาจากตาราง CompanyInfo 🌟
     company_info = CompanyInfo.objects.first()
     max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
 
@@ -399,37 +427,71 @@ def create_job_order(request, qt_id):
     while True:
         iso_year, iso_week, _ = current_check_date.isocalendar()
         check_cohort = f"{iso_year}-W{iso_week:02d}"
-        job_count = ProductionOrder.objects.filter(cohort_week=check_cohort).count()
 
-        if job_count < max_quota: # ⚡ เช็คจากตัวแปร max_quota แทนเลข 25 ตายตัว
+        total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+
+        if total_qty_in_week + first_item.quantity <= max_quota:
             assigned_cohort = check_cohort
             break
 
         weeks_pushed += 1
         current_check_date += datetime.timedelta(days=7)
 
-    sla_days = 22 + (weeks_pushed * 7)
-    calculated_deadline = deposit_date + datetime.timedelta(days=sla_days)
-    calculated_start_date = deposit_date + datetime.timedelta(days=(weeks_pushed * 7))
+    base_lead_time = 14 + (weeks_pushed * 7)
+    start_date = deposit_date + datetime.timedelta(days=(weeks_pushed * 7))
+    delivery_start_date = deposit_date + datetime.timedelta(days=base_lead_time)
+
+    days_to_monday = delivery_start_date.weekday()
+    monday_of_delivery_week = delivery_start_date - datetime.timedelta(days=days_to_monday)
+
+    total_qty = int(first_item.quantity)
+    daily_qty = math.ceil(total_qty / 5.0)
+
+    delivery_plan_note = f"\n\n🚚 แผนการจัดส่ง (เฉลี่ยวันละ {daily_qty} หลัง):\n"
+    remaining_qty = total_qty
+    for i in range(5):
+        current_day = monday_of_delivery_week + datetime.timedelta(days=i)
+        qty_today = min(daily_qty, remaining_qty)
+        if qty_today > 0:
+            delivery_plan_note += f"- {current_day.strftime('%d/%m/%Y')} ({['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสฯ', 'ศุกร์'][i]}): ส่ง {qty_today} หลัง\n"
+        remaining_qty -= qty_today
+
+    final_delivery_date = monday_of_delivery_week + datetime.timedelta(days=4)
+
+    # 🌟 [NEW] ระบบดักจับการ Override วันจัดส่ง 🌟
+    target_date_str = request.POST.get('target_date')
+    requested_date_obj = parse_date(target_date_str) if target_date_str else None
+    
+    if requested_date_obj and requested_date_obj != final_delivery_date:
+        approval_status = 'PENDING'
+        req_date = requested_date_obj
+        deadline = final_delivery_date # Fallback สำรองไว้ก่อน
+    else:
+        approval_status = 'NOT_REQUIRED'
+        req_date = None
+        deadline = final_delivery_date
 
     sales_obj = None
-    branch_obj = None
     if qt.employee:
         emp_name = f"{qt.employee.first_name} {qt.employee.last_name}".strip()
         branch_name = qt.employee.department.name if qt.employee.department else "สำนักงานใหญ่"
-        branch_obj, _ = MfgBranch.objects.get_or_create(name=branch_name)
-        sales_obj, _ = MfgSalesperson.objects.get_or_create(name=emp_name, branch=branch_obj)
+        sales_branch_obj, _ = Branch.objects.get_or_create(name=branch_name)
+        sales_obj, _ = MfgSalesperson.objects.get_or_create(name=emp_name, branch=sales_branch_obj)
 
     job = ProductionOrder.objects.create(
         product=first_item.product,
+        quantity=total_qty,
         quotation_ref=qt,
         customer_name=qt.customer_name,
-        note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}",
+        note=f"อ้างอิงใบเสนอราคา: {qt.code}\n{qt.note}{delivery_plan_note}",
         salesperson=sales_obj,
-        branch=branch_obj,
-        start_date=calculated_start_date,
-        delivery_date=target_date if target_date else calculated_deadline,
-        deadline_date=calculated_deadline,
+        branch=None,
+        start_date=start_date,
+        delivery_date=deadline,
+        deadline_date=deadline,
+        auto_calculated_date=final_delivery_date,
+        requested_date=req_date,
+        date_approval_status=approval_status,
         cohort_week=assigned_cohort
     )
 
@@ -437,12 +499,126 @@ def create_job_order(request, qt_id):
         job.blueprint_file = first_item.product.standard_blueprint
         job.save()
 
-    if weeks_pushed > 0:
-        messages.warning(request, f"⚠️ คิวผลิตสัปดาห์แรกล้น ({max_quota} งาน)! ระบบปัดคิวงาน {job.code} ไปสัปดาห์ถัดไป (SLA: {calculated_deadline.strftime('%d/%m/%Y')})")
+    # 🌟 แจ้งเตือนสถานะแบบใหม่ 🌟
+    if approval_status == 'PENDING':
+        messages.warning(request, f"🏭 ส่งสั่งผลิตสำเร็จ! (ระบบตั้งสถานะ 'รออนุมัติวัน' เนื่องจากขอเปลี่ยนวันจัดส่งเป็น {req_date.strftime('%d/%m/%Y')})")
+    elif weeks_pushed > 0:
+        messages.warning(request, f"⚠️ คิวผลิตสัปดาห์แรกล้น! ระบบปัดคิวงาน {job.code} ไปสัปดาห์ถัดไป (กำหนดส่ง: {final_delivery_date.strftime('%d/%m/%Y')})")
     else:
-        messages.success(request, f"🏭 ส่งข้อมูลเปิดใบสั่งผลิต (Job Order: {job.code}) เรียบร้อยแล้ว! (SLA: {calculated_deadline.strftime('%d/%m/%Y')})")
+        messages.success(request, f"🏭 ส่งข้อมูลเข้ากองกลางผลิตสำเร็จ (Job Order: {job.code})! (กำหนดส่ง: {final_delivery_date.strftime('%d/%m/%Y')})")
 
     return redirect('quotation_list')
+
+
+# ==========================================
+# 🌟 ฟังก์ชันสำหรับหน้าจอ Sales Timeline แบบใหม่ (SLA Forecast) 🌟
+# ==========================================
+@login_required
+def sales_timeline(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้า Timeline")
+        return redirect('dashboard')
+
+    active_jobs = ProductionOrder.objects.filter(is_closed=False).order_by('deadline_date')
+    unassigned_jobs = active_jobs.filter(branch__isnull=True)
+    branches = MfgBranch.objects.all()
+
+    company_info = CompanyInfo.objects.first()
+    max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
+
+    now = timezone.now().date()
+    iso_year, iso_week, _ = now.isocalendar()
+    current_cohort = f"{iso_year}-W{iso_week:02d}"
+
+    total_pending_qty = active_jobs.aggregate(Sum('quantity'))['quantity__sum'] or 0
+    current_usage = total_pending_qty
+
+    overall_percent = int((current_usage / max_quota) * 100) if max_quota > 0 else 0
+    overall_color = 'success' if overall_percent <= 60 else ('warning' if overall_percent <= 85 else 'danger')
+
+    quota_blocks = []
+    display_blocks = min(max_quota, 50) 
+    for i in range(display_blocks):
+        if i < current_usage: quota_blocks.append(overall_color)
+        else: quota_blocks.append('light')
+
+    branch_data = []
+    for b in branches:
+        b_usage = ProductionOrder.objects.filter(branch=b, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        b_quota = getattr(b, 'weekly_quota', 10)
+        b_percent = int((b_usage / b_quota) * 100) if b_quota > 0 else 0
+        b_status_color = 'success' if b_percent <= 60 else ('warning' if b_percent <= 85 else 'danger')
+
+        b_blocks = []
+        for i in range(min(b_quota, 30)):
+            if i < b_usage: b_blocks.append(b_status_color)
+            else: b_blocks.append('light')
+
+        branch_data.append({
+            'id': b.id, 'name': b.name, 'quota': b_quota, 'usage': b_usage,
+            'percent': min(b_percent, 100), 'status_color': b_status_color, 'blocks': b_blocks
+        })
+
+    forecast_data = []
+    days_to_monday = now.weekday()
+    current_monday = now - datetime.timedelta(days=days_to_monday)
+
+    def get_short_thai_date(d):
+        thai_months = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+        return f"{d.day} {thai_months[d.month]}"
+
+    def get_full_thai_date(d):
+        thai_months = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
+        weekdays = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
+        return f"{weekdays[d.weekday()]} {d.day} {thai_months[d.month]}"
+
+    remaining_backlog = total_pending_qty
+
+    for i in range(4):
+        if remaining_backlog >= max_quota:
+            booked_this_week = max_quota
+            remaining_backlog -= max_quota
+        else:
+            booked_this_week = remaining_backlog
+            remaining_backlog = 0
+
+        avail = max_quota - booked_this_week
+        is_full = avail <= 0
+
+        o_start = current_monday + datetime.timedelta(days=7*i)
+        o_end = o_start + datetime.timedelta(days=6)
+
+        p_start = o_start + datetime.timedelta(days=7) 
+        p_end = p_start + datetime.timedelta(days=6)
+
+        m_start = p_start + datetime.timedelta(days=7) 
+        m_end = m_start + datetime.timedelta(days=6)
+
+        d_start = m_start + datetime.timedelta(days=7) 
+        d_end = d_start + datetime.timedelta(days=4) 
+
+        forecast_data.append({
+            'week_num': i + 1,
+            'order_range': f"{get_short_thai_date(o_start)} - {get_short_thai_date(o_end)}",
+            'prep_range': f"{get_full_thai_date(p_start)} - {get_full_thai_date(p_end)}",
+            'prod_range': f"{get_full_thai_date(m_start)} - {get_full_thai_date(m_end)}",
+            'deliv_range': f"{get_full_thai_date(d_start)} - {get_full_thai_date(d_end)}",
+            'avail': avail,
+            'is_full': is_full,
+        })
+
+    return render(request, 'sales/sales_timeline.html', {
+        'active_jobs': active_jobs,
+        'unassigned_jobs': unassigned_jobs,
+        'branch_data': branch_data,
+        'max_quota': max_quota,
+        'current_usage': current_usage,
+        'overall_percent': min(overall_percent, 100),
+        'overall_color': overall_color,
+        'quota_blocks': quota_blocks,
+        'forecast_data': forecast_data, 
+    })
+
 
 @login_required
 def convert_quote_to_invoice(request, qt_id):
@@ -593,7 +769,7 @@ def quotation_list(request):
         if status_filter == 'PENDING_PRODUCTION':
             queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True).distinct()
         elif status_filter == 'PENDING_CLOSING':
-             queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
         elif status_filter == 'IN_PRODUCTION':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=True).distinct()
         else:
@@ -608,7 +784,7 @@ def quotation_list(request):
         else:
             valid_jobs = ProductionOrder.objects.filter(is_closed=False)
             if prod_status_filter == 'IN_PROGRESS_5':
-                valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count__lt=total_departments_count)
+                 valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count__lt=total_departments_count)
             elif prod_status_filter == 'IN_PROGRESS_6':
                 valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count=total_departments_count)
             else:
@@ -634,6 +810,11 @@ def quotation_list(request):
     elif current_emp:
         rank = current_emp.business_rank.lower()
         if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower(): is_manager = True
+
+    # 🌟 [NEW] เพิ่มการคำนวณวันจัดส่งอัตโนมัติ ส่งให้ Modal สั่งผลิต 🌟
+    for qt in page_obj:
+        if qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.exists():
+            qt.auto_delivery_date = get_auto_delivery_date(qt)
 
     return render(request, 'sales/quotation_list.html', {
         'page_obj': page_obj, 'search_query': search_query, 'is_manager': is_manager,
@@ -699,7 +880,6 @@ def quotation_edit(request, qt_id):
 
     balance_due = qt.grand_total - qt.deposit_amount
 
-    # 🌟 [NEW] จัดกลุ่มจังหวัดตามภาค ส่งให้หน้าจอในรูปแบบ Dictionary 🌟
     regions_data = {
         'ภาคเหนือ': ['เชียงราย', 'เชียงใหม่', 'น่าน', 'พะเยา', 'แพร่', 'แม่ฮ่องสอน', 'ลำปาง', 'ลำพูน', 'อุตรดิตถ์'],
         'ภาคกลาง': ['กรุงเทพมหานคร', 'กำแพงเพชร', 'ชัยนาท', 'นครนายก', 'นครปฐม', 'นครสวรรค์', 'นนทบุรี', 'ปทุมธานี', 'พระนครศรีอยุธยา', 'พิจิตร', 'พิษณุโลก', 'เพชรบูรณ์', 'ลพบุรี', 'สมุทรปราการ', 'สมุทรสงคราม', 'สมุทรสาคร', 'สระบุรี', 'สิงห์บุรี', 'สุโขทัย', 'สุพรรณบุรี', 'อ่างทอง', 'อุทัยธานี'],
@@ -776,7 +956,7 @@ def quotation_edit(request, qt_id):
         'qt': qt, 'main_categories': main_categories, 'upsale_categories': upsale_categories,
         'products_json': json.dumps(products_list), 'upsales_json': json.dumps(upsales_list),
         'item_total': item_total, 'balance_due': balance_due,
-        'regions_json': json.dumps(regions_data), 'shipping_rates_json': shipping_rates_json  # 🌟 ส่งข้อมูลภาคไป
+        'regions_json': json.dumps(regions_data), 'shipping_rates_json': shipping_rates_json
     })
 
 def calculate_totals(qt):
@@ -879,7 +1059,7 @@ def quotation_cancel(request, qt_id):
         else:
             messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากเอกสารถูกนำไปเปิดบิลแล้ว")
     else:
-        messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกใบเสนอราคานี้")
+         messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกใบเสนอราคานี้")
 
     return redirect('quotation_list')
 
