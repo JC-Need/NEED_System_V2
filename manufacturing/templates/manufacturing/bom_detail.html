@@ -45,6 +45,7 @@
             <p class="text-muted small mb-0">โครงสร้างส่วนประกอบและต้นทุนสำหรับ <span class="fw-bold text-dark">{{ bom.product.name }}</span></p>
         </div>
         <div>
+            <a href="{% url 'print_master_bom' bom.pk %}" target="_blank" class="btn btn-info rounded-pill px-4 me-2 shadow-sm fw-bold text-white"><i class="fas fa-print me-1"></i> พิมพ์สูตร</a>
             <a href="{% url 'bom_edit' bom.pk %}" class="btn btn-warning rounded-pill px-4 me-2 shadow-sm fw-bold text-dark"><i class="fas fa-edit me-1"></i> แก้ไขสูตร</a>
             <a href="{% url 'bom_list' %}" class="btn btn-outline-secondary rounded-pill px-4"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารวม</a>
         </div>
@@ -65,7 +66,7 @@
                             {% endif %}
                         </div>
                         <div class="col-sm-9">
-                            <span class="badge bg-primary bg-opacity-10 text-primary mb-2 px-3 rounded-pill">สินค้าสำเร็จรูป (FG)</span>
+                            <span class="badge bg-primary text-white mb-2 px-3 rounded-pill shadow-sm">สินค้าสำเร็จรูป (FG)</span>
                             <h5 class="fw-bold text-dark mb-1">{{ bom.product.code }} - {{ bom.product.name }}</h5>
                             <p class="text-muted small mb-2"><i class="fas fa-tag me-1"></i> ชื่อสูตร: {{ bom.name }}</p>
                             <p class="text-muted small mb-0"><i class="fas fa-info-circle me-1"></i> หมายเหตุ: {{ bom.note|default:"-" }}</p>
@@ -82,11 +83,13 @@
         </div>
     </div>
 
-    <div class="card shadow-sm border-0 rounded-4 overflow-visible"> <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+    <div class="card shadow-sm border-0 rounded-4 overflow-visible"> 
+        <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
             <h6 class="fw-bold mb-0 text-dark"><i class="fas fa-cubes text-secondary me-2"></i>รายการวัตถุดิบ (Raw Materials)</h6>
             <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">รวม {{ items.count }} รายการ</span>
         </div>
-        <div class="table-responsive" style="overflow-x: visible;"> <table class="table table-hover align-middle mb-0">
+        <div class="table-responsive" style="overflow-x: visible;"> 
+            <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
                     <tr>
                         <th class="ps-4 py-3 border-0" style="width: 5%;">#</th>
@@ -123,9 +126,9 @@
                                 <span class="badge bg-info text-dark rounded-pill px-2"><i class="fas fa-store me-1"></i> {{ item.raw_material.supplier.name }}</span>
                             {% else %}
                                 <span class="text-muted small fst-italic">- ไม่ได้ระบุ -</span>
-                            {% endif %}
+                             {% endif %}
                         </td>
-                        <td class="text-center fw-bold text-primary fs-6">{{ item.quantity|floatformat:"-2"|intcomma }}</td>
+                        <td class="text-center fw-bold text-primary fs-6">{{ item.quantity|floatformat:"-2"|intcomma }} {{ item.raw_material.unit|default:"" }}</td>
                         <td class="text-end text-muted">{{ item.raw_material.cost_price|floatformat:"2"|intcomma }}</td>
                         <td class="pe-4 text-end fw-bold text-dark">{{ item.calculated_total_cost|floatformat:"2"|intcomma }}</td>
                     </tr>

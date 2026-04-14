@@ -38,11 +38,13 @@ class ProductForm(forms.ModelForm):
 
     class Meta:
         model = Product
-        fields = ['product_type', 'code', 'name', 'category', 'rm_category', 'supplier', 'cost_price', 'sell_price', 'min_level', 'image', 'standard_blueprint', 'is_active']
+        # 🌟 [NEW] เพิ่ม 'unit' เข้าไปในหน้าฟอร์ม
+        fields = ['product_type', 'code', 'name', 'unit', 'category', 'rm_category', 'supplier', 'cost_price', 'sell_price', 'min_level', 'image', 'standard_blueprint', 'is_active']
         widgets = {
             'product_type': forms.Select(attrs={'class': 'form-select'}),
             'code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เว้นว่างเพื่อสร้างรหัสอัตโนมัติ'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'unit': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น ชิ้น, กล่อง, เมตร...'}), # 🌟 เพิ่ม Widget ให้ช่องกรอกหน่วยนับ
             'category': forms.Select(attrs={'class': 'form-select select2'}),
             'rm_category': forms.Select(attrs={'class': 'form-select select2'}),
             'supplier': forms.Select(attrs={'class': 'form-select select2'}),
@@ -74,15 +76,31 @@ class ProductForm(forms.ModelForm):
     def clean_sell_price(self): return self.cleaned_data['sell_price'].replace(',', '') if self.cleaned_data['sell_price'] else 0
 
 class ProductSupplierForm(forms.ModelForm):
+    cost_price = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control form-control-sm number-input text-end', 
+            'placeholder': '0.00'
+        })
+    )
+
     class Meta:
         model = ProductSupplier
         fields = ['supplier', 'supplier_part_no', 'cost_price', 'is_default']
         widgets = {
             'supplier': forms.Select(attrs={'class': 'form-select select2'}),
             'supplier_part_no': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': 'รหัสอ้างอิงร้าน'}),
-            'cost_price': forms.NumberInput(attrs={'class': 'form-control form-control-sm text-end', 'step': '0.01'}),
             'is_default': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
+
+    def clean_cost_price(self):
+        val = self.cleaned_data.get('cost_price')
+        return val.replace(',', '') if val else 0
+        
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and self.instance.cost_price:
+            self.initial['cost_price'] = f"{self.instance.cost_price:,.2f}"
 
 ProductSupplierFormSet = inlineformset_factory(
     Product, ProductSupplier, form=ProductSupplierForm,

@@ -6,6 +6,7 @@ from django.db import models, transaction
 from django.db.models import Q
 from django.utils.dateparse import parse_date
 from django.http import JsonResponse
+from django.urls import reverse # 🌟 [NEW] นำเข้า reverse เพื่อใช้สร้าง URL
 import json
 
 from .models import Product, StockMovement, InventoryDoc, ProductSupplier, SupplierPriceHistory
@@ -129,7 +130,8 @@ def product_create(request):
                     old_price=0, new_price=sup.cost_price, updated_by=request.user
                 )
             messages.success(request, f"✅ สร้าง '{product.name}' เรียบร้อย")
-            return redirect('inventory_dashboard')
+            # 🌟 [UPDATE] เด้งกลับไปที่หน้ารายการสินค้า (ตามหมวดหมู่)
+            return redirect(f"{reverse('product_list')}?type={p_type}")
     else:
         form = ProductForm(initial={'product_type': p_type})
         form.fields['product_type'].widget = forms.HiddenInput()
@@ -159,7 +161,8 @@ def product_update(request, pk):
                         old_price=old_p, new_price=sup.cost_price, updated_by=request.user
                     )
             messages.success(request, f"💾 บันทึกแก้ไข '{product.name}' เรียบร้อย")
-            return redirect('inventory_dashboard')
+            # 🌟 [UPDATE] เด้งกลับไปที่หน้ารายการสินค้า (ตามหมวดหมู่)
+            return redirect(f"{reverse('product_list')}?type={p_type}")
     else:
         form = ProductForm(instance=product)
         formset = ProductSupplierFormSet(instance=product)
@@ -169,11 +172,14 @@ def product_update(request, pk):
 @login_required
 def product_delete(request, pk):
     product = get_object_or_404(Product, pk=pk)
-    if product.stockmovement_set.exists(): messages.error(request, f"❌ ลบไม่ได้! มีประวัติการเคลื่อนไหวแล้ว")
+    p_type = product.product_type # 🌟 เก็บ Type ไว้เพื่อพากลับถูกหน้า
+    if product.stockmovement_set.exists(): 
+        messages.error(request, f"❌ ลบไม่ได้! มีประวัติการเคลื่อนไหวแล้ว")
     else:
         product.delete()
         messages.success(request, f"🗑️ ลบเรียบร้อย")
-    return redirect('inventory_dashboard')
+    # 🌟 [UPDATE] เด้งกลับไปที่หน้ารายการสินค้า
+    return redirect(f"{reverse('product_list')}?type={p_type}")
 
 @login_required
 def print_barcode(request, product_id):
@@ -200,7 +206,6 @@ def ajax_add_category(request):
         except Exception as e: return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
-# 🌟 [NEW] API เพิ่มหมวดหมู่วัตถุดิบ (แผนก) 🌟
 @login_required
 def ajax_add_rm_category(request):
     if request.method == 'POST':
@@ -214,7 +219,6 @@ def ajax_add_rm_category(request):
         except Exception as e: return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
-# 🌟 [UPDATE] API เพิ่มร้านค้าแบบเก็บข้อมูลได้ละเอียด 🌟
 @login_required
 def ajax_add_supplier(request):
     if request.method == 'POST':

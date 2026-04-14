@@ -2,6 +2,24 @@
 {% load humanize %}
 
 {% block content %}
+<style>
+    .product-zoom-img {
+        width: 40px;
+        height: 40px;
+        object-fit: cover;
+        border-radius: 6px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        cursor: pointer;
+    }
+    .product-zoom-img:hover {
+        transform: scale(3.5);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+        z-index: 1050;
+        position: relative;
+    }
+</style>
+
 <div class="container-fluid py-4">
     <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
         <div>
@@ -39,8 +57,9 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light text-secondary small text-uppercase">
                     <tr>
-                        <th width="15%" class="ps-4 py-3">รหัสสินค้า</th>
-                        <th width="35%" class="py-3">ชื่อรายการ / หมวดหมู่</th>
+                        <th width="5%" class="ps-4 py-3">รหัสสินค้า</th>
+                        <th width="13%" class="text-center py-3">รูปสินค้า</th>
+                        <th width="32%" class="py-3">ชื่อรายการ / หมวดหมู่</th>
                         <th class="text-end py-3" width="15%">ราคา {% if p_type == 'FG' %}ขาย{% else %}ทุน{% endif %}</th>
                         <th class="text-center py-3" width="15%">ยอดคงเหลือ</th>
                         <th class="text-center py-3" width="10%">สถานะ</th>
@@ -51,6 +70,15 @@
                     {% for p in page_obj %}
                     <tr>
                         <td class="fw-bold {% if p_type == 'FG' %}text-primary{% else %}text-dark{% endif %} ps-4">{{ p.code }}</td>
+
+                        <td class="text-center">
+                            {% if p.image %}
+                                <img src="{{ p.image.url }}" class="product-zoom-img" alt="{{ p.code }}">
+                            {% else %}
+                                <span class="text-muted small">-</span>
+                            {% endif %}
+                        </td>
+
                         <td>
                             <div class="fw-bold">{{ p.name }}</div>
                             <small class="text-muted"><i class="fas fa-tags me-1"></i>{{ p.category.name|default:"ไม่ได้ระบุหมวดหมู่" }}</small>
@@ -62,6 +90,7 @@
                             <span class="fs-5 fw-bold {% if p.stock_qty <= p.min_level %}text-danger{% else %}text-success{% endif %}">
                                 {{ p.stock_qty|intcomma }}
                             </span>
+                            <small class="text-muted ms-1">{{ p.unit|default:"-" }}</small>
                         </td>
                         <td class="text-center">
                             {% if p.stock_qty == 0 %}
@@ -80,12 +109,12 @@
                         </td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="6" class="text-center py-5 text-muted"><h4><i class="fas fa-box-open mb-3 opacity-25 fa-2x"></i></h4> ไม่พบรายการข้อมูล</td></tr>
+                    <tr><td colspan="7" class="text-center py-5 text-muted"><h4><i class="fas fa-box-open mb-3 opacity-25 fa-2x"></i></h4> ไม่พบรายการข้อมูล</td></tr>
                     {% endfor %}
                 </tbody>
             </table>
         </div>
-        
+
         {% if page_obj.has_other_pages %}
         <div class="card-footer bg-white py-3 border-top-0 d-flex justify-content-center">
             <nav>

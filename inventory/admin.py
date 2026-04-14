@@ -32,15 +32,16 @@ show_barcode_btn.short_description = 'Barcode'
 # 2. สินค้ารวม (Product All) - เอาไว้ดูภาพรวม
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('code', show_image_preview, 'name', 'product_type', 'stock_qty', 'is_active')
+    # 🌟 [UPDATE] แทรก 'unit' เข้ามาแสดงผล
+    list_display = ('code', show_image_preview, 'name', 'product_type', 'stock_qty', 'unit', 'is_active')
     list_filter = ('product_type', 'category', 'is_active')
     search_fields = ('code', 'name')
 
 # ✅ 2.1 เมนูสินค้าสำเร็จรูป (FG)
 @admin.register(FinishedGood)
 class FinishedGoodAdmin(admin.ModelAdmin):
-    # เน้นโชว์ "ราคาขาย"
-    list_display = ('code', show_image_preview, 'name', 'category', 'sell_price', 'stock_qty', 'is_active', show_barcode_btn)
+    # 🌟 [UPDATE] แทรก 'unit' เข้ามาแสดงผล
+    list_display = ('code', show_image_preview, 'name', 'category', 'sell_price', 'stock_qty', 'unit', 'is_active', show_barcode_btn)
     list_filter = ('category', 'is_active')
     search_fields = ('code', 'name')
     
@@ -83,8 +84,8 @@ class FinishedGoodAdmin(admin.ModelAdmin):
 # ✅ 2.2 เมนูวัตถุดิบ (RM)
 @admin.register(RawMaterial)
 class RawMaterialAdmin(admin.ModelAdmin):
-    # 🌟 [UPDATE] เน้นโชว์ "ราคาทุน" และดึงคอลัมน์ supplier มาแสดง
-    list_display = ('code', show_image_preview, 'name', 'rm_category', 'cost_price', 'stock_qty', 'supplier', 'is_active', show_barcode_btn)
+    # 🌟 [UPDATE] แทรก 'unit' เข้ามาแสดงผล
+    list_display = ('code', show_image_preview, 'name', 'rm_category', 'cost_price', 'stock_qty', 'unit', 'supplier', 'is_active', show_barcode_btn)
     list_filter = ('rm_category', 'supplier', 'is_active')
     search_fields = ('code', 'name', 'supplier__name', 'supplier__code')
 

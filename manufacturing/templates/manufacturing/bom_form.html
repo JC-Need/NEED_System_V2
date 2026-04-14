@@ -110,6 +110,35 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        
+        // 🌟 [NEW] ฟังก์ชันสำหรับเปิดระบบค้นหาอัจฉริยะ (AJAX Select2)
+        function initSelect2Ajax(element) {
+            $(element).select2({
+                width: '100%',
+                placeholder: 'พิมพ์รหัสหรือชื่อวัตถุดิบเพื่อค้นหา...',
+                ajax: {
+                    url: "{% url 'ajax_search_raw_material' %}",
+                    dataType: 'json',
+                    delay: 250, // หน่วงเวลาพิมพ์นิดนึงเพื่อไม่ให้เซิร์ฟเวอร์โหลดหนัก
+                    data: function (params) {
+                        return { q: params.term || '' };
+                    },
+                    processResults: function (data) {
+                        return { results: data.results };
+                    },
+                    cache: true
+                },
+                minimumInputLength: 0
+            });
+        }
+
+        // เปิดใช้งานกับกล่องที่มีอยู่แล้วในหน้าจอ
+        if (typeof jQuery !== 'undefined' && typeof jQuery.fn.select2 !== 'undefined') {
+            $('#items-table .select2-ajax').each(function() {
+                initSelect2Ajax(this);
+            });
+        }
+
         const addButton = document.getElementById('add-item-btn');
         const container = document.getElementById('formset-container');
         const emptyFormTemplate = document.getElementById('empty-form').innerHTML;
@@ -119,7 +148,30 @@
         addButton.addEventListener('click', function() {
             let formIdx = parseInt(totalFormsInput.value);
             let newRowHtml = emptyFormTemplate.replace(/__prefix__/g, formIdx);
+            
             container.insertAdjacentHTML('beforeend', newRowHtml);
+            let newRow = container.lastElementChild;
+            
+            // ลบขยะของ Select2 เดิมออก
+            const select2Containers = newRow.querySelectorAll('.select2-container');
+            select2Containers.forEach(el => el.remove());
+            
+            const selectElement = newRow.querySelector('.select2-ajax');
+            if (selectElement) {
+                selectElement.classList.remove('select2-hidden-accessible');
+                selectElement.removeAttribute('data-select2-id');
+                selectElement.removeAttribute('tabindex');
+                selectElement.removeAttribute('aria-hidden');
+                
+                // คืนค่ากล่องให้ว่างเปล่า
+                selectElement.innerHTML = '<option value="" selected>---------</option>';
+                
+                // เปิดใช้งานกล่องค้นหาอัจฉริยะบนบรรทัดใหม่
+                if (typeof jQuery !== 'undefined' && typeof jQuery.fn.select2 !== 'undefined') {
+                    initSelect2Ajax(selectElement);
+                }
+            }
+
             totalFormsInput.value = formIdx + 1;
         });
 
@@ -136,20 +188,17 @@
             }
         });
 
-        // 🌟 --- ระบบ Cascading Dropdown กรองสินค้า FG ตามหมวดหมู่ --- 🌟
+        // --- ระบบ Cascading Dropdown ---
         const categorySelect = document.getElementById('id_category');
         const productSelect = document.getElementById('id_product');
 
         if (categorySelect && productSelect) {
             categorySelect.addEventListener('change', function() {
                 const categoryId = this.value;
-                // ดึงข้อมูลใหม่ด้วย AJAX
                 fetch(`/manufacturing/ajax/get-fg-by-category/?category_id=${categoryId}`)
                     .then(response => response.json())
                     .then(data => {
-                        // ล้างตัวเลือกเก่าทิ้ง
                         productSelect.innerHTML = '<option value="">---------</option>';
-                        // นำข้อมูลใหม่ที่กรองแล้วมาสร้างตัวเลือกใหม่
                         data.products.forEach(p => {
                             const option = document.createElement('option');
                             option.value = p.id;

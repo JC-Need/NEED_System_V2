@@ -32,6 +32,9 @@ class Product(models.Model):
     barcode = models.CharField(max_length=50, blank=True, null=True, verbose_name="บาร์โค้ด")
     name = models.CharField(max_length=200, verbose_name="ชื่อสินค้า")
     
+    # 🌟 [NEW] เพิ่มช่องสำหรับเก็บหน่วยนับ
+    unit = models.CharField(max_length=50, blank=True, null=True, verbose_name="หน่วยนับ")
+    
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, verbose_name="หมวดหมู่สินค้า")
     rm_category = models.ForeignKey(RawMaterialCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่วัตถุดิบ (แผนก)")
     

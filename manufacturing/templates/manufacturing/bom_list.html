@@ -1,16 +1,24 @@
 {% extends 'core/base.html' %}
 {% load static %}
+{% load humanize %}
 
 {% block content %}
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-end mb-4">
+<div class="container-fluid px-4 py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-end mb-4 gap-3">
         <div>
             <h4 class="fw-bold mb-1 text-dark">
                 <i class="fas fa-clipboard-list text-primary me-2"></i>จัดการสูตรผลิต (BOM)
             </h4>
             <p class="text-muted small mb-0">รายการสูตรผลิตและโครงสร้างวัตถุดิบสำหรับสินค้าสำเร็จรูป (FG)</p>
         </div>
-        <div>
+        
+        <div class="d-flex gap-2">
+            <a href="{% url 'inventory_dashboard' %}" class="btn btn-outline-secondary rounded-pill shadow-sm px-4 fw-bold">
+                <i class="fas fa-arrow-left me-2"></i>กลับหน้าแรก
+            </a>
+            <a href="{% url 'import_bom_excel' %}" class="btn btn-outline-success rounded-pill shadow-sm px-4 fw-bold">
+                <i class="fas fa-file-excel me-2"></i>นำเข้าด้วย Excel
+            </a>
             <a href="{% url 'bom_create' %}" class="btn btn-primary rounded-pill shadow-sm px-4 fw-bold">
                 <i class="fas fa-plus me-2"></i>สร้างสูตรผลิตใหม่
             </a>
@@ -22,10 +30,12 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="bg-light text-secondary" style="font-size: 0.85rem; text-transform: uppercase;">
                     <tr>
-                        <th class="ps-4 py-3 border-0" style="width: 15%;">รหัสสินค้า (FG)</th>
-                        <th class="py-3 border-0" style="width: 30%;">ชื่อแบบบ้าน / สินค้า</th>
-                        <th class="py-3 border-0" style="width: 25%;">ชื่อสูตร (BOM Name)</th>
-                        <th class="py-3 border-0 text-center" style="width: 15%;">จำนวนรายการ</th>
+                        <th class="ps-4 py-3 border-0" style="width: 10%;">รหัสสินค้า (FG)</th>
+                        <th class="py-3 border-0" style="width: 25%;">ชื่อแบบบ้าน / สินค้า</th>
+                        <th class="py-3 border-0" style="width: 20%;">ชื่อสูตร (BOM Name)</th>
+                        <th class="py-3 border-0 text-end" style="width: 10%;">ต้นทุนวัตถุดิบ</th>
+                        <th class="py-3 border-0 text-end" style="width: 10%;">ราคาขาย</th>
+                        <th class="py-3 border-0 text-center" style="width: 10%;">จำนวนรายการ</th>
                         <th class="pe-4 py-3 border-0 text-center" style="width: 15%;">จัดการ</th>
                     </tr>
                 </thead>
@@ -35,23 +45,32 @@
                         <td class="ps-4 fw-bold text-primary">{{ bom.product.code }}</td>
                         <td>
                             <div class="fw-bold text-dark">{{ bom.product.name }}</div>
-                            <small class="text-muted">{% if bom.product.category %}{{ bom.product.category.name }}{% else %}ไม่มีหมวดหมู่{% endif %}</small>
+                            <small class="text-muted">
+                                <i class="fas fa-tags me-1"></i>
+                                {% if bom.product.category %}{{ bom.product.category.name }}{% else %}ไม่มีหมวดหมู่{% endif %}
+                            </small>
                         </td>
                         <td>
-                            <span class="text-dark">{{ bom.name }}</span>
+                            <span class="text-dark fw-bold">{{ bom.name }}</span>
                             {% if bom.note %}
-                            <div class="small text-muted fst-italic"><i class="fas fa-info-circle me-1"></i>{{ bom.note|truncatechars:30 }}</div>
+                            <div class="small text-muted fst-italic mt-1"><i class="fas fa-info-circle me-1"></i>{{ bom.note|truncatechars:30 }}</div>
                             {% endif %}
+                        </td>
+                        <td class="text-end fw-bold text-danger">
+                            ฿ {{ bom.total_rm_cost|default:"0"|floatformat:"2"|intcomma }}
+                        </td>
+                        <td class="text-end fw-bold text-success">
+                            ฿ {{ bom.product.sell_price|default:"0"|floatformat:"2"|intcomma }}
                         </td>
                         <td class="text-center">
                             <span class="badge bg-warning text-dark rounded-pill px-3 py-2 shadow-sm">{{ bom.item_count }} รายการ</span>
                         </td>
                         <td class="pe-4 text-center">
-                            <div class="d-flex justify-content-center gap-1">
-                                <a href="{% url 'bom_detail' bom.pk %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 shadow-sm fw-bold">
+                            <div class="btn-group shadow-sm rounded-pill">
+                                <a href="{% url 'bom_detail' bom.pk %}" class="btn btn-sm btn-white border text-primary" title="ดูรายละเอียด">
                                     <i class="fas fa-search"></i>
                                 </a>
-                                <a href="{% url 'bom_edit' bom.pk %}" class="btn btn-sm btn-outline-warning rounded-pill px-3 shadow-sm fw-bold text-dark">
+                                <a href="{% url 'bom_edit' bom.pk %}" class="btn btn-sm btn-white border text-warning" title="แก้ไข">
                                     <i class="fas fa-edit"></i>
                                 </a>
                             </div>
@@ -59,10 +78,18 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="5" class="text-center py-5 text-muted">
+                        <td colspan="7" class="text-center py-5 text-muted">
                             <i class="fas fa-folder-open fa-3x mb-3 text-light"></i><br>
                             ยังไม่มีข้อมูลสูตรผลิตในระบบ<br>
-                            <a href="{% url 'bom_create' %}" class="btn btn-sm btn-primary mt-3 rounded-pill px-4">สร้างสูตรแรกเลย</a>
+                            
+                            <div class="d-flex justify-content-center gap-2 mt-4">
+                                <a href="{% url 'import_bom_excel' %}" class="btn btn-sm btn-outline-success rounded-pill px-4 fw-bold">
+                                    <i class="fas fa-file-excel me-1"></i> นำเข้าผ่าน Excel
+                                </a>
+                                <a href="{% url 'bom_create' %}" class="btn btn-sm btn-primary rounded-pill px-4 fw-bold">
+                                    <i class="fas fa-plus me-1"></i> สร้างสูตรด้วยตนเอง
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}

@@ -18,11 +18,14 @@
                         </div>
 
                         <div class="row g-3 mb-3">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 {{ form.code|as_crispy_field }}
                             </div>
-                            <div class="col-md-8">
+                            <div class="col-md-6">
                                 {{ form.name|as_crispy_field }}
+                            </div>
+                            <div class="col-md-3">
+                                {{ form.unit|as_crispy_field }}
                             </div>
                         </div>
 
@@ -128,7 +131,7 @@
                             <button type="submit" class="btn btn-primary btn-lg fw-bold rounded-pill shadow-sm">
                                  <i class="fas fa-save me-2"></i> บันทึกข้อมูล
                             </button>
-                            <a href="{% url 'inventory_dashboard' %}" class="btn btn-light text-muted rounded-pill text-center text-decoration-none">ยกเลิก</a>
+                            <a href="{% url 'product_list' %}?type={{ p_type }}" class="btn btn-light text-muted rounded-pill text-center text-decoration-none">ยกเลิก</a>
                         </div>
                     </form>
                 </div>

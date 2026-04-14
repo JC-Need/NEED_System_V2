@@ -2,15 +2,17 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
-from django.db.models import Max, Count, Q
+# 🌟 [UPDATE] เพิ่ม Sum, F, FloatField เข้ามาเพื่อคำนวณต้นทุน
+from django.db.models import Max, Count, Q, Sum, F, FloatField
 from django.db import transaction
 from django.http import JsonResponse
 from django.core.paginator import Paginator
 import datetime
 import calendar
 import json
+import pandas as pd
 
-from .models import ProductionOrder, ProductionOrderMaterial, BOM, Branch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
+from .models import ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
 from master_data.models import CompanyInfo
 from inventory.models import Product, InventoryDoc, StockMovement
 from purchasing.models import PurchaseOrder, PurchaseOrderItem, PurchasePreparation
@@ -21,35 +23,30 @@ from .forms import BOMForm, BOMItemFormSet
 # ==========================================
 @login_required
 def production_list(request):
-    # 🌟 [UPDATE 2026] ปรับค่าเริ่มต้นให้วันที่ว่าง เพื่อโชว์งานค้างทั้งหมด 🌟
     start_date = request.GET.get('start_date', '')
     end_date = request.GET.get('end_date', '')
     search_q = request.GET.get('q', '')
     search_salesperson = request.GET.get('salesperson', '')
     search_team = request.GET.get('team', '')
-    search_status = request.GET.get('status', '') # 🌟 ตัวรับค่าจาก Dropdown สถานะระบบ
+    search_status = request.GET.get('status', '')
 
     orders = ProductionOrder.objects.select_related(
         'product', 'quotation_ref', 'salesperson',
         'production_team', 'delivery_status', 'transporter'
     ).prefetch_related('completed_departments').all().order_by('-id')
 
-    # 🔍 ระบบกรองข้อมูล
     if start_date:
         orders = orders.filter(start_date__gte=start_date)
     if end_date:
         orders = orders.filter(start_date__lte=end_date)
-
     if search_status:
         orders = orders.filter(status=search_status)
-
     if search_q:
         orders = orders.filter(
             Q(code__icontains=search_q) |
             Q(customer_name__icontains=search_q) |
             Q(quotation_ref__code__icontains=search_q)
         )
-
     if search_salesperson:
         orders = orders.filter(salesperson_id=search_salesperson)
     if search_team:
@@ -77,8 +74,6 @@ def production_list(request):
     transporters = Transporter.objects.all().order_by('name')
     salespersons = Salesperson.objects.all().order_by('name')
     total_departments_count = prod_statuses.count()
-
-    # ดึง Choices สถานะระบบจาก Model มาทำตัวกรอง
     system_status_choices = ProductionOrder.STATUS_CHOICES
 
     can_add_master_data = False
@@ -128,15 +123,12 @@ def production_list(request):
 
 @login_required
 def planner_board(request):
-    # 🌟 [UPDATE] จัดเรียงการ์ดงาน โดยเอางานที่ใกล้ถึงวัน Deadline (เหลือน้อยวันที่สุด) ขึ้นก่อนเสมอ 🌟
     orders = ProductionOrder.objects.filter(status='PLANNED', is_closed=False).order_by('deadline_date', '-id')
     return render(request, 'manufacturing/planner_board.html', {'orders': orders})
 
 @login_required
 def inventory_board(request):
     orders = ProductionOrder.objects.filter(status='WAITING_INVENTORY', is_closed=False).order_by('status', '-id')
-
-    # 🌟 [NEW] ระบบ Virtual Stock จำลองการหักคิววัตถุดิบ 🌟
     virtual_stock = {}
 
     for order in orders:
@@ -146,15 +138,14 @@ def inventory_board(request):
             required_qty = float(item.quantity)
 
             if mat_id not in virtual_stock:
-                # 🌟 [FIX] ป้องกันสต็อกติดลบ ถ้าติดลบให้มองเป็น 0
                 virtual_stock[mat_id] = max(0, float(item.raw_material.stock_qty))
 
             if virtual_stock[mat_id] < required_qty:
                 missing = required_qty - virtual_stock[mat_id]
                 shortage.append(f"{item.raw_material.name} (ขาดอีก {missing:.2f})")
-                virtual_stock[mat_id] = 0 # ใช้โควต้าหมดแล้ว
+                virtual_stock[mat_id] = 0
             else:
-                virtual_stock[mat_id] -= required_qty # หักโควต้าออกสำหรับคิวถัดไป
+                virtual_stock[mat_id] -= required_qty
 
         order.has_shortage = len(shortage) > 0
         order.shortage_list = ", ".join(shortage)
@@ -264,10 +255,7 @@ def materials_ready(request, pk):
     shortage = []
     for item in job_materials:
         required_qty = float(item.quantity)
-
-        # 🌟 [FIX] ป้องกันสต็อกติดลบ ก่อนตัดจริง 🌟
         actual_stock = max(0, float(item.raw_material.stock_qty))
-
         if actual_stock < required_qty:
             shortage.append(f"{item.raw_material.name} (ขาด {required_qty - actual_stock:.2f})")
 
@@ -279,9 +267,7 @@ def materials_ready(request, pk):
     doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบเตรียมผลิต {order.product.name}", created_by=request.user)
     for item in job_materials:
         StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=float(item.quantity), movement_type='OUT', created_by=request.user)
-
         item.raw_material.stock_qty = float(item.raw_material.stock_qty) - float(item.quantity)
-
         item.raw_material.save()
 
     order.status = 'IN_PROGRESS'
@@ -321,7 +307,6 @@ def production_process(request, pk):
     )
 
     doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code}", created_by=request.user)
-
     StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=order.quantity, movement_type='IN', created_by=request.user)
 
     allocated_product.stock_qty += order.quantity
@@ -435,9 +420,19 @@ def production_print(request, po_id):
     company = CompanyInfo.objects.first()
     return render(request, 'manufacturing/production_print.html', {'po': po, 'bom': bom, 'company': company})
 
+# ==========================================
+# 🌟 ระบบสูตรผลิต (BOM) 🌟
+# ==========================================
 @login_required
 def bom_list(request):
-    boms = BOM.objects.select_related('product').annotate(item_count=Count('items')).order_by('-id')
+    # 🌟 [UPDATE] สั่งให้ฐานข้อมูลคำนวณ 'ต้นทุนวัตถุดิบรวม' มาให้เสร็จสรรพเลยค่ะ 
+    boms = BOM.objects.select_related('product').annotate(
+        item_count=Count('items', distinct=True),
+        total_rm_cost=Sum(
+            F('items__quantity') * F('items__raw_material__cost_price'),
+            output_field=FloatField()
+        )
+    ).order_by('-id')
     return render(request, 'manufacturing/bom_list.html', {'boms': boms})
 
 @login_required
@@ -459,13 +454,19 @@ def bom_create(request):
 @login_required
 def bom_detail(request, pk):
     bom = get_object_or_404(BOM, pk=pk)
-    items = bom.items.all()
-    total_cost = sum([float(item.quantity) * float(item.raw_material.cost_price) for item in items])
+    items = bom.items.select_related('raw_material', 'raw_material__supplier').all()
+
+    total_cost = 0
+    for item in items:
+        item.calculated_total_cost = float(item.quantity) * float(item.raw_material.cost_price)
+        total_cost += item.calculated_total_cost
+
     return render(request, 'manufacturing/bom_detail.html', {'bom': bom, 'items': items, 'total_cost': total_cost})
 
 @login_required
 def bom_edit(request, pk):
-    bom = get_object_or_404(BOM, pk=pk)
+    bom = get_object_or_404(BOM.objects.prefetch_related('items'), pk=pk)
+
     if request.method == 'POST':
         form = BOMForm(request.POST, instance=bom)
         formset = BOMItemFormSet(request.POST, instance=bom)
@@ -477,7 +478,26 @@ def bom_edit(request, pk):
     else:
         form = BOMForm(instance=bom)
         formset = BOMItemFormSet(instance=bom)
+
     return render(request, 'manufacturing/bom_form.html', {'form': form, 'formset': formset, 'title': f'แก้ไขสูตรผลิต: {bom.product.code}'})
+
+@login_required
+def print_master_bom(request, pk):
+    bom = get_object_or_404(BOM, pk=pk)
+    items = bom.items.select_related('raw_material', 'raw_material__supplier').all()
+
+    total_cost = 0
+    for item in items:
+        item.calculated_total_cost = float(item.quantity) * float(item.raw_material.cost_price)
+        total_cost += item.calculated_total_cost
+
+    company = CompanyInfo.objects.first()
+    return render(request, 'manufacturing/print_master_bom.html', {
+        'bom': bom,
+        'items': items,
+        'total_cost': total_cost,
+        'company': company
+    })
 
 @login_required
 def update_production_board(request, pk):
@@ -572,3 +592,69 @@ def ajax_get_fg_by_category(request):
         products = products.filter(category_id=category_id)
     product_list = list(products.values('id', 'name', 'code'))
     return JsonResponse({'products': product_list})
+
+@login_required
+def import_bom_excel(request):
+    if request.method == 'POST' and request.FILES.get('excel_file'):
+        excel_file = request.FILES['excel_file']
+
+        try:
+            df = pd.read_excel(excel_file)
+
+            required_columns = ['FG SKU', 'RM SKU', 'Quantity']
+            if not all(col in df.columns for col in required_columns):
+                messages.error(request, "❌ รูปแบบไฟล์ไม่ถูกต้อง กรุณาใช้คอลัมน์: FG SKU, RM SKU, Quantity")
+                return redirect('import_bom_excel')
+
+            with transaction.atomic():
+                import_count = 0
+                for _, row in df.iterrows():
+                    fg_sku = str(row['FG SKU']).strip()
+                    rm_sku = str(row['RM SKU']).strip()
+                    try:
+                        qty = float(row['Quantity'])
+                    except (ValueError, TypeError):
+                        continue # ข้ามถ้าระบุจำนวนไม่ถูกต้อง
+
+                    # 1. หาตัวสินค้าสำเร็จรูป (FG)
+                    fg_product = Product.objects.filter(code=fg_sku, product_type='FG').first()
+                    if not fg_product:
+                        continue
+
+                    # 2. สร้างหรือดึงหัวสูตร BOM
+                    bom_obj, _ = BOM.objects.get_or_create(
+                        product=fg_product,
+                        defaults={'name': f"สูตรมาตรฐาน - {fg_product.name}"}
+                     )
+
+                    # 3. หาตัววัตถุดิบ (RM)
+                    rm_product = Product.objects.filter(code=rm_sku, product_type='RM').first()
+                    if rm_product:
+                        # 4. สร้างหรืออัปเดตรายการในสูตร
+                        BOMItem.objects.update_or_create(
+                            bom=bom_obj,
+                            raw_material=rm_product,
+                            defaults={'quantity': qty}
+                        )
+                        import_count += 1
+
+            messages.success(request, f"✅ นำเข้าข้อมูลสูตรผลิตสำเร็จทั้งหมด {import_count} รายการ")
+            return redirect('import_bom_excel')
+
+        except Exception as e:
+            messages.error(request, f"❌ เกิดข้อผิดพลาด: {str(e)}")
+
+    return render(request, 'manufacturing/import_bom.html')
+
+@login_required
+def ajax_search_raw_material(request):
+    q = request.GET.get('q', '')
+    products = Product.objects.filter(product_type='RM', is_active=True)
+
+    if q:
+        products = products.filter(Q(code__icontains=q) | Q(name__icontains=q))
+
+    products = products.order_by('code')[:30]
+
+    results = [{'id': p.id, 'text': f"{p.code} - {p.name}"} for p in products]
+    return JsonResponse({'results': results})

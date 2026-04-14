@@ -1,10 +1,8 @@
 from django import forms
 from .models import BOM, BOMItem
-# 🌟 ดึง Model Category มาใช้ด้วย 🌟
 from inventory.models import Product, Category 
 
 class BOMForm(forms.ModelForm):
-    # 🌟 เพิ่มฟิลด์จำลอง สำหรับกรองหมวดหมู่ 🌟
     category = forms.ModelChoiceField(
         queryset=Category.objects.all(),
         required=False,
@@ -29,10 +27,7 @@ class BOMForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(BOMForm, self).__init__(*args, **kwargs)
-        # ดึงเฉพาะ Product ที่เป็นสินค้าสำเร็จรูป (FG)
         self.fields['product'].queryset = Product.objects.filter(product_type='FG', is_active=True)
-        
-        # 🌟 ถ้านี่คือโหมดแก้ไข (Edit) ให้ดึงหมวดหมู่ของสินค้านั้นมาแสดงอัตโนมัติ 🌟
         if self.instance and self.instance.pk and self.instance.product:
             self.fields['category'].initial = self.instance.product.category
 
@@ -41,14 +36,30 @@ class BOMItemForm(forms.ModelForm):
         model = BOMItem
         fields = ['raw_material', 'quantity']
         widgets = {
-            'raw_material': forms.Select(attrs={'class': 'form-select shadow-sm'}),
+            # 🌟 [UPDATE] ระบุคลาส select2-ajax เพื่อบอกหน้าเว็บว่านี่คือกล่องค้นหา
+            'raw_material': forms.Select(attrs={'class': 'form-select shadow-sm select2-ajax'}),
             'quantity': forms.NumberInput(attrs={'class': 'form-control shadow-sm text-center', 'step': '0.0001', 'min': '0'}),
         }
 
     def __init__(self, *args, **kwargs):
         super(BOMItemForm, self).__init__(*args, **kwargs)
-        # ตัด Product ที่เป็นสินค้าสำเร็จรูป (FG) ออกไป โชว์แค่วัตถุดิบ
-        self.fields['raw_material'].queryset = Product.objects.exclude(product_type='FG').filter(is_active=True)
+        
+        # 🌟 [MAGIC FIX] ควบคุมไม่ให้ดึงข้อมูลวัตถุดิบ 200 รายการมาโหลดบนหน้า HTML
+        # แต่ยังคงดึงข้อมูลมาทั้งหมดตอนบันทึกข้อมูลเพื่อความถูกต้องของระบบ
+        if 'data' in kwargs or len(args) > 0:
+            self.fields['raw_material'].queryset = Product.objects.exclude(product_type='FG').filter(is_active=True)
+        elif self.instance and self.instance.pk and self.instance.raw_material:
+            self.fields['raw_material'].queryset = Product.objects.filter(pk=self.instance.raw_material.pk)
+        else:
+            self.fields['raw_material'].queryset = Product.objects.none()
+        
+        # ตัด 0 ทศนิยม
+        if self.instance and self.instance.pk and self.instance.quantity is not None:
+            qty = self.instance.quantity
+            if qty == int(qty):
+                self.initial['quantity'] = int(qty)
+            else:
+                self.initial['quantity'] = float(qty)
 
 BOMItemFormSet = forms.inlineformset_factory(
     BOM, BOMItem, form=BOMItemForm, extra=1, can_delete=True

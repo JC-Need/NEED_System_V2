@@ -5,7 +5,7 @@ urlpatterns = [
     # 🌟 ระบบสั่งผลิต (Production Order) 🌟
     path('production/', views.production_list, name='production_list'),
     path('production/create/', views.production_create, name='production_create'),
-    
+
     # 🌟 กระดานใหม่: วางแผน และ คลังสินค้า 🌟
     path('production/planner/', views.planner_board, name='planner_board'),
     path('production/inventory/', views.inventory_board, name='inventory_board'),
@@ -21,12 +21,12 @@ urlpatterns = [
     path('production/<int:pk>/load-bom/', views.load_standard_bom, name='load_standard_bom'),
     path('production/<int:pk>/print-bom/', views.print_bom, name='print_bom'),
     path('production/<int:pk>/start/', views.start_production, name='start_production'),
-    
+
     # 🌟 เส้นทางสำหรับการรับส่งไม้ต่อ (Workflow Actions) 🌟
     path('production/<int:pk>/materials-ready/', views.materials_ready, name='materials_ready'),
     path('production/<int:pk>/start-actual/', views.start_actual_production, name='start_actual_production'),
     path('production/<int:pk>/process/', views.production_process, name='production_process'),
-    
+
     # 🌟 เส้นทางสำหรับจัดการวัตถุดิบส่วนเพิ่ม 🌟
     path('production/<int:pk>/add-material/', views.add_additional_material, name='add_additional_material'),
     path('production/material/<int:pk>/delete/', views.delete_production_material, name='delete_production_material'),
@@ -40,6 +40,9 @@ urlpatterns = [
     path('bom/<int:pk>/', views.bom_detail, name='bom_detail'),
     path('bom/<int:pk>/edit/', views.bom_edit, name='bom_edit'),
     
+    # 🌟 [NEW] เส้นทางสำหรับพิมพ์สูตรการผลิตโดยตรง
+    path('bom/<int:pk>/print/', views.print_master_bom, name='print_master_bom'),
+
     # 🌟 เส้นทางสำหรับระบบกระดานติดตามงานและเพิ่มข้อมูลด่วน (AJAX) 🌟
     path('production/<int:pk>/update-board/', views.update_production_board, name='update_production_board'),
     path('ajax/add-branch/', views.ajax_add_branch, name='ajax_add_branch'),
@@ -48,7 +51,11 @@ urlpatterns = [
     path('ajax/add-prod-team/', views.ajax_add_prod_team, name='ajax_add_prod_team'),
     path('ajax/add-delivery-status/', views.ajax_add_delivery_status, name='ajax_add_delivery_status'),
     path('ajax/add-transporter/', views.ajax_add_transporter, name='ajax_add_transporter'),
-    
+
     # 🌟 เส้นทางใหม่: ดึงข้อมูล FG ตามหมวดหมู่ 🌟
     path('ajax/get-fg-by-category/', views.ajax_get_fg_by_category, name='ajax_get_fg_by_category'),
+    path('bom/import/', views.import_bom_excel, name='import_bom_excel'),
+
+    # 🌟 [NEW] เส้นทางสำหรับระบบค้นหาวัตถุดิบ (แก้อาการโหลดช้า) 🌟
+    path('ajax/search-raw-material/', views.ajax_search_raw_material, name='ajax_search_raw_material'),
 ]
