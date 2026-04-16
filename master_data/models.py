@@ -25,7 +25,11 @@ class CompanyInfo(models.Model):
     name_en = models.CharField(max_length=200, verbose_name="ชื่อบริษัท (อังกฤษ)", blank=True)
     tax_id = models.CharField(max_length=20, verbose_name="เลขผู้เสียภาษี")
     branch = models.CharField(max_length=50, default="สำนักงานใหญ่", verbose_name="สาขา")
-    address = models.TextField(verbose_name="ที่อยู่")
+    address = models.TextField(verbose_name="ที่อยู่ (ไทย)")
+    
+    # 🌟 [NEW] ช่องที่อยู่ภาษาอังกฤษสำหรับออกเอกสารต่างประเทศ
+    address_en = models.TextField(blank=True, verbose_name="ที่อยู่ (อังกฤษ)") 
+    
     phone = models.CharField(max_length=50, blank=True, verbose_name="เบอร์โทร")
     email = models.EmailField(blank=True, verbose_name="อีเมล")
     website = models.URLField(blank=True, verbose_name="เว็บไซต์")
@@ -35,7 +39,6 @@ class CompanyInfo(models.Model):
     navbar_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้บนแถบเมนู")
     seal = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="ตราประทับบริษัท (Seal)")
 
-    # 🌟 [NEW] เพิ่มช่องสำหรับตั้งค่าโควตาผลิตต่อสัปดาห์ 🌟
     weekly_job_quota = models.IntegerField(default=25, verbose_name="โควตางานผลิตต่อสัปดาห์ (Jobs)")
 
     class Meta:
@@ -78,7 +81,7 @@ class Customer(models.Model):
             self.code = f"{prefix}-{seq:03d}"
         super().save(*args, **kwargs)
 
-# --- ส่วนที่ 4: 🌟 อัปเกรดข้อมูลผู้ขาย (Supplier) 🌟 ---
+# --- ส่วนที่ 4: ข้อมูลผู้ขาย (Supplier) ---
 class Supplier(models.Model):
     code = models.CharField(max_length=20, unique=True, verbose_name="รหัสผู้ขาย")
     name = models.CharField(max_length=200, verbose_name="ชื่อบริษัท/ร้านค้า (ซัพพลายเออร์)")

@@ -372,7 +372,7 @@ def record_deposit(request, qt_id):
 def get_auto_delivery_date(qt):
     first_item = qt.items.filter(product__isnull=False).first()
     if not first_item: return timezone.now().date()
-    
+
     company_info = CompanyInfo.objects.first()
     max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
 
@@ -383,7 +383,7 @@ def get_auto_delivery_date(qt):
     while True:
         iso_year, iso_week, _ = current_check_date.isocalendar()
         check_cohort = f"{iso_year}-W{iso_week:02d}"
-        
+
         total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
 
         if total_qty_in_week + first_item.quantity <= max_quota:
@@ -461,7 +461,7 @@ def create_job_order(request, qt_id):
     # 🌟 [NEW] ระบบดักจับการ Override วันจัดส่ง 🌟
     target_date_str = request.POST.get('target_date')
     requested_date_obj = parse_date(target_date_str) if target_date_str else None
-    
+
     if requested_date_obj and requested_date_obj != final_delivery_date:
         approval_status = 'PENDING'
         req_date = requested_date_obj
@@ -536,28 +536,28 @@ def sales_timeline(request):
     overall_percent = int((current_usage / max_quota) * 100) if max_quota > 0 else 0
     overall_color = 'success' if overall_percent <= 60 else ('warning' if overall_percent <= 85 else 'danger')
 
-    quota_blocks = []
-    display_blocks = min(max_quota, 50) 
-    for i in range(display_blocks):
-        if i < current_usage: quota_blocks.append(overall_color)
-        else: quota_blocks.append('light')
-
     branch_data = []
+    # 🌟 [NEW] เตรียมข้อมูลโครงสร้าง JSON ส่งไปให้กราฟ ApexCharts 🌟
+    chart_categories = []
+    chart_series_usage = []
+    chart_series_quota = []
+
     for b in branches:
         b_usage = ProductionOrder.objects.filter(branch=b, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
         b_quota = getattr(b, 'weekly_quota', 10)
         b_percent = int((b_usage / b_quota) * 100) if b_quota > 0 else 0
         b_status_color = 'success' if b_percent <= 60 else ('warning' if b_percent <= 85 else 'danger')
 
-        b_blocks = []
-        for i in range(min(b_quota, 30)):
-            if i < b_usage: b_blocks.append(b_status_color)
-            else: b_blocks.append('light')
-
         branch_data.append({
             'id': b.id, 'name': b.name, 'quota': b_quota, 'usage': b_usage,
-            'percent': min(b_percent, 100), 'status_color': b_status_color, 'blocks': b_blocks
+            'percent': min(b_percent, 100), 'status_color': b_status_color,
+            'color_hex': '#198754' if b_status_color == 'success' else ('#ffc107' if b_status_color == 'warning' else '#dc3545')
         })
+
+        # เก็บข้อมูลเข้า Array ไว้ทำกราฟแท่ง (Bar Chart)
+        chart_categories.append(b.name)
+        chart_series_usage.append(b_usage)
+        chart_series_quota.append(b_quota)
 
     forecast_data = []
     days_to_monday = now.weekday()
@@ -588,14 +588,14 @@ def sales_timeline(request):
         o_start = current_monday + datetime.timedelta(days=7*i)
         o_end = o_start + datetime.timedelta(days=6)
 
-        p_start = o_start + datetime.timedelta(days=7) 
+        p_start = o_start + datetime.timedelta(days=7)
         p_end = p_start + datetime.timedelta(days=6)
 
-        m_start = p_start + datetime.timedelta(days=7) 
+        m_start = p_start + datetime.timedelta(days=7)
         m_end = m_start + datetime.timedelta(days=6)
 
-        d_start = m_start + datetime.timedelta(days=7) 
-        d_end = d_start + datetime.timedelta(days=4) 
+        d_start = m_start + datetime.timedelta(days=7)
+        d_end = d_start + datetime.timedelta(days=4)
 
         forecast_data.append({
             'week_num': i + 1,
@@ -615,10 +615,13 @@ def sales_timeline(request):
         'current_usage': current_usage,
         'overall_percent': min(overall_percent, 100),
         'overall_color': overall_color,
-        'quota_blocks': quota_blocks,
-        'forecast_data': forecast_data, 
-    })
+        'forecast_data': forecast_data,
 
+        # 🌟 ส่งตัวแปร JSON สำหรับกราฟ ApexCharts
+        'chart_categories_json': json.dumps(chart_categories),
+        'chart_series_usage_json': json.dumps(chart_series_usage),
+        'chart_series_quota_json': json.dumps(chart_series_quota),
+    })
 
 @login_required
 def convert_quote_to_invoice(request, qt_id):
@@ -786,7 +789,7 @@ def quotation_list(request):
             if prod_status_filter == 'IN_PROGRESS_5':
                  valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count__lt=total_departments_count)
             elif prod_status_filter == 'IN_PROGRESS_6':
-                valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count=total_departments_count)
+                 valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count=total_departments_count)
             else:
                  valid_jobs = valid_jobs.filter(status=prod_status_filter)
         valid_job_ids = list(valid_jobs.values_list('id', flat=True))
@@ -1059,7 +1062,7 @@ def quotation_cancel(request, qt_id):
         else:
             messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากเอกสารถูกนำไปเปิดบิลแล้ว")
     else:
-         messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกใบเสนอราคานี้")
+        messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกใบเสนอราคานี้")
 
     return redirect('quotation_list')
 

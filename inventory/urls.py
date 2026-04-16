@@ -20,10 +20,14 @@ urlpatterns = [
     path('ajax/add-category/', views.ajax_add_category, name='ajax_add_category'),
     path('ajax/add-supplier/', views.ajax_add_supplier, name='ajax_add_supplier'),
     
-    # 🌟 [NEW] เส้นทางสำหรับเพิ่มหมวดหมู่วัตถุดิบ (แผนก) ผ่านหน้าจอ Modal 🌟
+    # 🌟 เส้นทางสำหรับเพิ่มหมวดหมู่วัตถุดิบ (แผนก) ผ่านหน้าจอ Modal 🌟
     path('ajax/add-rm-category/', views.ajax_add_rm_category, name='ajax_add_rm_category'),
 
     # 🌟 เส้นทางใหม่: สำหรับรับสินค้าจาก PO (GR) 🌟
     path('receive-po/', views.po_receive_list, name='po_receive_list'),
     path('receive-po/<int:po_id>/', views.po_receive_process, name='po_receive_process'),
+
+    # 🌟 [NEW] เส้นทางใหม่: สำหรับรับสินค้าจาก PQ ต่างประเทศ (GR-PQ) 🌟
+    path('receive-pq/', views.pq_receive_list, name='pq_receive_list'),
+    path('receive-pq/<int:pq_id>/', views.pq_receive_process, name='pq_receive_process'),
 ]

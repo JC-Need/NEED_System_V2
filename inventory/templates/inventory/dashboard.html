@@ -3,7 +3,6 @@
 
 {% block content %}
 <style>
-    /* 🌟 CSS เพิ่มเติมสำหรับทำไฟกระพริบที่ป้ายแจ้งเตือน 🌟 */
     .badge-pulse {
         animation: pulse-animation 2s infinite;
     }
@@ -17,12 +16,12 @@
 <div class="container-fluid py-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-warehouse text-primary me-2"></i>คลังสินค้าโรงงาน (Factory Inventory)</h3>
+            <h3 class="text-dark fw-bold mb-1"><i class="fas fa-warehouse text-primary me-2"></i>คลังสินค้าโรงงาน (Factory Inventory)</h3>
             <p class="text-muted mb-0">บริหารจัดการสินค้าสำเร็จรูป (FG) และวัตถุดิบ (RM)</p>
         </div>
         <div class="d-flex flex-wrap gap-2">
             
-            <a href="{% url 'po_receive_list' %}" class="btn btn-success shadow-sm rounded-pill px-3 fw-bold position-relative">
+            <a href="{% url 'po_receive_list' %}" class="btn btn-success rounded-pill shadow-sm px-3 fw-bold position-relative">
                 <i class="fas fa-truck-loading me-1"></i> รับสินค้าจาก PO (GR)
                 {% if pending_po_count > 0 %}
                 <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light border-2 badge-pulse shadow-sm">
@@ -30,17 +29,26 @@
                 </span>
                 {% endif %}
             </a>
-            
-            <a href="{% url 'bom_list' %}" class="btn shadow-sm rounded-pill px-3 fw-bold text-dark" style="background-color: #e0f7fa; border: 1px solid #b2ebf2;">
-                <i class="fas fa-clipboard-list me-1 text-info"></i> จัดการสูตรผลิต (BOM)
+
+            <a href="{% url 'pq_receive_list' %}" class="btn btn-primary rounded-pill shadow-sm px-3 fw-bold position-relative">
+                <i class="fas fa-ship me-1"></i> รับสินค้าจาก PQ (Import)
+                {% if pending_pq_count > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light border-2 badge-pulse shadow-sm">
+                    {{ pending_pq_count }}
+                </span>
+                {% endif %}
             </a>
-            <a href="{% url 'product_create' %}" class="btn btn-primary shadow-sm rounded-pill px-3 fw-bold">
+            
+            <a href="{% url 'bom_list' %}" class="btn rounded-pill shadow-sm px-3 fw-bold text-dark" style="background-color: #e0f7fa; border: 1px solid #b2ebf2;">
+                <i class="fas fa-clipboard-list text-info me-1"></i> จัดการสูตรผลิต (BOM)
+            </a>
+            <a href="{% url 'product_create' %}" class="btn btn-dark rounded-pill shadow-sm px-3 fw-bold">
                 <i class="fas fa-plus me-1"></i> เพิ่มสินค้า/วัตถุดิบ
             </a>
-            <a href="{% url 'document_list_in' %}" class="btn btn-outline-success shadow-sm rounded-pill px-3 fw-bold bg-white">
+            <a href="{% url 'document_list_in' %}" class="btn btn-outline-success bg-white rounded-pill shadow-sm px-3 fw-bold">
                 <i class="fas fa-file-import me-1"></i> ใบรับสินค้า
             </a>
-            <a href="{% url 'document_list_out' %}" class="btn btn-warning text-dark shadow-sm rounded-pill px-3 fw-bold">
+            <a href="{% url 'document_list_out' %}" class="btn btn-warning text-dark rounded-pill shadow-sm px-3 fw-bold">
                 <i class="fas fa-file-export me-1"></i> ใบเบิกสินค้า
             </a>
         </div>
@@ -48,33 +56,33 @@
 
     <div class="row g-3 mb-4">
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden" style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);">
-                <div class="card-body p-4 text-white d-flex justify-content-between align-items-center">
+            <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden" style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);">
+                <div class="card-body text-white p-4 d-flex justify-content-between align-items-center">
                     <div>
-                        <p class="mb-1 opacity-75 fw-bold">สินค้าสำเร็จรูป (FG) ทั้งหมด</p>
-                        <h2 class="fw-bold mb-0 display-6">{{ fg_count|intcomma }} <span class="fs-6 fw-normal">รายการ</span></h2>
+                        <p class="mb-1 fw-bold opacity-75">สินค้าสำเร็จรูป (FG) ทั้งหมด</p>
+                        <h2 class="mb-0 fw-bold display-6">{{ fg_count|intcomma }} <span class="fw-normal fs-6">รายการ</span></h2>
                     </div>
                     <i class="fas fa-box-open fa-3x opacity-50"></i>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden" style="background: linear-gradient(135deg, #f39c12 0%, #d68910 100%);">
-                <div class="card-body p-4 text-white d-flex justify-content-between align-items-center">
+            <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden" style="background: linear-gradient(135deg, #f39c12 0%, #d68910 100%);">
+                <div class="card-body text-white p-4 d-flex justify-content-between align-items-center">
                     <div>
-                        <p class="mb-1 opacity-75 fw-bold text-dark">วัตถุดิบ (RM) ทั้งหมด</p>
-                        <h2 class="fw-bold mb-0 display-6 text-dark">{{ rm_count|intcomma }} <span class="fs-6 fw-normal">รายการ</span></h2>
+                        <p class="mb-1 text-dark fw-bold opacity-75">วัตถุดิบ (RM) ทั้งหมด</p>
+                        <h2 class="mb-0 text-dark fw-bold display-6">{{ rm_count|intcomma }} <span class="fw-normal fs-6">รายการ</span></h2>
                     </div>
-                    <i class="fas fa-cubes fa-3x opacity-50 text-dark"></i>
+                    <i class="fas fa-cubes text-dark fa-3x opacity-50"></i>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card border-0 shadow-sm rounded-4 h-100 overflow-hidden {% if low_stock_count > 0 %}bg-danger text-white{% else %}bg-white text-dark{% endif %}" {% if low_stock_count > 0 %}style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);"{% endif %}>
+            <div class="card h-100 border-0 shadow-sm rounded-4 overflow-hidden {% if low_stock_count > 0 %}bg-danger text-white{% else %}bg-white text-dark{% endif %}" {% if low_stock_count > 0 %}style="background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);"{% endif %}>
                 <div class="card-body p-4 d-flex justify-content-between align-items-center">
                     <div>
                         <p class="mb-1 fw-bold {% if low_stock_count > 0 %}opacity-75{% else %}text-muted{% endif %}">รายการที่ต้องสั่งซื้อด่วน (ใกล้หมด)</p>
-                        <h2 class="fw-bold mb-0 display-6">{{ low_stock_count|intcomma }} <span class="fs-6 fw-normal">รายการ</span></h2>
+                        <h2 class="mb-0 fw-bold display-6">{{ low_stock_count|intcomma }} <span class="fw-normal fs-6">รายการ</span></h2>
                     </div>
                     <i class="fas fa-exclamation-triangle fa-3x {% if low_stock_count > 0 %}opacity-50{% else %}text-danger opacity-25{% endif %}"></i>
                 </div>
@@ -84,6 +92,7 @@
 
     <div class="row g-4">
         <div class="col-lg-8">
+            
             <div class="card border-0 shadow-sm rounded-4 border-start border-4 border-primary mb-4">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h5 class="m-0 fw-bold text-primary"><i class="fas fa-box-open me-2"></i>พรีวิว: สินค้าสำเร็จรูป (FG)</h5>

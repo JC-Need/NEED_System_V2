@@ -5,33 +5,40 @@ from django.db.models import Q
 from django.http import JsonResponse
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 
-# 🌟 [UPDATE] นำเข้า CompanyInfo และ CompanyInfoForm
 from .models import Customer, Province, Amphure, Tambon, Supplier, CompanyInfo
-from .forms import CustomerForm, SupplierForm, CompanyInfoForm
+# 🌟 [UPDATE] นำเข้า MfgBranchFormSet 
+from .forms import CustomerForm, SupplierForm, CompanyInfoForm, MfgBranchFormSet
+# 🌟 [NEW] นำเข้าโมเดล MfgBranch
+from manufacturing.models import MfgBranch
 
 # --- Company Settings (ตั้งค่าองค์กรและโควตา) ---
 
 @login_required
 def company_settings(request):
-    # ดึงข้อมูลบริษัทแถวแรกขึ้นมา ถ้ายังไม่มีในฐานข้อมูลเลยให้สร้างใหม่ 1 แถวอัตโนมัติ
     company = CompanyInfo.objects.first()
     if not company:
         company = CompanyInfo.objects.create(name_th="บริษัท NEED System จำกัด", tax_id="0000000000000")
 
     if request.method == 'POST':
-        # 🌟 ใส่ request.FILES ด้วย เพราะเรามีฟิลด์สำหรับอัปโหลดโลโก้บริษัท
         form = CompanyInfoForm(request.POST, request.FILES, instance=company)
-        if form.is_valid():
+        # 🌟 [NEW] รับค่าจากตารางโควตาสาขาที่ผู้ใช้กรอกเข้ามา
+        branch_formset = MfgBranchFormSet(request.POST, queryset=MfgBranch.objects.all())
+        
+        if form.is_valid() and branch_formset.is_valid():
             form.save()
-            messages.success(request, "✅ บันทึกข้อมูลบริษัท และอัปเดตโควตาการผลิตเรียบร้อยแล้ว!")
+            branch_formset.save() # 🌟 บันทึกโควตาย่อยลงฐานข้อมูล
+            messages.success(request, "✅ บันทึกข้อมูลบริษัท และอัปเดตโควตาการผลิตของทุกสาขาเรียบร้อยแล้ว!")
             return redirect('company_settings')
         else:
             messages.error(request, "❌ กรุณาตรวจสอบข้อมูลให้ถูกต้อง")
     else:
         form = CompanyInfoForm(instance=company)
+        # 🌟 [NEW] ส่งข้อมูลสาขาที่มีอยู่ไปให้หน้าเว็บแสดงผล
+        branch_formset = MfgBranchFormSet(queryset=MfgBranch.objects.all().order_by('id'))
 
     return render(request, 'master_data/company/company_settings.html', {
         'form': form,
+        'branch_formset': branch_formset, # 🌟 ส่งตัวแปรไปยัง HTML
         'title': 'ตั้งค่าข้อมูลบริษัท & โควตาการผลิต'
     })
 
@@ -41,22 +48,16 @@ def company_settings(request):
 @login_required
 def customer_list(request):
     search = request.GET.get('search', '')
-
-    # 1. ค้นหาข้อมูล (Search Logic)
     if search:
         customer_list = Customer.objects.filter(
-            Q(name__icontains=search) |
-            Q(code__icontains=search) |
-            Q(phone__icontains=search) |
-            Q(tax_id__icontains=search)
+            Q(name__icontains=search) | Q(code__icontains=search) |
+            Q(phone__icontains=search) | Q(tax_id__icontains=search)
         ).order_by('-created_at')
     else:
         customer_list = Customer.objects.all().order_by('-created_at')
 
-    # 2. ระบบแบ่งหน้า (Pagination Logic)
-    paginator = Paginator(customer_list, 20) # แสดงหน้าละ 20 รายการ
+    paginator = Paginator(customer_list, 20) 
     page = request.GET.get('page')
-
     try:
         customers = paginator.page(page)
     except PageNotAnInteger:
@@ -76,13 +77,10 @@ def customer_create(request):
         if form.is_valid():
             cust = form.save()
             messages.success(request, f"เพิ่มลูกค้า {cust.name} เรียบร้อย")
-
-            # ✅ เช็คว่ามีคำสั่งให้ "เด้งกลับ" หรือไม่ (Next URL)
             next_url = request.GET.get('next')
             if next_url:
-                return redirect(next_url) # เด้งกลับไปหน้าใบเสนอราคา (หรือหน้าที่ส่งมา)
-
-            return redirect('customer_list') # ถ้าไม่มี ก็ไปหน้ารายชื่อลูกค้าตามปกติ
+                return redirect(next_url) 
+            return redirect('customer_list') 
     else:
         form = CustomerForm()
 
@@ -141,17 +139,14 @@ def supplier_list(request):
     search = request.GET.get('search', '')
     if search:
         supplier_qs = Supplier.objects.filter(
-            Q(name__icontains=search) |
-            Q(code__icontains=search) |
-            Q(phone__icontains=search) | 
-            Q(tax_id__icontains=search)
+            Q(name__icontains=search) | Q(code__icontains=search) |
+            Q(phone__icontains=search) | Q(tax_id__icontains=search)
         ).order_by('-id')  
     else:
         supplier_qs = Supplier.objects.all().order_by('-id')  
 
     paginator = Paginator(supplier_qs, 20)
     page = request.GET.get('page')
-
     try: 
         suppliers = paginator.page(page)
     except PageNotAnInteger: 

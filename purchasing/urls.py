@@ -13,12 +13,18 @@ urlpatterns = [
     path('ppo/list/', views.ppo_list, name='ppo_list'),
     path('ppo/<int:pk>/', views.ppo_detail, name='ppo_detail'),
     
-    # 🌟 [NEW] เส้นทางสำหรับทำเนียบและโปรไฟล์ซัพพลายเออร์ 🌟
     path('suppliers/', views.supplier_list, name='supplier_list'),
     path('suppliers/<int:pk>/', views.supplier_detail, name='supplier_detail'),
 
-    # 🌟 เส้นทางใหม่: ระบบจัดซื้อต่างประเทศ 🌟
+    # 🌟 ระบบจัดซื้อต่างประเทศ (Overseas PO) 🌟
     path('overseas/', views.overseas_po_list, name='overseas_po_list'),
     path('overseas/save/', views.overseas_po_save, name='overseas_po_save'),
     path('overseas/delete/<int:pk>/', views.overseas_po_delete, name='overseas_po_delete'),
+    path('overseas/<int:po_id>/request-payment/<str:payment_type>/', views.request_overseas_payment, name='request_overseas_payment'),
+    path('overseas/print/<int:po_id>/', views.overseas_po_print, name='overseas_po_print'),
+
+    # 🌟 [NEW] ระบบทำเนียบร้านค้าต่างประเทศ 🌟
+    path('overseas-suppliers/', views.overseas_supplier_list, name='overseas_supplier_list'),
+    path('overseas-suppliers/save/', views.overseas_supplier_save, name='overseas_supplier_save'),
+    path('overseas-suppliers/delete/<int:pk>/', views.overseas_supplier_delete, name='overseas_supplier_delete'),
 ]

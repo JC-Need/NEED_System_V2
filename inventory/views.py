@@ -6,13 +6,13 @@ from django.db import models, transaction
 from django.db.models import Q
 from django.utils.dateparse import parse_date
 from django.http import JsonResponse
-from django.urls import reverse # 🌟 [NEW] นำเข้า reverse เพื่อใช้สร้าง URL
+from django.urls import reverse
 import json
 
 from .models import Product, StockMovement, InventoryDoc, ProductSupplier, SupplierPriceHistory
 from .forms import StockInForm, StockOutForm, ProductForm, ProductSupplierFormSet
 from master_data.models import CompanyInfo
-from purchasing.models import PurchaseOrder, PurchaseOrderItem
+from purchasing.models import PurchaseOrder, PurchaseOrderItem, OverseasPO, OverseasPOItem
 from django.core.paginator import Paginator
 
 @login_required
@@ -23,6 +23,10 @@ def inventory_dashboard(request):
     low_stock_count = all_products.filter(stock_qty__lte=models.F('min_level')).count()
 
     pending_po_count = PurchaseOrder.objects.filter(status='APPROVED', receipt_status__in=['PENDING', 'PARTIAL']).count()
+    
+    # 🌟 [NEW] นับบิล PQ ที่พร้อมรับเข้าคลัง 🌟
+    pending_pq_count = OverseasPO.objects.filter(status__in=['FULLY_PAID', 'DEPOSITED']).count()
+
     fg_products = fg_qs.order_by('code')[:5]
     rm_products = rm_qs.order_by('code')[:5]
     recent_docs = InventoryDoc.objects.all().order_by('-doc_no')[:10]
@@ -31,7 +35,8 @@ def inventory_dashboard(request):
         'fg_products': fg_products, 'rm_products': rm_products,
         'fg_count': fg_qs.count(), 'rm_count': rm_qs.count(),       
         'low_stock_count': low_stock_count, 'recent_docs': recent_docs,
-        'pending_po_count': pending_po_count
+        'pending_po_count': pending_po_count,
+        'pending_pq_count': pending_pq_count # ส่งไปโชว์ตัวแดงๆ
     })
 
 @login_required
@@ -111,6 +116,18 @@ def stock_out(request):
 @transaction.atomic
 def product_create(request):
     p_type = request.GET.get('type')
+    
+    # 🌟 [UPDATE] ระบบดักจับการบังคับสร้างรหัสสินค้าจากใบ PQ (Auto Fill ข้อมูลจากบิล)
+    from_pq = request.GET.get('from_pq')
+    pq_item_id = request.GET.get('pq_item')
+    auto_name = ""
+    auto_price = 0
+    if from_pq and pq_item_id:
+        pq_item = OverseasPOItem.objects.filter(id=pq_item_id).first()
+        if pq_item:
+            auto_name = pq_item.description
+            auto_price = pq_item.unit_price
+
     if not p_type: return render(request, 'inventory/product_type_select.html')
 
     if request.method == 'POST':
@@ -130,14 +147,26 @@ def product_create(request):
                     old_price=0, new_price=sup.cost_price, updated_by=request.user
                 )
             messages.success(request, f"✅ สร้าง '{product.name}' เรียบร้อย")
-            # 🌟 [UPDATE] เด้งกลับไปที่หน้ารายการสินค้า (ตามหมวดหมู่)
+            
+            # 🌟 [UPDATE] ถ้ามาจากใบ PQ ให้ผูกรหัสให้เลย แล้วเด้งกลับไปหน้ารับของ PQ
+            if from_pq and pq_item_id:
+                pq_item = OverseasPOItem.objects.filter(id=pq_item_id).first()
+                if pq_item:
+                    pq_item.product = product
+                    pq_item.save()
+                    messages.success(request, f"🔗 ผูกรหัสสินค้ากับใบสั่งซื้อ PQ สำเร็จแล้ว!")
+                    return redirect('pq_receive_process', pq_id=from_pq)
+
             return redirect(f"{reverse('product_list')}?type={p_type}")
     else:
-        form = ProductForm(initial={'product_type': p_type})
+        # ยัดค่าเริ่มต้นถ้ามาจากใบ PQ
+        form = ProductForm(initial={'product_type': p_type, 'name': auto_name, 'cost_price': auto_price})
         form.fields['product_type'].widget = forms.HiddenInput()
         formset = ProductSupplierFormSet()
 
     title = '✨ เพิ่มสินค้าสำเร็จรูป (FG)' if p_type == 'FG' else '✨ เพิ่มวัตถุดิบ (RM)'
+    if from_pq: title = '🚨 บังคับสร้างรหัสสินค้าใหม่ (จากใบสั่งซื้อต่างประเทศ)'
+    
     return render(request, 'inventory/product_form.html', {'form': form, 'formset': formset, 'title': title, 'p_type': p_type})
 
 @login_required
@@ -161,7 +190,6 @@ def product_update(request, pk):
                         old_price=old_p, new_price=sup.cost_price, updated_by=request.user
                     )
             messages.success(request, f"💾 บันทึกแก้ไข '{product.name}' เรียบร้อย")
-            # 🌟 [UPDATE] เด้งกลับไปที่หน้ารายการสินค้า (ตามหมวดหมู่)
             return redirect(f"{reverse('product_list')}?type={p_type}")
     else:
         form = ProductForm(instance=product)
@@ -172,13 +200,12 @@ def product_update(request, pk):
 @login_required
 def product_delete(request, pk):
     product = get_object_or_404(Product, pk=pk)
-    p_type = product.product_type # 🌟 เก็บ Type ไว้เพื่อพากลับถูกหน้า
+    p_type = product.product_type
     if product.stockmovement_set.exists(): 
         messages.error(request, f"❌ ลบไม่ได้! มีประวัติการเคลื่อนไหวแล้ว")
     else:
         product.delete()
         messages.success(request, f"🗑️ ลบเรียบร้อย")
-    # 🌟 [UPDATE] เด้งกลับไปที่หน้ารายการสินค้า
     return redirect(f"{reverse('product_list')}?type={p_type}")
 
 @login_required
@@ -242,6 +269,9 @@ def ajax_add_supplier(request):
         except Exception as e: return JsonResponse({'success': False, 'error': str(e)})
     return JsonResponse({'success': False, 'error': 'Invalid request'})
 
+# ==========================================
+# 🌟 ระบบรับสินค้าจาก PO ภายในประเทศ (GR) 🌟
+# ==========================================
 @login_required
 def po_receive_list(request):
     pending_pos = PurchaseOrder.objects.filter(status='APPROVED', receipt_status__in=['PENDING', 'PARTIAL']).order_by('expected_date', '-id')
@@ -290,3 +320,51 @@ def po_receive_process(request, po_id):
         elif not items_to_receive and not has_error:
             messages.warning(request, "⚠️ กรุณาระบุจำนวนสินค้าที่ต้องการรับอย่างน้อย 1 รายการ")
     return render(request, 'inventory/po_receive_form.html', {'po': po})
+
+
+# ==========================================
+# 🌟 [NEW] ระบบรับสินค้าจาก PQ ต่างประเทศ (GR) 🌟
+# ==========================================
+@login_required
+def pq_receive_list(request):
+    # ดึง PQ ที่จ่ายเงินครบ หรือจ่ายมัดจำแล้วมาโชว์ให้รับของ
+    pending_pqs = OverseasPO.objects.filter(status__in=['FULLY_PAID', 'DEPOSITED']).order_by('eta_date', '-id')
+    return render(request, 'inventory/pq_receive_list.html', {'pos': pending_pqs})
+
+@login_required
+@transaction.atomic 
+def pq_receive_process(request, pq_id):
+    pq = get_object_or_404(OverseasPO, id=pq_id, status__in=['FULLY_PAID', 'DEPOSITED'])
+    
+    # 🌟 ดักจับรายการที่ยังไม่มีรหัสสินค้า (Manual Items)
+    unlinked_items = []
+    for item in pq.overseas_items.all():
+        if not item.product:  # ถ้ายังไม่ได้ผูกตาราง Product
+            unlinked_items.append(item)
+            
+    # ถ้ามีของไม่มีรหัส ให้แสดงหน้าต่างบังคับสร้างรหัสก่อน
+    if unlinked_items:
+        messages.warning(request, f"🚨 บิล PQ นี้มีรายการ 'พิมพ์เพิ่มเอง' ที่ยังไม่ได้สร้างรหัสในระบบคลัง! กรุณาสร้างรหัสก่อนรับสินค้าเข้าคลังค่ะ")
+        return render(request, 'inventory/pq_force_create_product.html', {'pq': pq, 'unlinked_items': unlinked_items})
+
+    # ถ้ารหัสครบหมดแล้ว ก็ทำกระบวนการรับเข้าปกติ (จำลองใบ GR)
+    if request.method == 'POST':
+        reference_doc = request.POST.get('reference_doc', pq.pi_number) # ใช้ PI เป็นใบอ้างอิงปริยาย
+        note = request.POST.get('note', f'รับสินค้าจากใบสั่งซื้อต่างประเทศ {pq.po_number}')
+        
+        # ถือว่ารับเข้าคลังครบ 100% ตามใบ PQ ทันทีเพื่อความรวดเร็ว
+        doc = InventoryDoc.objects.create(doc_type='GR', reference=reference_doc, description=note, created_by=request.user)
+        for item in pq.overseas_items.all():
+            if item.product and item.quantity > 0:
+                StockMovement.objects.create(doc=doc, product=item.product, quantity=item.quantity, movement_type='IN', created_by=request.user)
+                # เพิ่มสต็อกจริงๆ
+                item.product.stock_qty += item.quantity
+                item.product.save()
+                
+        # ปิดบิล PQ
+        pq.status = 'COMPLETED'
+        pq.save()
+        messages.success(request, f"✅ รับสินค้าจาก PQ: {pq.po_number} เข้าคลังสำเร็จ! (เลขที่ใบรับ: {doc.doc_no})")
+        return redirect('print_document', doc_no=doc.doc_no)
+        
+    return render(request, 'inventory/pq_receive_form.html', {'po': pq})

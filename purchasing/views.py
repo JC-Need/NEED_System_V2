@@ -13,15 +13,23 @@ from django.utils.dateparse import parse_date
 from django.utils import timezone
 from django.forms.models import inlineformset_factory
 
-from .models import PurchaseOrder, PurchaseOrderItem, PurchaseOrderPayment, PurchasePreparation, OverseasPO
+# จัดบรรทัดใหม่ป้องกัน AI แทรกป้ายกำกับ
+from .models import (
+    PurchaseOrder, PurchaseOrderItem, PurchaseOrderPayment, 
+    PurchasePreparation, OverseasPO, OverseasSupplier, 
+    OverseasDocument, OverseasPOItem
+)
 from .forms import PurchaseOrderForm, PurchaseOrderItemFormSet, PurchaseOrderItemForm
 from master_data.models import CompanyInfo, Supplier
-from inventory.models import Product, ProductSupplier, SupplierPriceHistory, Category, RawMaterialCategory
+from inventory.models import (
+    Product, ProductSupplier, SupplierPriceHistory, 
+    Category, RawMaterialCategory
+)
 from manufacturing.models import BOM
 
-# ==========================================
+# ------------------------------------------
 # 🛡️ ระบบนายทวาร (Gatekeeper) แบ่งสิทธิ์การทำงาน
-# ==========================================
+# ------------------------------------------
 def can_view_and_pay(user):
     if user.is_superuser: return True
     user_groups = list(user.groups.values_list('name', flat=True))
@@ -51,9 +59,9 @@ def check_is_approver(user):
         if rank in ['manager', 'director', 'executive']: return True
     return False
 
-# ==========================================
+# ------------------------------------------
 # 🛒 ระบบจัดซื้อ (Purchasing)
-# ==========================================
+# ------------------------------------------
 @login_required
 def purchasing_dashboard(request):
     if not can_view_and_pay(request.user):
@@ -391,46 +399,184 @@ def po_cancel(request, po_id):
     else: messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิก หรือสถานะเอกสารไม่ถูกต้อง")
     return redirect('po_list')
 
+# ------------------------------------------
+# 🌟 ระบบติดตามสินค้านำเข้า (Overseas PO Tracker)
+# ------------------------------------------
 @login_required
 def overseas_po_list(request):
     if not can_view_and_pay(request.user): return redirect('purchasing_dashboard')
+    
     query = request.GET.get('q', '')
-    if query: overseas_pos = OverseasPO.objects.filter(Q(supplier_name__icontains=query) | Q(pi_number__icontains=query)).order_by('-id')
-    else: overseas_pos = OverseasPO.objects.all().order_by('-id')
-    return render(request, 'purchasing/overseas_po_list.html', {'overseas_pos': overseas_pos, 'query': query})
+    status_filter = request.GET.get('status', '')
+    start_date = request.GET.get('start_date', '')
+
+    overseas_pos = OverseasPO.objects.all().order_by('-id').prefetch_related('documents', 'overseas_items')
+
+    if query:
+        overseas_pos = overseas_pos.filter(
+            Q(po_number__icontains=query) | Q(supplier__name__icontains=query) | Q(supplier_name__icontains=query) | 
+            Q(pi_number__icontains=query) |
+            Q(overseas_items__description__icontains=query)
+        ).distinct()
+        
+    if status_filter:
+        overseas_pos = overseas_pos.filter(status=status_filter)
+    if start_date:
+        overseas_pos = overseas_pos.filter(po_date__gte=start_date)
+
+    for po in overseas_pos:
+        all_docs = list(po.documents.all())
+        po.docs = {
+            'PI': [d for d in all_docs if d.doc_type == 'PI'],
+            'FE': [d for d in all_docs if d.doc_type == 'FE'],
+            'BL': [d for d in all_docs if d.doc_type == 'BL'],
+            'PL': [d for d in all_docs if d.doc_type == 'PL'],
+            'CI': [d for d in all_docs if d.doc_type == 'CI'],
+            'CUSTOMS': [d for d in all_docs if d.doc_type == 'CUSTOMS'],
+        }
+
+    suppliers = OverseasSupplier.objects.all().order_by('name')
+
+    products = Product.objects.filter(is_active=True).exclude(product_type='WIP')
+    prod_list = []
+    for p in products:
+        cat_name = p.category.name if p.category else (p.rm_category.name if p.rm_category else "อื่นๆ")
+        
+        prod_list.append({
+            'id': p.id,
+            'name': f"[{p.code}] {p.name}",
+            'img_url': p.image.url if p.image else '',
+            'type': p.product_type,
+            'category': cat_name
+        })
+    products_json = json.dumps(prod_list)
+
+    return render(request, 'purchasing/overseas_po_list.html', {
+        'overseas_pos': overseas_pos, 
+        'query': query,
+        'status_filter': status_filter,
+        'start_date': start_date,
+        'suppliers': suppliers,
+        'products_json': products_json
+    })
 
 @login_required
 def overseas_po_save(request):
     if not can_create_po(request.user): return redirect('overseas_po_list')
     if request.method == 'POST':
         po_id = request.POST.get('po_id')
-        supplier_name = request.POST.get('supplier_name')
-        pi_number = request.POST.get('pi_number')
-        total_amount = request.POST.get('total_amount', '0').replace(',', '')
-        deposit_date = request.POST.get('deposit_date') or None
-        deposit_amount = request.POST.get('deposit_amount', '0').replace(',', '')
-        balance_date = request.POST.get('balance_date') or None
-        balance_amount = request.POST.get('balance_amount', '0').replace(',', '')
+        
+        supplier_id = request.POST.get('supplier_id')
+        new_supplier_name = request.POST.get('new_supplier_name')
+        supplier_obj = None
 
-        is_fully_paid = request.POST.get('is_fully_paid') == 'on'
-        doc_fe = request.POST.get('doc_fe') == 'on'
-        doc_bl = request.POST.get('doc_bl') == 'on'
-        doc_pl = request.POST.get('doc_pl') == 'on'
-        doc_ci = request.POST.get('doc_ci') == 'on'
+        if supplier_id:
+            supplier_obj = OverseasSupplier.objects.get(id=supplier_id)
+        elif new_supplier_name:
+            supplier_obj, _ = OverseasSupplier.objects.get_or_create(name=new_supplier_name)
 
         po = get_object_or_404(OverseasPO, id=po_id) if po_id else OverseasPO()
 
-        po.supplier_name = supplier_name
-        po.pi_number = pi_number
-        po.total_amount = total_amount or 0
-        po.deposit_date = deposit_date
-        po.deposit_amount = deposit_amount or 0
-        po.balance_date = balance_date
-        po.balance_amount = balance_amount or 0
-        po.is_fully_paid = is_fully_paid
-        po.doc_fe, po.doc_bl, po.doc_pl, po.doc_ci = doc_fe, doc_bl, doc_pl, doc_ci
+        po.supplier = supplier_obj
+        
+        po.pi_number = request.POST.get('pi_number', '')
+        po.ship_to_port = request.POST.get('ship_to_port', '')
+        
+        po.po_date = request.POST.get('po_date') or timezone.now().date()
+        po.eta_date = request.POST.get('eta_date') or None
+        po.item_description = request.POST.get('item_description', '')
+        po.status = request.POST.get('status', 'PENDING')
+
+        t_amt = request.POST.get('total_amount', '').replace(',', '').strip()
+        po.total_amount = Decimal(t_amt) if t_amt else Decimal('0')
+
+        po.deposit_date = request.POST.get('deposit_date') or None
+        d_amt = request.POST.get('deposit_amount', '').replace(',', '').strip()
+        po.deposit_amount = Decimal(d_amt) if d_amt else Decimal('0')
+
+        po.balance_date = request.POST.get('balance_date') or None
+        b_amt = request.POST.get('balance_amount', '').replace(',', '').strip()
+        po.balance_amount = Decimal(b_amt) if b_amt else Decimal('0')
+        
         po.save()
-        messages.success(request, f"✅ บันทึกรายการ PI: {pi_number} เรียบร้อยแล้ว")
+
+        item_ids = request.POST.getlist('item_id[]')
+        item_descs = request.POST.getlist('item_desc[]')
+        item_qtys = request.POST.getlist('item_qty[]')
+        item_prices = request.POST.getlist('item_price[]')
+        item_product_ids = request.POST.getlist('item_product_id[]') 
+
+        kept_item_ids = []
+        for i in range(len(item_descs)):
+            desc = item_descs[i]
+            if not desc.strip(): continue
+
+            qty_str = str(item_qtys[i]).replace(',', '').strip() if i < len(item_qtys) else ''
+            qty = Decimal(qty_str) if qty_str else Decimal('1')
+            
+            price_str = str(item_prices[i]).replace(',', '').strip() if i < len(item_prices) else ''
+            price = Decimal(price_str) if price_str else Decimal('0')
+            
+            total = qty * price
+            
+            i_id = item_ids[i] if i < len(item_ids) else ""
+            
+            prod_id_val = item_product_ids[i] if i < len(item_product_ids) else ""
+            linked_product = None
+            if prod_id_val:
+                linked_product = Product.objects.filter(id=prod_id_val).first()
+
+            if i_id:
+                item = OverseasPOItem.objects.filter(id=i_id, po=po).first()
+                if item:
+                    item.description = desc
+                    item.quantity = qty
+                    item.unit_price = price
+                    item.total_price = total
+                    item.product = linked_product 
+                    if f'item_image_{i}' in request.FILES:
+                        item.image = request.FILES[f'item_image_{i}']
+                    item.save()
+                    kept_item_ids.append(item.id)
+            else:
+                item = OverseasPOItem.objects.create(
+                    po=po, description=desc, quantity=qty, unit_price=price, total_price=total
+                )
+                item.product = linked_product 
+                if f'item_image_{i}' in request.FILES:
+                    item.image = request.FILES[f'item_image_{i}']
+                item.save()
+                kept_item_ids.append(item.id)
+
+        po.overseas_items.exclude(id__in=kept_item_ids).delete()
+
+        doc_types = ['pi', 'fe', 'bl', 'pl', 'ci', 'customs']
+        for dtype in doc_types:
+            files = request.FILES.getlist(f'doc_{dtype}')
+            for f in files:
+                OverseasDocument.objects.create(
+                    po=po, 
+                    doc_type=dtype.upper(), 
+                    file=f
+                )
+
+        messages.success(request, f"✅ บันทึกรายการเอกสาร PQ สำเร็จแล้ว")
+        
+    return redirect('overseas_po_list')
+
+@login_required
+def request_overseas_payment(request, po_id, payment_type):
+    if not can_create_po(request.user): return redirect('overseas_po_list')
+    po = get_object_or_404(OverseasPO, id=po_id)
+    
+    if payment_type == 'deposit':
+        po.is_deposit_requested = True
+        messages.success(request, f"📤 ส่งเรื่องขอเบิก 'มัดจำ' สำหรับเอกสาร: {po.po_number or po.pi_number} เรียบร้อยแล้ว")
+    elif payment_type == 'balance':
+        po.is_balance_requested = True
+        messages.success(request, f"📤 ส่งเรื่องขอเบิก 'ส่วนที่เหลือ' สำหรับเอกสาร: {po.po_number or po.pi_number} เรียบร้อยแล้ว")
+        
+    po.save()
     return redirect('overseas_po_list')
 
 @login_required
@@ -441,9 +587,54 @@ def overseas_po_delete(request, pk):
     messages.success(request, "🗑️ ลบรายการสั่งซื้อต่างประเทศเรียบร้อยแล้ว")
     return redirect('overseas_po_list')
 
-# ==========================================
-# 🌟 [UPDATE] ทำเนียบซัพพลายเออร์ (รองรับระบบค้นหาขั้นสูง) 🌟
-# ==========================================
+@login_required
+def overseas_po_print(request, po_id):
+    if not can_view_and_pay(request.user): return redirect('overseas_po_list')
+    po = get_object_or_404(OverseasPO, id=po_id)
+    company = CompanyInfo.objects.first()
+    
+    return render(request, 'purchasing/overseas_po_print.html', {
+        'po': po, 
+        'company': company
+    })
+
+# ------------------------------------------
+# 🌟 ระบบทำเนียบร้านค้าต่างประเทศ
+# ------------------------------------------
+@login_required
+def overseas_supplier_list(request):
+    if not can_view_and_pay(request.user): return redirect('dashboard')
+    suppliers = OverseasSupplier.objects.all().order_by('-id')
+    return render(request, 'purchasing/overseas_supplier_list.html', {'suppliers': suppliers})
+
+@login_required
+def overseas_supplier_save(request):
+    if not can_create_po(request.user): return redirect('overseas_supplier_list')
+    if request.method == 'POST':
+        sup_id = request.POST.get('supplier_id')
+        sup = get_object_or_404(OverseasSupplier, id=sup_id) if sup_id else OverseasSupplier()
+        sup.name = request.POST.get('name')
+        sup.country = request.POST.get('country', '')
+        sup.contact_name = request.POST.get('contact_name', '')
+        sup.phone = request.POST.get('phone', '')
+        sup.email = request.POST.get('email', '')
+        sup.note = request.POST.get('note', '')
+        sup.save()
+        messages.success(request, f"✅ บันทึกข้อมูลร้านค้า {sup.name} สำเร็จ")
+    return redirect('overseas_supplier_list')
+
+@login_required
+def overseas_supplier_delete(request, pk):
+    if not can_create_po(request.user): return redirect('overseas_supplier_list')
+    sup = get_object_or_404(OverseasSupplier, pk=pk)
+    sup.delete()
+    messages.success(request, "🗑️ ลบข้อมูลร้านค้าต่างประเทศเรียบร้อยแล้ว")
+    return redirect('overseas_supplier_list')
+
+
+# ------------------------------------------
+# 🌟 ทำเนียบซัพพลายเออร์ในประเทศ
+# ------------------------------------------
 @login_required
 def supplier_list(request):
     if not can_view_and_pay(request.user): return redirect('dashboard')
@@ -454,21 +645,18 @@ def supplier_list(request):
 
     suppliers = Supplier.objects.all().order_by('-id')
     
-    # 1. กรองด้วยข้อความ (ค้นหาจากตาราง Supplier โดยตรง)
     if query:
         suppliers = suppliers.filter(
             Q(code__icontains=query) | Q(name__icontains=query) |
             Q(contact_name__icontains=query) | Q(phone__icontains=query)
         )
         
-    # 2. กรองด้วยหมวดหมู่ (ค้นหาทะลุผ่านตาราง ProductSupplier ไปหา Product)
     if category_id:
         suppliers = suppliers.filter(supplied_products__product__category_id=category_id).distinct()
         
     if rm_category_id:
         suppliers = suppliers.filter(supplied_products__product__rm_category_id=rm_category_id).distinct()
 
-    # ดึงหมวดหมู่ทั้งหมดไปแสดงเป็นตัวเลือก (Dropdown)
     categories = Category.objects.all().order_by('name')
     rm_categories = RawMaterialCategory.objects.all().order_by('name')
 

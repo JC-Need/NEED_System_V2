@@ -1,13 +1,17 @@
 from django.contrib import admin
 from django.contrib import messages
-from django.utils.html import format_html # ✅ เพิ่มตัวนี้
-from django.urls import reverse # ✅ เพิ่มตัวนี้
-from .models import PurchaseOrder, PurchaseOrderItem
+from django.utils.html import format_html
+from django.urls import reverse
 from accounting.models import Expense, ExpenseCategory
+
+# นำเข้า Model ทั้งหมดที่ต้องใช้
+from .models import (
+    PurchaseOrder, PurchaseOrderItem, PurchasePreparation, PurchaseOrderPayment,
+    OverseasSupplier, OverseasPO, OverseasPOItem, OverseasDocument
+)
 
 @admin.action(description='✅ ยืนยันรับของเข้าสต็อก (และลงบัญชี)')
 def action_receive_stock(modeladmin, request, queryset):
-    # (โค้ดฟังก์ชันรับของเดิม... ปล่อยไว้เหมือนเดิมครับ)
     try:
         cat = ExpenseCategory.objects.get(name__contains="ต้นทุน")
     except:
@@ -39,16 +43,53 @@ class PurchaseItemInline(admin.TabularInline):
 
 @admin.register(PurchaseOrder)
 class PurchaseOrderAdmin(admin.ModelAdmin):
-    # ✅ เพิ่ม 'print_button' เข้าไปใน list_display
     list_display = ('code', 'date', 'supplier', 'total_amount', 'status', 'print_button')
     list_filter = ('status', 'date', 'supplier')
     inlines = [PurchaseItemInline]
     actions = [action_receive_stock]
 
-    # ✅ ฟังก์ชันสร้างปุ่มพิมพ์
     def print_button(self, obj):
-        # สร้างลิงก์ไปที่ purchasing/po/{id}/print/
         url = reverse('po_print', args=[obj.id])
         return format_html(f'<a href="{url}" target="_blank" class="button" style="background-color:#fd7e14; color:white; padding:5px 10px; border-radius:5px; text-decoration:none;">🖨️ พิมพ์</a>')
     
     print_button.short_description = 'พิมพ์เอกสาร'
+
+@admin.register(PurchaseOrderPayment)
+class PurchaseOrderPaymentAdmin(admin.ModelAdmin):
+    list_display = ('po', 'amount', 'payment_date', 'payment_method')
+    search_fields = ('po__code',)
+
+@admin.register(PurchasePreparation)
+class PurchasePreparationAdmin(admin.ModelAdmin):
+    list_display = ('code', 'created_at', 'created_by')
+    search_fields = ('code',)
+
+
+# ==========================================
+# 🌟 ระบบจัดซื้อต่างประเทศ (Overseas) เพิ่มให้แสดงใน Admin 🌟
+# ==========================================
+
+@admin.register(OverseasSupplier)
+class OverseasSupplierAdmin(admin.ModelAdmin):
+    list_display = ('name', 'country', 'contact_name', 'phone', 'email')
+    search_fields = ('name', 'country', 'contact_name', 'phone')
+    list_filter = ('country',)
+
+class OverseasPOItemInline(admin.TabularInline):
+    model = OverseasPOItem
+    extra = 1
+
+class OverseasDocumentInline(admin.TabularInline):
+    model = OverseasDocument
+    extra = 1
+
+@admin.register(OverseasPO)
+class OverseasPOAdmin(admin.ModelAdmin):
+    list_display = ('po_number', 'pi_number', 'get_supplier_name', 'po_date', 'status', 'total_amount')
+    list_filter = ('status', 'po_date')
+    search_fields = ('po_number', 'pi_number', 'supplier__name', 'supplier_name')
+    inlines = [OverseasPOItemInline, OverseasDocumentInline]
+    
+    def get_supplier_name(self, obj):
+        return obj.supplier.name if obj.supplier else obj.supplier_name
+    get_supplier_name.short_description = 'ร้านค้าต่างประเทศ'
