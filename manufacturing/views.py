@@ -12,7 +12,6 @@ import calendar
 import json
 import pandas as pd
 
-# 🌟 [FIXED] เพิ่ม QCInspectionLog เข้ามาในการนำเข้า
 from .models import ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch, MfgBranch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter, QCInspectionLog
 from master_data.models import CompanyInfo
 from inventory.models import Product, InventoryDoc, StockMovement
@@ -80,7 +79,7 @@ def production_list(request):
     system_status_choices = ProductionOrder.STATUS_CHOICES
 
     can_add_master_data = False
-    is_sales = False # 🌟 ตัวแปรสำหรับเช็กสิทธิ์ว่าเป็นเซลส์หรือไม่
+    is_sales = False 
 
     if request.user.is_superuser:
         can_add_master_data = True
@@ -103,7 +102,6 @@ def production_list(request):
             if 'วางแผน' in dept_name or 'ผลิต' in dept_name:
                  is_planner = True
 
-            # 🌟 ดักจับว่าอยู่แผนกขายหรือไม่
             if 'ขาย' in dept_name or 'sales' in dept_name.lower():
                  is_sales = True
 
@@ -278,7 +276,7 @@ def ppo_prepare(request):
             for job in jobs:
                 bom = BOM.objects.filter(product=job.product).first()
                 if bom:
-                    for item in bom.items.all():
+                     for item in bom.items.all():
                         total_needed = Decimal(str(item.quantity))
                         supplier = item.raw_material.supplier
                         sup_id = supplier.id if supplier else "none"
@@ -851,7 +849,7 @@ def production_head_board(request):
 
     for order in orders:
         order.display_cohort = format_week_range(order.start_date)
-
+        
         if order.status == 'PLANNED':
             col1_upcoming.append(order)
         elif order.status == 'REWORK':
@@ -904,9 +902,91 @@ def submit_to_qc(request, pk):
 # ==========================================
 @login_required
 def qc_board(request):
-    # ดึงเฉพาะงานที่ช่างส่งมาให้ตรวจ (WAITING_QC)
-    orders = ProductionOrder.objects.filter(status='WAITING_QC', is_closed=False).order_by('start_date')
-    return render(request, 'manufacturing/qc_board.html', {'orders': orders})
+    today = timezone.now().date()
+    default_start = today - datetime.timedelta(days=30)
+
+    # 🌟 1. คำนวณวันที่ สัปดาห์ปัจจุบัน 🌟
+    current_monday = today - datetime.timedelta(days=today.weekday())
+    current_sunday = current_monday + datetime.timedelta(days=6)
+    thai_year_curr = str(current_sunday.year + 543)[-2:]
+
+    if current_monday.month == current_sunday.month:
+        str_current_week = f"{current_monday.day}-{current_sunday.day}/{current_monday.month}/{thai_year_curr}"
+    else:
+        str_current_week = f"{current_monday.day}/{current_monday.month}-{current_sunday.day}/{current_sunday.month}/{thai_year_curr}"
+
+    # 2. รับค่าตัวกรองจากหน้าเว็บ
+    start_date = request.GET.get('start_date', default_start.strftime('%Y-%m-%d'))
+    end_date = request.GET.get('end_date', today.strftime('%Y-%m-%d'))
+    search_q = request.GET.get('q', '')
+    search_branch = request.GET.get('branch', '')
+    search_team = request.GET.get('team', '')
+    search_salesperson = request.GET.get('salesperson', '')
+
+    # 3. ดึงข้อมูลงาน (WAITING_QC = รอตรวจ, REWORK = ตีกลับกำลังซ่อม)
+    orders = ProductionOrder.objects.select_related(
+        'product', 'branch', 'production_team', 'salesperson', 'salesperson__branch', 'quotation_ref'
+    ).prefetch_related('qc_logs').filter(
+        status__in=['WAITING_QC', 'REWORK'], is_closed=False
+    ).order_by('start_date', '-id')
+
+    # 4. ใส่ Filter ค้นหา
+    if start_date: orders = orders.filter(start_date__gte=start_date)
+    if end_date: orders = orders.filter(start_date__lte=end_date)
+    if search_q:
+        orders = orders.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(product__name__icontains=search_q))
+    if search_branch: orders = orders.filter(branch_id=search_branch)
+    if search_team: orders = orders.filter(production_team_id=search_team)
+    if search_salesperson: orders = orders.filter(salesperson_id=search_salesperson)
+
+    # 🌟 5. ฟังก์ชันแปลงวันที่ ให้กลายเป็นป้ายสัปดาห์คิวงาน (บนการ์ด) 🌟
+    def format_week_range(d):
+        iso_y, iso_w, _ = d.isocalendar()
+        monday = datetime.date.fromisocalendar(iso_y, iso_w, 1)
+        sunday = monday + datetime.timedelta(days=6)
+        y_str = str(sunday.year + 543)[-2:]
+        if monday.month == sunday.month:
+            return f"จ.{monday.day}-อา.{sunday.day}/{monday.month}/{y_str}"
+        else:
+            return f"จ.{monday.day}/{monday.month}-อา.{sunday.day}/{sunday.month}/{y_str}"
+
+    # 🌟 6. แยกการ์ดออกเป็น 3 คอลัมน์ สำหรับกระดาน QC 🌟
+    col1_current = []   # รอตรวจรอบปัจจุบัน
+    col2_overdue = []   # ค้างตรวจสอบ (Overdue)
+    col3_rework = []    # งานที่ถูกตีกลับ (กำลังซ่อม)
+
+    for order in orders:
+        order.display_cohort = format_week_range(order.start_date)
+        
+        if order.status == 'REWORK':
+            col3_rework.append(order)
+        elif order.status == 'WAITING_QC':
+            if order.start_date < current_monday:
+                col2_overdue.append(order)
+            else:
+                col1_current.append(order)
+
+    # ดึงข้อมูล Master Data สำหรับช่อง Filter
+    branches = MfgBranch.objects.all().order_by('name')
+    teams = ProductionTeam.objects.all().order_by('name')
+    salespersons = Salesperson.objects.select_related('branch').all().order_by('name')
+
+    return render(request, 'manufacturing/qc_board.html', {
+        'orders': orders,
+        'col1_current': col1_current,
+        'col2_overdue': col2_overdue,
+        'col3_rework': col3_rework,
+        'str_current_week': str_current_week,
+        'branches': branches,
+        'teams': teams,
+        'salespersons': salespersons,
+        'start_date': start_date,
+        'end_date': end_date,
+        'search_q': search_q,
+        'search_branch': search_branch,
+        'search_team': search_team,
+        'search_salesperson': search_salesperson,
+    })
 
 @login_required
 @transaction.atomic
@@ -916,8 +996,22 @@ def process_qc(request, pk):
     if request.method == 'POST':
         action = request.POST.get('action')
 
+        # 🌟 [NEW] รับค่าจากการติ๊กกล่อง Checklist 6 ข้อ ทุกครั้งที่มีการกดปุ่มใดๆ ในฟอร์ม 🌟
+        order.qc_paint = request.POST.get('qc_paint') == 'on'
+        order.qc_internal = request.POST.get('qc_internal') == 'on'
+        order.qc_external = request.POST.get('qc_external') == 'on'
+        order.qc_electrical = request.POST.get('qc_electrical') == 'on'
+        order.qc_plumbing = request.POST.get('qc_plumbing') == 'on'
+        order.qc_aircon = request.POST.get('qc_aircon') == 'on'
+
+        # 🌟 [NEW] กรณีที่ QC กดแค่ปุ่ม "บันทึกไว้ก่อน (สีเหลือง)" 🌟
+        if action == 'save_progress':
+            order.save()
+            messages.success(request, f"💾 บันทึกความคืบหน้าการตรวจ QC สำหรับ {order.code} เรียบร้อยแล้ว! (รอตรวจต่อ)")
+            return redirect('qc_board')
+
         # 1. 🌟 กรณีที่ QC ตรวจผ่าน 100% (รับเข้าคลัง) 🌟
-        if action == 'pass':
+        elif action == 'pass':
             alloc_code = f"{order.product.code}-{order.code}"
             alloc_name = f"{order.product.name} [{order.code}]"
             if order.customer_name: alloc_name += f" (ลค. {order.customer_name})"
