@@ -34,6 +34,25 @@ class SalespersonAdmin(admin.ModelAdmin):
     search_fields = ('name',)
 
 # ==========================================
+# 🌟 เพิ่มเมนูจัดการ "ทีมช่างผลิต" (Production Team) 🌟
+# ==========================================
+@admin.register(ProductionTeam)
+class ProductionTeamAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name')
+    search_fields = ('name',)
+
+# ==========================================
+# 🌟 เพิ่มเมนูจัดการ "สถานะการจัดส่ง" และ "ทีมขนส่ง" 🌟
+# ==========================================
+@admin.register(DeliveryStatus)
+class DeliveryStatusAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name')
+
+@admin.register(Transporter)
+class TransporterAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name')
+
+# ==========================================
 # 🌟 เพิ่มเมนูจัดการสถานะหน้าตารางกระดานผลิต
 # ==========================================
 @admin.register(ProductionStatus)
@@ -41,10 +60,6 @@ class ProductionStatusAdmin(admin.ModelAdmin):
     list_display = ('name', 'sequence')
     list_editable = ('sequence',) 
     ordering = ('sequence', 'id')
-
-admin.site.register(ProductionTeam)
-admin.site.register(DeliveryStatus)
-admin.site.register(Transporter)
 
 # ==========================================
 # ส่วน BOMAdmin

@@ -10,28 +10,30 @@ urlpatterns = [
     path('production/planner/', views.planner_board, name='planner_board'),
     path('production/inventory/', views.inventory_board, name='inventory_board'),
 
+    # 🌟 [NEW] กระดานแยกตามสายงาน: หัวหน้าผลิต และ QC 🌟
+    path('production/head-board/', views.production_head_board, name='production_head_board'),
+    path('production/qc-board/', views.qc_board, name='qc_board'),
+    path('production/<int:pk>/submit-qc/', views.submit_to_qc, name='submit_to_qc'),
+    path('production/<int:pk>/process-qc/', views.process_qc, name='process_qc'),
+
     # เส้นทางเดิม
     path('production/<int:po_id>/print/', views.production_print, name='production_print'),
     path('production/<int:pk>/detail/', views.production_detail, name='production_detail'),
     path('production/<int:pk>/generate-pos/', views.generate_pos_from_production, name='generate_pos_from_production'),
     path('prepare-purchase/', views.ppo_prepare, name='ppo_prepare'),
 
-    # 🌟 เส้นทางสำหรับกระบวนการสั่งผลิต (หน้า Detail และ Action ใหม่) 🌟
     path('production/<int:pk>/upload-blueprint/', views.upload_blueprint, name='upload_blueprint'),
     path('production/<int:pk>/load-bom/', views.load_standard_bom, name='load_standard_bom'),
     path('production/<int:pk>/print-bom/', views.print_bom, name='print_bom'),
     path('production/<int:pk>/start/', views.start_production, name='start_production'),
 
-    # 🌟 เส้นทางสำหรับการรับส่งไม้ต่อ (Workflow Actions) 🌟
     path('production/<int:pk>/materials-ready/', views.materials_ready, name='materials_ready'),
     path('production/<int:pk>/start-actual/', views.start_actual_production, name='start_actual_production'),
     path('production/<int:pk>/process/', views.production_process, name='production_process'),
 
-    # 🌟 เส้นทางสำหรับจัดการวัตถุดิบส่วนเพิ่ม 🌟
     path('production/<int:pk>/add-material/', views.add_additional_material, name='add_additional_material'),
     path('production/material/<int:pk>/delete/', views.delete_production_material, name='delete_production_material'),
 
-    # 🌟 เส้นทางสำหรับหน้าต่างดูแบบแปลนอัจฉริยะ (แยกหน้า) 🌟
     path('production/<int:pk>/blueprint-viewer/', views.blueprint_viewer, name='blueprint_viewer'),
 
     # ระบบสูตรผลิต (BOM)
@@ -39,11 +41,8 @@ urlpatterns = [
     path('bom/create/', views.bom_create, name='bom_create'),
     path('bom/<int:pk>/', views.bom_detail, name='bom_detail'),
     path('bom/<int:pk>/edit/', views.bom_edit, name='bom_edit'),
-    
-    # 🌟 [NEW] เส้นทางสำหรับพิมพ์สูตรการผลิตโดยตรง
     path('bom/<int:pk>/print/', views.print_master_bom, name='print_master_bom'),
 
-    # 🌟 เส้นทางสำหรับระบบกระดานติดตามงานและเพิ่มข้อมูลด่วน (AJAX) 🌟
     path('production/<int:pk>/update-board/', views.update_production_board, name='update_production_board'),
     path('ajax/add-branch/', views.ajax_add_branch, name='ajax_add_branch'),
     path('ajax/add-salesperson/', views.ajax_add_salesperson, name='ajax_add_salesperson'),
@@ -52,10 +51,7 @@ urlpatterns = [
     path('ajax/add-delivery-status/', views.ajax_add_delivery_status, name='ajax_add_delivery_status'),
     path('ajax/add-transporter/', views.ajax_add_transporter, name='ajax_add_transporter'),
 
-    # 🌟 เส้นทางใหม่: ดึงข้อมูล FG ตามหมวดหมู่ 🌟
     path('ajax/get-fg-by-category/', views.ajax_get_fg_by_category, name='ajax_get_fg_by_category'),
     path('bom/import/', views.import_bom_excel, name='import_bom_excel'),
-
-    # 🌟 [NEW] เส้นทางสำหรับระบบค้นหาวัตถุดิบ (แก้อาการโหลดช้า) 🌟
     path('ajax/search-raw-material/', views.ajax_search_raw_material, name='ajax_search_raw_material'),
 ]

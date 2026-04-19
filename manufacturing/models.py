@@ -22,7 +22,7 @@ class Salesperson(models.Model):
 class MfgBranch(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อโรงงาน / สถานที่ผลิต")
     weekly_quota = models.IntegerField(default=10, verbose_name="โควตาการผลิต (หลัง/สัปดาห์)")
-    
+
     class Meta:
         verbose_name = "โรงงาน / สถานที่ผลิต"
         verbose_name_plural = "ตั้งค่าโรงงานผลิต"
@@ -34,19 +34,31 @@ class MfgBranch(models.Model):
 class ProductionStatus(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="สถานะการผลิตหน้างาน (แผนก)")
     sequence = models.IntegerField(default=99, verbose_name="ลำดับการแสดงผล")
-    class Meta: ordering = ['sequence', 'id']
+    class Meta:
+        ordering = ['sequence', 'id']
+        verbose_name = "สถานะการผลิต"
+        verbose_name_plural = "สถานะการผลิต"
     def __str__(self): return self.name
 
 class ProductionTeam(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อทีมช่าง")
+    class Meta:
+        verbose_name = "ทีมช่างผลิต"
+        verbose_name_plural = "ทีมช่างผลิต"
     def __str__(self): return self.name
 
 class DeliveryStatus(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="สถานะการจัดส่ง")
+    class Meta:
+        verbose_name = "สถานะการจัดส่ง"
+        verbose_name_plural = "สถานะการจัดส่ง"
     def __str__(self): return self.name
 
 class Transporter(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ทีมขนส่ง / บริษัทขนส่ง")
+    class Meta:
+        verbose_name = "ทีมขนส่ง"
+        verbose_name_plural = "ทีมขนส่ง"
     def __str__(self): return self.name
 
 # ==========================================
@@ -57,6 +69,7 @@ class BOM(models.Model):
     name = models.CharField(max_length=200, verbose_name="ชื่อสูตร (เช่น สูตรมาตรฐาน)")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     def __str__(self): return f"สูตรผลิต: {self.product.name}"
+
     class Meta:
         verbose_name = "1. สูตรการผลิต (BOM)"
         verbose_name_plural = "1. จัดการสูตรผลิต"
@@ -72,15 +85,17 @@ class BOMItem(models.Model):
 # ==========================================
 class ProductionOrder(models.Model):
     STATUS_CHOICES = [
-        ('PLANNED', 'รอตรวจสอบแบบแปลน'),
-        ('WAITING_MATERIALS', 'รอสั่งซื้อวัตถุดิบ'),
-        ('WAITING_INVENTORY', 'รอวัตถุดิบพร้อมผลิต'),
-        ('IN_PROGRESS', 'งานอยู่ระหว่างผลิต'),
-        ('COMPLETED', 'ผลิตเสร็จแล้ว (เข้าสต็อก)'),
+        ('NEW_JOB', '1. รอจ่ายงาน (New JOB)'),
+        ('PLANNED', '2. ตรวจแบบแปลน / ดึงสูตร'),
+        ('WAITING_MATERIALS', '3. รอสั่งซื้อวัตถุดิบ'),
+        ('WAITING_INVENTORY', '4. รอเบิกวัตถุดิบ'),
+        ('IN_PROGRESS', '5. กำลังผลิต'),
+        ('WAITING_QC', 'รอตรวจสอบคุณภาพ (QC)'),  # 🌟 [NEW] สถานะใหม่
+        ('REWORK', 'รอแก้ไขงาน (Rework)'),     # 🌟 [NEW] สถานะใหม่
+        ('COMPLETED', '6. พร้อมจัดส่ง / เสร็จแล้ว (เข้าสต็อก)'),
         ('CANCELLED', 'ยกเลิก')
     ]
-    
-    # 🌟 [NEW] ตัวเลือกสถานะการขออนุมัติวันจัดส่ง 🌟
+
     DATE_APPROVAL_CHOICES = [
         ('NOT_REQUIRED', 'ไม่ต้องอนุมัติ'),
         ('PENDING', 'รออนุมัติวัน'),
@@ -101,14 +116,14 @@ class ProductionOrder(models.Model):
     cohort_week = models.CharField(max_length=15, blank=True, null=True, verbose_name="สัปดาห์คิวผลิต (Cohort)")
     deadline_date = models.DateField(null=True, blank=True, verbose_name="เส้นตายจัดส่ง (SLA)")
 
-    # 🌟 [NEW] ฟิลด์สำหรับระบบขออนุมัติวันพิเศษ 🌟
     auto_calculated_date = models.DateField(null=True, blank=True, verbose_name="วันที่ระบบคำนวณ (Safe Date)")
     requested_date = models.DateField(null=True, blank=True, verbose_name="วันที่เซลส์ขอ (Requested Date)")
     date_approval_status = models.CharField(max_length=20, choices=DATE_APPROVAL_CHOICES, default='NOT_REQUIRED', verbose_name="สถานะการอนุมัติวัน")
 
     branch = models.ForeignKey(MfgBranch, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สถานที่ผลิต / โรงงาน")
+    # 🌟 [FIXED] เอาคำว่า 'sales.' ออก เพื่อให้ดึงตาราง Salesperson ในแอปตัวเองได้ถูกต้อง 🌟
     salesperson = models.ForeignKey(Salesperson, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="พนักงานขาย")
-    
+
     customer_name = models.CharField(max_length=200, blank=True, verbose_name="ชื่อลูกค้า / สถานที่ส่ง")
     completed_departments = models.ManyToManyField(ProductionStatus, blank=True, verbose_name="แผนกที่ดำเนินการเสร็จแล้ว")
     production_team = models.ForeignKey(ProductionTeam, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมช่างผลิต")
@@ -116,8 +131,21 @@ class ProductionOrder(models.Model):
     transporter = models.ForeignKey(Transporter, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมขนส่ง")
 
     responsible_person = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ควบคุมการผลิต")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PLANNED', verbose_name="สถานะระบบ")
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='NEW_JOB', verbose_name="สถานะระบบ")
     is_materials_ordered = models.BooleanField(default=False, verbose_name="สั่งซื้อวัตถุดิบแล้ว")
+
+    # 🌟 เพิ่มตัวนับจำนวนครั้งที่โดน QC ตีกลับ 🌟
+    rework_count = models.IntegerField(default=0, verbose_name="จำนวนครั้งที่ถูกตีกลับ (Rework)")
+
+    qc_paint = models.BooleanField(default=False, verbose_name="1. งานเก็บสี")
+    qc_internal = models.BooleanField(default=False, verbose_name="2. งานตรวจภายใน")
+    qc_external = models.BooleanField(default=False, verbose_name="3. งานตรวจภายนอก")
+    qc_electrical = models.BooleanField(default=False, verbose_name="4. งานเช็คระบบไฟฟ้า")
+    qc_plumbing = models.BooleanField(default=False, verbose_name="5. งานเช็คระบบน้ำประปา")
+    qc_aircon = models.BooleanField(default=False, verbose_name="6. งานเช็คระบบแอร์")
+
+    is_qc_passed = models.BooleanField(default=False, verbose_name="ผ่าน QC แล้ว")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     is_closed = models.BooleanField(default=False, verbose_name="ปิดจ๊อบแล้ว (งานเสร็จสมบูรณ์)")
 
@@ -155,9 +183,26 @@ class ProductionOrder(models.Model):
     def sla_status_color(self):
         if self.is_closed: return "success"
         rem = self.days_remaining
-        if rem < 0: return "danger" 
-        if rem <= 5: return "warning" 
-        return "primary" 
+        if rem < 0: return "danger"
+        if rem <= 5: return "warning"
+        return "primary"
+
+# ==========================================
+# 🌟 ตารางประวัติการตรวจ QC (QC Inspection Log) 🌟
+# ==========================================
+class QCInspectionLog(models.Model):
+    production_order = models.ForeignKey(ProductionOrder, related_name='qc_logs', on_delete=models.CASCADE, verbose_name="ใบสั่งผลิต")
+    round_number = models.IntegerField(default=1, verbose_name="ตรวจครั้งที่")
+    inspector = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ตรวจสอบ (QC)")
+    inspected_at = models.DateTimeField(auto_now_add=True, verbose_name="เวลาที่ตรวจ")
+    status = models.CharField(max_length=20, choices=[('PASSED', 'ผ่าน'), ('FAILED', 'ไม่ผ่าน/ตีกลับ')], default='FAILED', verbose_name="ผลการตรวจ")
+    comments = models.TextField(blank=True, verbose_name="คอมเมนต์/จุดที่ต้องแก้ไข")
+    
+    defect_image_1 = models.ImageField(upload_to='qc_defects/%Y/%m/', null=True, blank=True, verbose_name="รูปภาพประกอบ 1")
+    defect_image_2 = models.ImageField(upload_to='qc_defects/%Y/%m/', null=True, blank=True, verbose_name="รูปภาพประกอบ 2")
+
+    def __str__(self):
+        return f"QC รอบที่ {self.round_number} - {self.production_order.code}"
 
 # ==========================================
 # 3. รายการวัตถุดิบที่ใช้จริงต่อ 1 งาน (Job Material List)

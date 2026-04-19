@@ -10,7 +10,8 @@ class StockInForm(forms.ModelForm):
         fields = ['product', 'quantity']
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select select2'}),
-            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'placeholder': 'จำนวนที่รับ'}),
+            # 🌟 [UPDATE] ปลดล็อคให้รับทศนิยมได้ 🌟
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01', 'placeholder': 'จำนวนที่รับ'}),
         }
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -25,7 +26,8 @@ class StockOutForm(forms.ModelForm):
         fields = ['product', 'quantity']
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select select2'}),
-            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': 1, 'placeholder': 'จำนวนที่เบิก'}),
+            # 🌟 [UPDATE] ปลดล็อคให้รับทศนิยมได้ 🌟
+            'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01', 'placeholder': 'จำนวนที่เบิก'}),
         }
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

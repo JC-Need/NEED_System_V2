@@ -2,263 +2,271 @@
 {% load humanize %}
 
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
-    /* สีฟอนต์ให้ดูละมุนตาและอ่านง่ายขึ้น */
     .text-strong { color: #1e2b3c !important; }
     .text-medium { color: #596573 !important; }
-    
-    /* สไตล์การ์ดงาน (Job Card) */
-    .timeline-card { transition: all 0.3s; background-color: #ffffff; border: 1px solid #e9ecef; border-left: 6px solid #dee2e6; }
-    .timeline-card:hover { transform: translateX(5px); box-shadow: 0 8px 15px rgba(0,0,0,0.05); }
-    
-    /* สไตล์จุดสถานะการผลิต */
-    .status-node { width: 14px; height: 14px; border-radius: 50%; background: #e9ecef; position: relative; border: 2px solid #fff; box-shadow: 0 0 0 1px #dee2e6; }
-    .status-node.active { background: #ffc107; box-shadow: 0 0 0 3px rgba(255, 193, 7, 0.3); border-color: #fff; }
-    .status-node.completed { background: #198754; box-shadow: 0 0 0 1px #198754; }
-    .status-line { height: 3px; background: #e9ecef; flex-grow: 1; margin: 0 5px; }
-    .status-line.completed { background: #198754; }
-    
-    /* สไตล์กล่องประมาณการจัดส่ง */
-    .sla-card { transition: all 0.3s; border: 2px solid transparent; }
-    .sla-card:hover { transform: translateY(-3px); box-shadow: 0 12px 24px rgba(0,0,0,0.08) !important; }
-    .sla-card.is-full { border-color: #f5c2c7; background-color: #fffafb; }
-    .sla-card.is-avail { border-color: #badbcc; background-color: #f8fff9; }
-    .delivery-box { background-color: #fff3cd !important; border: 1px solid #ffe69c !important; color: #4d3a00 !important; }
 
-    /* สไตล์การ์ดโรงงานแบบใหม่ (Accordion) */
-    .branch-card-header { transition: all 0.2s; cursor: pointer; }
-    .branch-card-header:hover { background-color: #f8f9fa; }
-    .progress-thick { height: 12px; border-radius: 50rem; background-color: #e9ecef; }
+    .smart-eta-card {
+        background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+        border-left: 6px solid #0d6efd;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .smart-eta-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08) !important;
+    }
+
+    .chart-container {
+        position: relative;
+        height: 350px;
+        width: 100%;
+    }
+
+    .date-input-seamless {
+        background: transparent;
+        border: none;
+        border-bottom: 2px dashed #0d6efd;
+        border-radius: 0;
+        font-size: 1.15rem;
+        font-weight: bold;
+        color: #0d6efd;
+        width: 150px;
+        text-align: center;
+        padding: 0;
+        cursor: pointer;
+    }
+    .date-input-seamless:focus { outline: none; box-shadow: none; border-color: #ffc107; color: #ffc107; }
 </style>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
 
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h3 class="fw-bold text-strong mb-1"><i class="fas fa-stream text-warning me-2"></i>สถานะงานผลิต & Timeline</h3>
-            <p class="text-medium small mb-0">ติดตามความคืบหน้างานผลิต และแผนการจัดส่งรายสัปดาห์</p>
+            <h3 class="fw-bold text-strong mb-1"><i class="fas fa-chart-pie text-primary me-2"></i>Dashboard: สรุปงานผลิตและจัดส่ง</h3>
+            <p class="text-medium small mb-0">ประเมินวันจัดส่งอัตโนมัติ และเช็กประสิทธิภาพโรงงานแบบ Real-time</p>
         </div>
-        <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 bg-white shadow-sm"><i class="fas fa-arrow-left me-1"></i> กลับหน้า Dashboard</a>
+        <a href="{% url 'sales_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 bg-white shadow-sm fw-bold">
+            <i class="fas fa-arrow-left me-1"></i> หน้า Dashboard
+        </a>
     </div>
 
-    <div class="mb-5">
-        <h5 class="fw-bold text-strong mb-3"><i class="fas fa-calendar-alt text-primary me-2"></i>ประมาณการวันที่ผลิตและการจัดส่งสินค้า</h5>
-        <div class="row g-3">
-            {% for f in forecast_data %}
-            <div class="col-md-6 col-lg-3">
-                <div class="card h-100 shadow-sm rounded-4 sla-card {% if f.is_full %}is-full{% else %}is-avail{% endif %}">
-                    <div class="card-body p-3">
-                        <div class="fw-bold text-strong mb-2" style="font-size: 0.95rem;">
-                            📌 สัปดาห์ที่ {{ f.week_num }}: <span class="text-primary">สั่งซื้อ ({{ f.order_range }})</span>
-                        </div>
-                        
-                        <div class="mb-3">
-                            {% if f.is_full %}
-                                <div class="badge bg-danger text-white w-100 py-2 shadow-sm fs-6 text-start px-3"><i class="fas fa-times-circle me-1"></i> 🔴 สถานะคิว: เต็ม/จำกัด</div>
-                            {% else %}
-                                <div class="badge bg-success text-white w-100 py-2 shadow-sm fs-6 text-start px-3"><i class="fas fa-check-circle me-1"></i> 🟢 สถานะคิว: ว่าง (รับได้อีก {{ f.avail }} หลัง)</div>
-                            {% endif %}
-                        </div>
-
-                        <div class="text-strong" style="font-size: 0.85rem; line-height: 1.8;">
-                            <div><i class="fas fa-cog text-secondary me-1"></i> <strong>ช่วงเวลาจัดเตรียมวัตถุดิบ:</strong><br><span class="ms-4 text-muted">{{ f.prep_range }}</span></div>
-                            <div class="mt-2"><i class="fas fa-cogs text-warning me-1"></i> <strong>ช่วงเวลาผลิต:</strong><br><span class="ms-4 text-muted">{{ f.prod_range }}</span></div>
-                            
-                            <div class="mt-3 p-2 rounded delivery-box shadow-sm">
-                                <div class="fw-bold"><i class="fas fa-truck text-warning me-1"></i> <strong>ช่วงเวลาจัดส่ง:</strong></div>
-                                <div class="ms-4 fw-bold" style="font-size: 0.95rem;">{{ f.deliv_range }}</div>
-                                <div class="ms-4" style="font-size: 0.75rem; opacity: 0.8;">(ทยอยส่งตามคิว)</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-12 mb-4">
-            <div class="card shadow-sm border-0 rounded-4 bg-white">
-                <div class="card-body p-4">
-                    <h5 class="fw-bold text-strong mb-4"><i class="fas fa-chart-line text-primary me-2"></i>ภาพรวมกำลังผลิตทั้งบริษัท (สัปดาห์ปัจจุบัน)</h5>
-                    <div class="row align-items-center">
-                        <div class="col-md-3 text-center text-md-start mb-3 mb-md-0 border-end">
-                            <p class="text-muted small mb-1">จองคิวงานแล้ว</p>
-                            <h2 class="fw-bold text-{{ overall_color }} mb-0">{{ current_usage }} <span class="fs-5 text-muted">/ {{ max_quota }} หลัง</span></h2>
-                        </div>
-                        <div class="col-md-9 ps-md-4">
-                            <div class="d-flex justify-content-between align-items-end mb-2">
-                                <span class="text-strong fw-bold">ความหนาแน่นรวม</span>
-                                <h4 class="fw-bold text-{{ overall_color }} mb-0">{{ overall_percent }}%</h4>
-                            </div>
-                            <div class="progress progress-thick shadow-sm">
-                                <div class="progress-bar bg-{{ overall_color }} progress-bar-striped progress-bar-animated" style="width: {{ overall_percent }}%;"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-12 mb-4">
-            <div class="card shadow-sm border-0 rounded-4 border-start border-warning" style="border-left-width: 6px !important;">
-                <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center cursor-pointer" data-bs-toggle="collapse" data-bs-target="#poolJobs">
-                    <h5 class="fw-bold text-strong mb-0"><i class="fas fa-inbox text-warning me-2"></i>กองกลาง (รอจ่ายงานเข้าโรงงาน)</h5>
-                    <div class="d-flex align-items-center">
-                        {% if unassigned_jobs.count > 0 %}
-                            <span class="badge bg-danger rounded-pill px-3 py-2 fs-6 shadow-sm animate__animated animate__pulse animate__infinite">ค้างจ่าย {{ unassigned_jobs.count }} งาน</span>
-                        {% else %}
-                            <span class="badge bg-success rounded-pill px-3 py-2 fs-6 shadow-sm"><i class="fas fa-check me-1"></i> จ่ายงานครบแล้ว</span>
-                        {% endif %}
-                        <i class="fas fa-chevron-down text-muted ms-3"></i>
-                    </div>
-                </div>
-                
-                <div class="collapse {% if unassigned_jobs.count > 0 %}show{% endif %} border-top bg-light" id="poolJobs">
-                    <div class="card-body p-4">
-                        {% for job in unassigned_jobs %}
-                        <div class="card mb-3 shadow-sm rounded-4 timeline-card border-0" style="border-left-color: #ffc107;">
-                            <div class="card-body p-4">
-                                <div class="row align-items-center">
-                                    <div class="col-md-4">
-                                        <div class="d-flex align-items-start mb-2">
-                                            <span class="badge bg-warning text-dark me-2 shadow-sm">W{{ job.cohort_week|slice:"-2:"|default:"--" }}</span>
-                                            <h6 class="fw-bold mb-0 text-strong" style="font-size: 1.1rem;">{{ job.customer_name|default:"ไม่ระบุชื่อลูกค้า" }}</h6>
-                                        </div>
-                                        <p class="text-medium small mb-2"><i class="fas fa-home me-1"></i> {{ job.product.name }} <span class="fw-bold text-strong">({{ job.quantity }} หลัง)</span></p>
-                                        <div class="text-danger small fw-bold bg-danger bg-opacity-10 d-inline-block px-2 py-1 rounded"><i class="fas fa-calendar-check me-1"></i> กำหนดส่ง: {{ job.deadline_date|date:"d/m/Y"|default:"-" }}</div>
-                                    </div>
-                                    <div class="col-md-6 border-start border-end px-4">
-                                        <div class="d-flex align-items-center">
-                                            <div class="text-center" style="width: 70px;">
-                                                <div class="status-node {% if job.status != 'CANCELLED' %}completed{% endif %} mx-auto"></div>
-                                                <div class="text-strong mt-2 fw-bold" style="font-size: 11px;">เปิด JOB</div>
-                                            </div>
-                                            <div class="status-line completed"></div>
-                                            <div class="text-center" style="width: 70px;">
-                                                <div class="status-node active mx-auto"></div>
-                                                <div class="text-warning mt-2 fw-bold" style="font-size: 11px;">รอเลือกสาขา</div>
-                                            </div>
-                                            <div class="status-line"></div>
-                                            <div class="text-center" style="width: 70px;">
-                                                <div class="status-node mx-auto"></div>
-                                                <div class="text-medium mt-2" style="font-size: 11px;">เริ่มผลิต</div>
-                                            </div>
-                                            <div class="status-line"></div>
-                                            <div class="text-center" style="width: 70px;">
-                                                <div class="status-node mx-auto"></div>
-                                                <div class="text-medium mt-2" style="font-size: 11px;">จัดส่ง</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-2 text-end">
-                                        <div class="d-grid gap-2">
-                                            <button class="btn btn-sm btn-dark rounded-pill fw-bold shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#detail-{{ job.id }}">แผนจัดส่ง <i class="fas fa-chevron-down ms-1"></i></button>
-                                            {% if job.quotation_ref_id %}
-                                                <a href="{% url 'quotation_edit' job.quotation_ref_id %}" class="btn btn-sm btn-outline-primary rounded-pill fw-bold">ดูใบงาน</a>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="collapse mt-3" id="detail-{{ job.id }}">
-                                    <div class="p-3 rounded-3 border delivery-box">
-                                        <h6 class="fw-bold mb-2 small"><i class="fas fa-truck-loading me-2"></i>รายละเอียดการเกลี่ยยอดส่งของ (หาร 5 วัน)</h6>
-                                        <pre class="mb-0 font-monospace" style="white-space: pre-wrap; font-size: 12px;">{{ job.note|slice:"100:"|default:"-ไม่มีบันทึกแผน-" }}</pre>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        {% empty %}
-                        <div class="text-center py-4 text-medium bg-white rounded-4 border border-dashed">
-                            <i class="fas fa-check-circle fa-2x opacity-25 mb-2 text-success"></i>
-                            <p class="small mb-0">ไม่มีงานค้างในกองกลาง งานทั้งหมดถูกจ่ายให้โรงงานเรียบร้อยแล้ว</p>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
-
+    <div class="row mb-4">
         <div class="col-12">
-            <h5 class="fw-bold text-strong mb-3 mt-2"><i class="fas fa-network-wired text-primary me-2"></i>สถานะกำลังผลิต แยกตามโรงงานสาขา</h5>
-            
-            {% for branch in branch_data %}
-            <div class="card shadow-sm border-0 rounded-4 mb-3 overflow-hidden">
-                
-                <div class="card-body p-4 branch-card-header" data-bs-toggle="collapse" data-bs-target="#branchJobs{{ branch.id }}">
-                    <div class="row align-items-center">
-                        <div class="col-md-3">
-                            <h5 class="fw-bold text-dark mb-2"><i class="fas fa-warehouse text-{{ branch.status_color }} me-2"></i>{{ branch.name }}</h5>
-                            <span class="badge bg-{{ branch.status_color }} bg-opacity-10 text-{{ branch.status_color }} border border-{{ branch.status_color }} px-3 py-2 rounded-pill shadow-sm">
-                                ใช้งานแล้ว {{ branch.usage }} / {{ branch.quota }} หลัง
-                            </span>
-                        </div>
-                        <div class="col-md-7 mt-3 mt-md-0">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span class="small text-muted fw-bold">ความหนาแน่นคิวงาน</span>
-                                <span class="small fw-bold text-{{ branch.status_color }}">{{ branch.percent }}%</span>
+            <div class="card shadow-sm border-0 rounded-4 smart-eta-card p-4">
+                <div class="row align-items-center">
+                    <div class="col-md-7 border-end-md mb-3 mb-md-0">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-primary bg-opacity-10 text-primary p-3 rounded-circle me-4">
+                                <i class="fas fa-calendar-check fa-2x"></i>
                             </div>
-                            <div class="progress progress-thick">
-                                <div class="progress-bar bg-{{ branch.status_color }}" style="width: {{ branch.percent }}%;"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-2 text-end mt-3 mt-md-0">
-                            <button class="btn btn-sm btn-light border rounded-pill px-3 fw-bold text-secondary shadow-sm">
-                                ดูงานในคิว <i class="fas fa-chevron-down ms-1"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                            <div>
+                                <p class="text-muted fw-bold mb-1"><i class="fas fa-info-circle me-1"></i> ระบบคำนวณวันส่งมอบอัตโนมัติ (คำนวณจากโควตาโรงงาน)</p>
 
-                <div class="collapse bg-light border-top" id="branchJobs{{ branch.id }}">
-                    <div class="p-4">
-                        {% for job in active_jobs %}
-                            {% if job.branch_id == branch.id %}
-                            <div class="card mb-3 shadow-sm rounded-4 timeline-card border-0" style="border-left-color: #2c3e50;">
-                                <div class="card-body p-4">
-                                    <div class="row align-items-center">
-                                        <div class="col-md-4">
-                                            <div class="d-flex align-items-start mb-2">
-                                                <span class="badge bg-secondary text-white me-2 shadow-sm">W{{ job.cohort_week|slice:"-2:"|default:"--" }}</span>
-                                                <h6 class="fw-bold mb-1 text-strong" style="font-size: 1.1rem;">{{ job.customer_name|default:"ไม่ระบุชื่อลูกค้า" }}</h6>
-                                            </div>
-                                            <p class="text-medium small mb-2"><i class="fas fa-home me-1"></i> {{ job.product.name }} <span class="fw-bold text-strong">({{ job.quantity }} หลัง)</span></p>
-                                            <div class="text-danger fw-bold bg-danger bg-opacity-10 d-inline-block px-2 py-1 rounded" style="font-size: 11px;"><i class="fas fa-flag-checkered me-1"></i> กำหนดส่ง: {{ job.deadline_date|date:"d/m/Y"|default:"-" }}</div>
-                                        </div>
-                                        <div class="col-md-6 border-start px-4">
-                                            <div class="d-flex justify-content-between mb-1">
-                                                <span class="text-strong fw-bold" style="font-size: 11px;">ความคืบหน้าการผลิต (ที่โรงงาน)</span>
-                                                <span class="text-strong fw-bold" style="font-size: 11px;">{{ job.progress_percentage }}%</span>
-                                            </div>
-                                            <div class="progress mb-2" style="height: 10px; border-radius: 50rem;">
-                                                <div class="progress-bar bg-success progress-bar-striped" style="width: {{ job.progress_percentage }}%;"></div>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-2 text-end">
-                                            {% if job.quotation_ref_id %}
-                                                <a href="{% url 'quotation_edit' job.quotation_ref_id %}" class="btn btn-sm btn-outline-dark rounded-pill px-4 fw-bold shadow-sm">ดูใบงาน</a>
-                                            {% else %}
-                                                <span class="badge bg-light text-medium border fw-normal px-2 py-1"><i class="fas fa-unlink me-1"></i>ไม่มีใบอ้างอิง</span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                </div>
+                                <form id="etaForm" method="GET" class="d-inline-flex align-items-center">
+                                    <input type="hidden" name="filter_date" value="{{ filter_date|date:'Y-m-d' }}">
+                                    <h5 class="fw-bold text-dark mb-0 me-2">หากลูกค้ายืนยันและชำระมัดจำวันที่:</h5>
+                                    <input type="text" class="date-input-seamless datepicker" name="deposit_date" value="{{ calc_deposit_date|date:'Y-m-d' }}" onchange="document.getElementById('etaForm').submit();" title="คลิกเพื่อเปลี่ยนวันที่">
+                                </form>
                             </div>
-                            {% endif %}
-                        {% endfor %}
-                        
-                        {% if branch.usage == 0 %}
-                        <div class="text-center py-4 text-medium bg-white rounded-4 border border-dashed">
-                            <i class="fas fa-wind fa-2x opacity-25 mb-2 text-info"></i>
-                            <p class="small mb-0">โรงงานนี้คิวว่างพร้อมรับงานผลิตทันที</p>
                         </div>
-                        {% endif %}
+                    </div>
+                    <div class="col-md-5 text-center text-md-end ps-md-4">
+                        <p class="text-muted fw-bold mb-1">คาดว่าจะสามารถจัดส่งได้ประมาณวันที่:</p>
+                        <h2 class="fw-bold text-primary mb-0 d-inline-block border-bottom border-primary border-3 pb-1">
+                            {{ smart_eta_date|date:"d M Y" }}
+                        </h2>
+                        <div class="mt-3 text-danger small bg-danger bg-opacity-10 p-2 rounded-3 text-start text-md-center">
+                            <i class="fas fa-exclamation-triangle me-1"></i> <strong>หมายเหตุ:</strong> วันที่จัดส่งสินค้าอาจมีความคลาดเคลื่อนจากปริมาณออเดอร์ใหม่ที่เพิ่มขึ้นในอนาคต
+                        </div>
                     </div>
                 </div>
-                
             </div>
-            {% endfor %}
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-xl-6">
+            <div class="card shadow-sm border-0 rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 rounded-top-4 d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold text-strong m-0"><i class="fas fa-chart-bar text-success me-2"></i>เปรียบเทียบ ยอดสั่งผลิต vs จัดส่ง</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="chart-container">
+                        <canvas id="chartPerformance"></canvas>
+                    </div>
+                    <p class="text-center text-muted small mt-3 mb-0">
+                        <i class="fas fa-lightbulb text-warning"></i>
+                        <span class="text-primary fw-bold">น้ำเงิน:</span> ยอดสั่งผลิตทั้งหมด |
+                        <span class="text-danger fw-bold">แดง:</span> ผลิตเสร็จ (ค้างส่ง) <span class="text-decoration-underline" style="cursor: pointer;" title="กดที่แท่งสีแดงเพื่อดูงาน">👉กดดูได้</span> |
+                        <span class="text-success fw-bold">เขียว:</span> ส่งเรียบร้อยแล้ว
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-6">
+            <div class="card shadow-sm border-0 rounded-4 h-100">
+                <div class="card-header bg-white border-0 py-3 rounded-top-4 d-flex flex-wrap justify-content-between align-items-center">
+                    <h5 class="fw-bold text-strong m-0"><i class="fas fa-industry text-warning me-2"></i>ปริมาณงานสั่งผลิต แยกตามโรงงาน</h5>
+
+                    <form id="chartFilterForm" method="GET" class="d-flex align-items-center mt-2 mt-md-0">
+                        <input type="hidden" name="deposit_date" value="{{ calc_deposit_date|date:'Y-m-d' }}">
+                        <span class="small fw-bold text-muted me-2">รอบสัปดาห์:</span>
+                        <div class="input-group input-group-sm w-auto shadow-sm rounded-pill overflow-hidden border">
+                            <span class="input-group-text bg-white border-0"><i class="far fa-calendar-alt text-primary"></i></span>
+                            <input type="text" class="form-control border-0 fw-bold text-dark datepicker" name="filter_date" value="{{ filter_date|date:'Y-m-d' }}" onchange="document.getElementById('chartFilterForm').submit();" style="width: 110px; cursor: pointer; text-align: center;">
+                        </div>
+                    </form>
+                </div>
+                <div class="card-body p-4">
+                    <div class="text-center mb-3">
+                        <span class="badge bg-light text-dark border px-3 py-2 fs-6 shadow-sm">ข้อมูลประจำสัปดาห์: <span class="text-primary">{{ filter_week_display }}</span></span>
+                    </div>
+                    <div class="chart-container" style="height: 290px;">
+                        <canvas id="chartWorkload"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+
+    // เปิดใช้งานปฏิทินภาษาไทย
+    flatpickr(".datepicker", {
+        dateFormat: "Y-m-d",
+        altInput: true,
+        altFormat: "d/m/Y",
+        locale: "th",
+        allowInput: true
+    });
+
+    // สมัครใช้งานปลั๊กอิน DataLabels ให้ตัวเลขโชว์บนกราฟ
+    Chart.register(ChartDataLabels);
+
+    const labelsDisplay = JSON.parse('{{ chart_labels_display_json|safe }}');
+    const weekStarts = JSON.parse('{{ chart_week_starts_json|safe }}');
+    const weekEnds = JSON.parse('{{ chart_week_ends_json|safe }}');
+
+    const orderedData = JSON.parse('{{ chart1_ordered_json|safe }}');
+    const pendingData = JSON.parse('{{ chart1_pending_json|safe }}');
+    const deliveredData = JSON.parse('{{ chart1_delivered_json|safe }}');
+
+    const branchLabels = JSON.parse('{{ chart2_labels_json|safe }}');
+    const branchData = JSON.parse('{{ chart2_data_json|safe }}');
+    const branchColors = JSON.parse('{{ chart2_colors_json|safe }}');
+
+    // ----------------------------------------
+    // สร้างกราฟที่ 1 (สั่งผลิต vs ค้างส่ง vs จัดส่ง)
+    // ----------------------------------------
+    const ctx1 = document.getElementById('chartPerformance').getContext('2d');
+    new Chart(ctx1, {
+        type: 'bar',
+        data: {
+            labels: labelsDisplay,
+            datasets: [
+                {
+                    label: 'ยอดสั่งผลิตทั้งหมด (หลัง)',
+                    data: orderedData,
+                    backgroundColor: '#0d6efd', // น้ำเงิน
+                    borderRadius: 4,
+                },
+                {
+                    label: 'ผลิตเสร็จ (ค้างส่ง)',
+                    data: pendingData,
+                    backgroundColor: '#dc3545', // แดง
+                    borderRadius: 4,
+                },
+                {
+                    label: 'จัดส่งแล้ว (ปิดจ๊อบ)',
+                    data: deliveredData,
+                    backgroundColor: '#198754', // เขียว
+                    borderRadius: 4,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            // 🌟 ทำให้กราฟคลิกได้ และมี Effect เปลี่ยนเมาส์ 🌟
+            onClick: (e, elements) => {
+                if (elements.length > 0) {
+                    const datasetIndex = elements[0].datasetIndex;
+                    const index = elements[0].index;
+
+                    // ถ้าผู้ใช้คลิกที่แท่งที่ 1 (คือแท่งสีแดง ค้างส่ง)
+                    if (datasetIndex === 1) {
+                        const sDate = weekStarts[index];
+                        const eDate = weekEnds[index];
+                        // เปิดหน้ากระดาน พร้อมยัด Filter ให้เรียบร้อย
+                        const url = `{% url 'production_list' %}?status=COMPLETED&start_date=${sDate}&end_date=${eDate}`;
+                        window.open(url, '_blank');
+                    }
+                }
+            },
+            onHover: (e, elements) => {
+                // เปลี่ยนเคอร์เซอร์เป็นรูปมือ เฉพาะตอนชี้แท่งสีแดง
+                e.native.target.style.cursor = (elements.length > 0 && elements[0].datasetIndex === 1) ? 'pointer' : 'default';
+            },
+            plugins: {
+                legend: { position: 'top', labels: { font: { family: "'Sarabun', sans-serif", size: 13 } } },
+                datalabels: {
+                    color: '#fff',
+                    font: { weight: 'bold', family: "'Sarabun', sans-serif" },
+                    formatter: function(value) { return value > 0 ? value : ''; },
+                    anchor: 'end',
+                    align: 'bottom' // ตัวเลขอยู่ด้านบนสุดด้านในแท่ง
+                }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: "'Sarabun', sans-serif" } } },
+                x: { ticks: { font: { family: "'Sarabun', sans-serif", size: 11 } } }
+            }
+        }
+    });
+
+    // ----------------------------------------
+    // สร้างกราฟที่ 2 (ยอดสั่งผลิตแยกตามสาขา) - แสดงเฉพาะ 1 สัปดาห์
+    // ----------------------------------------
+    const ctx2 = document.getElementById('chartWorkload').getContext('2d');
+    new Chart(ctx2, {
+        type: 'bar',
+        data: {
+            labels: branchLabels,
+            datasets: [{
+                label: 'ยอดสั่งผลิต (หลัง)',
+                data: branchData,
+                backgroundColor: branchColors,
+                borderRadius: 4,
+                barPercentage: 0.6 // ปรับให้แท่งไม่อ้วนเกินไป
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }, // ซ่อน Legend เพราะแกน X บอกชื่ออยู่แล้ว
+                datalabels: {
+                    color: '#fff',
+                    font: { weight: 'bold', family: "'Sarabun', sans-serif", size: 14 },
+                    formatter: function(value) { return value > 0 ? value : ''; },
+                    anchor: 'end',
+                    align: 'bottom'
+                }
+            },
+            scales: {
+                x: { ticks: { font: { family: "'Sarabun', sans-serif", weight: 'bold' } } },
+                y: { beginAtZero: true, ticks: { stepSize: 1, font: { family: "'Sarabun', sans-serif" } } }
+            }
+        }
+    });
+});
+</script>
 {% endblock %}

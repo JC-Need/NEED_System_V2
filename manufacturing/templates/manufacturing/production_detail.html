@@ -17,8 +17,8 @@
             </p>
         </div>
         <div class="d-flex gap-2">
-            <a href="{% url 'production_list' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
-                <i class="fas fa-arrow-left me-1"></i> กลับกระดาน
+            <a href="{% url 'planner_board' %}" class="btn btn-outline-secondary rounded-pill px-4 fw-bold shadow-sm">
+                <i class="fas fa-arrow-left me-1"></i> แผนกวางแผนการผลิต
             </a>
 
             {% if order.status == 'PLANNED' %}
@@ -83,7 +83,7 @@
                 </div>
 
                 <div class="col-md-4 p-4 d-flex flex-column justify-content-center align-items-center bg-light">
-                    
+
                     <div class="mb-3 w-100 text-center">
                         {% if order.product.image %}
                             <img src="{{ order.product.image.url }}" alt="{{ order.product.code }}" class="img-fluid rounded-4 shadow-sm border border-white border-3" style="max-height: 160px; object-fit: contain; background-color: #fff;">
@@ -98,7 +98,7 @@
                     <div class="w-100 text-center bg-white p-3 rounded-4 shadow-sm border border-light">
                         <h3 class="fw-bold text-primary mb-1 font-monospace">{{ order.product.code }}</h3>
                         <h6 class="fw-bold text-dark mb-3 text-truncate" title="{{ order.product.name }}">{{ order.product.name }}</h6>
-                        
+
                         <div class="d-flex justify-content-center align-items-center gap-2 border-top pt-2 mt-2">
                             <span class="text-muted small fw-bold text-uppercase">จำนวนผลิต:</span>
                             <div class="d-flex align-items-baseline text-danger">
@@ -156,27 +156,29 @@
         </div>
 
         <div class="col-lg-7">
-            <div class="card border-0 shadow-sm rounded-4 h-100">
+            <div class="card border-0 shadow-sm rounded-4 h-100 d-flex flex-column">
                 <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
                     <h6 class="m-0 fw-bold text-dark"><i class="fas fa-cubes text-info me-2"></i>รายการวัตถุดิบที่ต้องใช้ (BOM)</h6>
 
-                    {% if not materials and has_bom %}
-                    <form action="{% url 'load_standard_bom' order.id %}" method="POST" class="d-inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-info btn-sm rounded-pill fw-bold text-dark px-4 shadow-sm border border-info" onclick="return confirm('ระบบจะดึงรายการวัตถุดิบพื้นฐานตาม BOM มาตรฐานลงในบิลนี้ ยืนยันหรือไม่?');">
-                            <i class="fas fa-download me-1"></i> ดึงสูตรมาตรฐาน
-                        </button>
-                    </form>
-                    {% elif not has_bom %}
-                        <span class="badge bg-danger rounded-pill px-3 shadow-sm py-2"><i class="fas fa-exclamation-triangle me-1"></i> สินค้านี้ยังไม่มีสูตรผลิต (BOM)</span>
-                    {% else %}
-                        <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 border border-success"><i class="fas fa-check-circle me-1"></i> ดึงรายการครบแล้ว</span>
-                    {% endif %}
+                    <div class="d-flex align-items-center gap-2">
+                        {% if not materials and has_bom %}
+                        <form action="{% url 'load_standard_bom' order.id %}" method="POST" class="m-0">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-info btn-sm rounded-pill fw-bold text-dark px-4 shadow-sm border border-info" onclick="return confirm('ระบบจะดึงรายการวัตถุดิบพื้นฐานตาม BOM มาตรฐานลงในบิลนี้ ยืนยันหรือไม่?');">
+                                <i class="fas fa-download me-1"></i> ดึงสูตรมาตรฐาน
+                            </button>
+                        </form>
+                        {% elif not has_bom %}
+                            <span class="badge bg-danger rounded-pill px-3 shadow-sm py-2"><i class="fas fa-exclamation-triangle me-1"></i> สินค้านี้ยังไม่มีสูตรผลิต (BOM)</span>
+                        {% else %}
+                            <span class="badge bg-success bg-opacity-10 text-success rounded-pill px-3 py-2 border border-success"><i class="fas fa-check-circle me-1"></i> ดึงรายการครบแล้ว</span>
+                        {% endif %}
+                    </div>
                 </div>
 
                 {% if order.status != 'COMPLETED' %}
-                <div class="card-body bg-light bg-opacity-50 py-3 border-bottom">
-                    <form action="{% url 'add_additional_material' order.id %}" method="POST" class="row g-2 align-items-center">
+                <div class="card-body bg-light bg-opacity-50 py-3 border-bottom flex-grow-0">
+                    <form action="{% url 'add_additional_material' order.id %}" method="POST" class="row g-2 align-items-center m-0">
                         {% csrf_token %}
                         <div class="col-md-7">
                             <select name="raw_material" class="form-select form-select-sm select2 w-100" required>
@@ -196,9 +198,9 @@
                 </div>
                 {% endif %}
 
-                <div class="table-responsive">
+                <div class="table-responsive flex-grow-1">
                     <table class="table table-hover align-middle mb-0">
-                        <thead class="bg-light text-secondary small text-uppercase border-bottom">
+                        <thead class="bg-light text-secondary small text-uppercase border-bottom sticky-top">
                             <tr>
                                 <th class="ps-4 py-3 border-0" width="10%">#</th>
                                 <th class="py-3 border-0" width="45%">รหัส / ชื่อวัตถุดิบ</th>
@@ -247,14 +249,14 @@
                     </table>
                 </div>
 
-                <div class="card-footer bg-light py-3 border-0 rounded-bottom-4 mt-auto">
+                <div class="card-footer bg-light py-3 border-0 mt-auto">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="text-muted small">
                             <span class="fw-bold text-dark"><i class="fas fa-comment-dots text-primary me-1"></i> หมายเหตุงาน:</span>
                             {{ order.note|default:"ไม่มีระบุ" }}
                         </div>
                         {% if materials %}
-                        <span class="badge bg-dark rounded-pill px-3 shadow-sm">รวมทั้งหมด {{ materials.count }} รายการ</span>
+                            <span class="badge bg-dark rounded-pill px-3 shadow-sm">รวมทั้งหมด {{ materials.count }} รายการ</span>
                         {% endif %}
                     </div>
                 </div>

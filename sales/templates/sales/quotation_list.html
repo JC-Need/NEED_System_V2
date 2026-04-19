@@ -278,7 +278,7 @@
                                                 <div class="mt-1 text-start">
                                                     <div class="d-flex justify-content-between align-items-center mb-1">
                                                         <span class="text-muted" style="font-size: 0.65rem;">ความคืบหน้า</span>
-                                                        <span class="fw-bold text-dark" style="font-size: 0.65rem;">{{ job.progress_percentage }}%</span>
+                                                         <span class="fw-bold text-dark" style="font-size: 0.65rem;">{{ job.progress_percentage }}%</span>
                                                     </div>
                                                     <div class="progress progress-rounded" style="height: 8px;" tabindex="0" data-bs-toggle="popover" title="แผนกที่เสร็จแล้ว" data-bs-content="{% for d in job.completed_departments.all %}<i class='fas fa-check-circle text-success me-1'></i> {{ d.name }}<br>{% empty %}<span class='text-muted'>ยังไม่เริ่มดำเนินการ</span>{% endfor %}" data-bs-html="true">
                                                         <div class="progress-bar {% if job.progress_percentage == 100 %}bg-success{% elif job.progress_percentage >= 75 %}bg-primary{% elif job.progress_percentage >= 50 %}bg-info{% elif job.progress_percentage >= 25 %}bg-warning{% else %}bg-danger{% endif %}" role="progressbar" style="width: {{ job.progress_percentage }}%;"></div>
@@ -323,6 +323,10 @@
                                                     <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-convert shadow-sm rounded-pill d-flex align-items-center gap-1 mt-1" title="เปลี่ยนเป็นใบขายสินค้า" onclick="return confirm('โรงงานผลิตเสร็จแล้ว! ต้องการเปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');">
                                                         <i class="fas fa-file-invoice-dollar"></i> เปิดบิล
                                                     </a>
+                                                {% elif job %}
+                                                    <span class="btn btn-secondary shadow-sm rounded-pill d-flex align-items-center gap-1 mt-1" style="font-size: 0.8rem; padding: 5px 12px; border: none; font-weight: bold; opacity: 0.8; cursor: default;" title="งานอยู่ระหว่างดำเนินการในโรงงาน">
+                                                        <i class="fas fa-tools"></i> กำลังผลิต
+                                                    </span>
                                                 {% endif %}
                                             {% endwith %}
                                         {% endif %}
@@ -497,7 +501,6 @@
         var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
             return new bootstrap.Popover(popoverTriggerEl, {trigger: 'hover focus'})
         });
-
         if (typeof jQuery !== 'undefined') {
             $('.modal').on('hidden.bs.modal', function () {
                 const form = $(this).find('form')[0];

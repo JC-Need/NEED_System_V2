@@ -15,7 +15,6 @@ from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 from datetime import timedelta
-from django.core.cache import cache
 
 from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment
 from inventory.models import Product, Category
@@ -172,115 +171,95 @@ def api_dashboard_data(request):
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
     group_by = request.GET.get('group_by', 'day')
-    force_refresh = request.GET.get('force_refresh') == '1'
 
     start_date = parse_date(start_date_str) if start_date_str else today
     end_date = parse_date(end_date_str) if end_date_str else today
     end_date_inclusive = end_date + timedelta(days=1)
 
-    cache_key = f"dash_cache_{request.user.id}_{start_date}_{end_date}_{group_by}"
-    if force_refresh: cache.delete(cache_key)
-    cached_data = cache.get(cache_key)
+    pos_qs_all = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
+    inv_qs_all = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
 
-    if not cached_data:
-        pos_qs_all = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
-        inv_qs_all = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
+    total_sales = float((pos_qs_all.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0) +
+                        (inv_qs_all.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0))
 
-        total_sales = float((pos_qs_all.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0) +
-                            (inv_qs_all.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0))
+    total_orders_today = pos_qs_all.count() + inv_qs_all.count()
+    qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
+    pending_approval = qt_all_qs.filter(status='DRAFT').count()
+    pending_closing = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
+    in_production = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
 
-        today_inclusive = today + timedelta(days=1)
-        total_orders_today = (
-            get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=today, created_at__lt=today_inclusive).count() +
-            get_sales_queryset(Invoice, request.user, target_employees).filter(date=today).count()
-        )
+    chart_labels, chart_data, chart_title, chart_type = [], [], "", "bar"
+    user_rank = emp.business_rank.lower() if (emp and emp.business_rank) else "member"
 
-        qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
-        pending_approval = qt_all_qs.filter(status='DRAFT').count()
-        pending_closing = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
-        in_production = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
+    pos_raw = list(pos_qs_all.filter(status='PAID').values('created_at', 'total_amount', 'employee__department__name', 'employee__first_name'))
+    inv_raw = list(inv_qs_all.filter(status='PAID').values('date', 'grand_total', 'employee__department__name', 'employee__first_name'))
 
-        chart_labels, chart_data, chart_title, chart_type = [], [], "", "bar"
-        user_rank = emp.business_rank.lower() if (emp and emp.business_rank) else "member"
-
-        pos_raw = list(pos_qs_all.filter(status='PAID').values('created_at', 'total_amount', 'employee__department__name', 'employee__first_name'))
-        inv_raw = list(inv_qs_all.filter(status='PAID').values('date', 'grand_total', 'employee__department__name', 'employee__first_name'))
-
-        if user_rank in ['manager', 'director'] or request.user.is_superuser:
-            if group_by == 'day':
-                chart_title = "แนวโน้มยอดขายรวมทั้งบริษัท (รายวัน)"
-                chart_type = "line"
-                period_dict = {}
-                for p in pos_raw:
-                    if p['created_at']:
-                        key = p['created_at'].strftime("%Y-%m-%d")
-                        period_dict[key] = period_dict.get(key, 0) + float(p['total_amount'] or 0)
-                for i in inv_raw:
-                    if i['date']:
-                        key = i['date'].strftime("%Y-%m-%d")
-                        period_dict[key] = period_dict.get(key, 0) + float(i['grand_total'] or 0)
-
-                sorted_keys = sorted(period_dict.keys())
-                chart_labels = [datetime.datetime.strptime(k, "%Y-%m-%d").strftime("%d/%m") for k in sorted_keys]
-                chart_data = [period_dict[k] for k in sorted_keys]
-
-            else:
-                chart_title = "ยอดขายเปรียบเทียบรายทีม/สาขา"
-                chart_type = "bar"
-                team_dict = {}
-                for p in pos_raw:
-                    t = p['employee__department__name'] or 'ไม่ระบุทีม'
-                    team_dict[t] = team_dict.get(t, 0) + float(p['total_amount'] or 0)
-                for i in inv_raw:
-                    t = i['employee__department__name'] or 'ไม่ระบุทีม'
-                    team_dict[t] = team_dict.get(t, 0) + float(i['grand_total'] or 0)
-
-                sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
-                chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
-
-        elif user_rank == 'supervisor':
-            chart_title = f"เปรียบเทียบผลงานในทีม {emp.department.name if emp.department else ''}"
-            chart_type = "bar"
-            mem_dict = {}
-            for p in pos_raw:
-                m = p['employee__first_name'] or 'ไม่ระบุ'
-                mem_dict[m] = mem_dict.get(m, 0) + float(p['total_amount'] or 0)
-            for i in inv_raw:
-                m = i['employee__first_name'] or 'ไม่ระบุ'
-                mem_dict[m] = mem_dict.get(m, 0) + float(i['grand_total'] or 0)
-
-            sorted_data = sorted(mem_dict.items(), key=lambda x: x[1], reverse=True)
-            chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
-
-        else:
-            chart_title = "แนวโน้มยอดขายส่วนตัว"
-            chart_type = "bar"
-
+    if user_rank in ['manager', 'director'] or request.user.is_superuser:
+        if group_by == 'day':
+            chart_title = "แนวโน้มยอดขายรวมทั้งบริษัท (รายวัน)"
+            chart_type = "line"
             period_dict = {}
             for p in pos_raw:
                 if p['created_at']:
-                    key = p['created_at'].strftime("%Y-%m") if group_by == 'month' else p['created_at'].strftime("%Y-%m-%d")
+                    key = p['created_at'].strftime("%Y-%m-%d")
                     period_dict[key] = period_dict.get(key, 0) + float(p['total_amount'] or 0)
             for i in inv_raw:
                 if i['date']:
-                    key = i['date'].strftime("%Y-%m") if group_by == 'month' else i['date'].strftime("%Y-%m-%d")
+                    key = i['date'].strftime("%Y-%m-%d")
                     period_dict[key] = period_dict.get(key, 0) + float(i['grand_total'] or 0)
 
             sorted_keys = sorted(period_dict.keys())
-            if group_by == 'month':
-                chart_labels = [f"{k[5:7]}/{k[:4]}" for k in sorted_keys]
-            else:
-                chart_labels = [f"{k[-2:]}/{k[5:7]}" for k in sorted_keys]
+            chart_labels = [datetime.datetime.strptime(k, "%Y-%m-%d").strftime("%d/%m") for k in sorted_keys]
             chart_data = [period_dict[k] for k in sorted_keys]
 
-        cached_data = {
-            'total_sales': total_sales, 'total_orders_today': total_orders_today,
-            'pending_approval': pending_approval, 'pending_closing': pending_closing,
-            'in_production': in_production, 'chart_labels': chart_labels,
-            'chart_data': chart_data, 'chart_title': chart_title,
-            'chart_type': chart_type, 'scope_title': scope_title
-        }
-        cache.set(cache_key, cached_data, timeout=300)
+        else:
+            chart_title = "ยอดขายเปรียบเทียบรายทีม/สาขา"
+            chart_type = "bar"
+            team_dict = {}
+            for p in pos_raw:
+                t = p['employee__department__name'] or 'ไม่ระบุทีม'
+                team_dict[t] = team_dict.get(t, 0) + float(p['total_amount'] or 0)
+            for i in inv_raw:
+                t = i['employee__department__name'] or 'ไม่ระบุทีม'
+                team_dict[t] = team_dict.get(t, 0) + float(i['grand_total'] or 0)
+
+            sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
+            chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
+
+    elif user_rank == 'supervisor':
+        chart_title = f"เปรียบเทียบผลงานในทีม {emp.department.name if emp.department else ''}"
+        chart_type = "bar"
+        mem_dict = {}
+        for p in pos_raw:
+            m = p['employee__first_name'] or 'ไม่ระบุ'
+            mem_dict[m] = mem_dict.get(m, 0) + float(p['total_amount'] or 0)
+        for i in inv_raw:
+            m = i['employee__first_name'] or 'ไม่ระบุ'
+            mem_dict[m] = mem_dict.get(m, 0) + float(i['grand_total'] or 0)
+
+        sorted_data = sorted(mem_dict.items(), key=lambda x: x[1], reverse=True)
+        chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
+
+    else:
+        chart_title = "แนวโน้มยอดขายส่วนตัว"
+        chart_type = "bar"
+
+        period_dict = {}
+        for p in pos_raw:
+            if p['created_at']:
+                key = p['created_at'].strftime("%Y-%m") if group_by == 'month' else p['created_at'].strftime("%Y-%m-%d")
+                period_dict[key] = period_dict.get(key, 0) + float(p['total_amount'] or 0)
+        for i in inv_raw:
+            if i['date']:
+                key = i['date'].strftime("%Y-%m") if group_by == 'month' else i['date'].strftime("%Y-%m-%d")
+                period_dict[key] = period_dict.get(key, 0) + float(i['grand_total'] or 0)
+
+        sorted_keys = sorted(period_dict.keys())
+        if group_by == 'month':
+            chart_labels = [f"{k[5:7]}/{k[:4]}" for k in sorted_keys]
+        else:
+            chart_labels = [f"{k[-2:]}/{k[5:7]}" for k in sorted_keys]
+        chart_data = [period_dict[k] for k in sorted_keys]
 
     recent_pos = list(get_sales_queryset(POSOrder, request.user, target_employees)
                       .filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
@@ -312,8 +291,14 @@ def api_dashboard_data(request):
             'amount': float(item.total_amount) if is_pos else float(item.grand_total)
         })
 
-    response_data = cached_data.copy()
-    response_data['recent_sales'] = recent_sales_data
+    response_data = {
+        'total_sales': total_sales, 'total_orders_today': total_orders_today,
+        'pending_approval': pending_approval, 'pending_closing': pending_closing,
+        'in_production': in_production, 'chart_labels': chart_labels,
+        'chart_data': chart_data, 'chart_title': chart_title,
+        'chart_type': chart_type, 'scope_title': scope_title,
+        'recent_sales': recent_sales_data
+    }
 
     return JsonResponse(response_data)
 
@@ -358,7 +343,8 @@ def record_deposit(request, qt_id):
             else: qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
 
-            if 'deposit_slip' in request.FILES: qt.deposit_slip = request.FILES['deposit_slip']
+            if 'deposit_slip' in request.FILES: 
+                qt.deposit_slip = request.FILES['deposit_slip']
             qt.save()
             messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
         else:
@@ -368,7 +354,6 @@ def record_deposit(request, qt_id):
 
     return redirect('quotation_edit', qt_id=qt.id)
 
-# 🌟 [NEW] ฟังก์ชัน Helper คำนวณวันจัดส่งอัตโนมัติ 🌟
 def get_auto_delivery_date(qt):
     first_item = qt.items.filter(product__isnull=False).first()
     if not first_item: return timezone.now().date()
@@ -458,14 +443,13 @@ def create_job_order(request, qt_id):
 
     final_delivery_date = monday_of_delivery_week + datetime.timedelta(days=4)
 
-    # 🌟 [NEW] ระบบดักจับการ Override วันจัดส่ง 🌟
     target_date_str = request.POST.get('target_date')
     requested_date_obj = parse_date(target_date_str) if target_date_str else None
 
     if requested_date_obj and requested_date_obj != final_delivery_date:
         approval_status = 'PENDING'
         req_date = requested_date_obj
-        deadline = final_delivery_date # Fallback สำรองไว้ก่อน
+        deadline = final_delivery_date 
     else:
         approval_status = 'NOT_REQUIRED'
         req_date = None
@@ -499,7 +483,6 @@ def create_job_order(request, qt_id):
         job.blueprint_file = first_item.product.standard_blueprint
         job.save()
 
-    # 🌟 แจ้งเตือนสถานะแบบใหม่ 🌟
     if approval_status == 'PENDING':
         messages.warning(request, f"🏭 ส่งสั่งผลิตสำเร็จ! (ระบบตั้งสถานะ 'รออนุมัติวัน' เนื่องจากขอเปลี่ยนวันจัดส่งเป็น {req_date.strftime('%d/%m/%Y')})")
     elif weeks_pushed > 0:
@@ -511,7 +494,7 @@ def create_job_order(request, qt_id):
 
 
 # ==========================================
-# 🌟 ฟังก์ชันสำหรับหน้าจอ Sales Timeline แบบใหม่ (SLA Forecast) 🌟
+# 🌟 [NEW] หน้าระบบ Timeline และ Dashboards สำหรับงานขาย 🌟
 # ==========================================
 @login_required
 def sales_timeline(request):
@@ -519,108 +502,124 @@ def sales_timeline(request):
         messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้า Timeline")
         return redirect('dashboard')
 
-    active_jobs = ProductionOrder.objects.filter(is_closed=False).order_by('deadline_date')
-    unassigned_jobs = active_jobs.filter(branch__isnull=True)
-    branches = MfgBranch.objects.all()
-
+    today = timezone.now().date()
     company_info = CompanyInfo.objects.first()
     max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
 
-    now = timezone.now().date()
-    iso_year, iso_week, _ = now.isocalendar()
-    current_cohort = f"{iso_year}-W{iso_week:02d}"
+    # ====================================================
+    # 1. ระบบคำนวณวันส่งมอบอัตโนมัติ (รับค่าจากช่อง Input ได้)
+    # ====================================================
+    deposit_date_str = request.GET.get('deposit_date')
+    if deposit_date_str:
+        try: calc_deposit_date = parse_date(deposit_date_str) or today
+        except: calc_deposit_date = today
+    else:
+        calc_deposit_date = today
 
-    total_pending_qty = active_jobs.aggregate(Sum('quantity'))['quantity__sum'] or 0
-    current_usage = total_pending_qty
+    current_check_date = calc_deposit_date
+    weeks_pushed = 0
+    while True:
+        iso_year, iso_week, _ = current_check_date.isocalendar()
+        check_cohort = f"{iso_year}-W{iso_week:02d}"
+        
+        total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        
+        if total_qty_in_week < max_quota:
+            break
+            
+        weeks_pushed += 1
+        current_check_date += datetime.timedelta(days=7)
 
-    overall_percent = int((current_usage / max_quota) * 100) if max_quota > 0 else 0
-    overall_color = 'success' if overall_percent <= 60 else ('warning' if overall_percent <= 85 else 'danger')
+    # Lead time มาตรฐาน = 22 วัน
+    smart_eta_date = calc_deposit_date + datetime.timedelta(days=22 + (weeks_pushed * 7))
 
-    branch_data = []
-    # 🌟 [NEW] เตรียมข้อมูลโครงสร้าง JSON ส่งไปให้กราฟ ApexCharts 🌟
-    chart_categories = []
-    chart_series_usage = []
-    chart_series_quota = []
-
-    for b in branches:
-        b_usage = ProductionOrder.objects.filter(branch=b, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
-        b_quota = getattr(b, 'weekly_quota', 10)
-        b_percent = int((b_usage / b_quota) * 100) if b_quota > 0 else 0
-        b_status_color = 'success' if b_percent <= 60 else ('warning' if b_percent <= 85 else 'danger')
-
-        branch_data.append({
-            'id': b.id, 'name': b.name, 'quota': b_quota, 'usage': b_usage,
-            'percent': min(b_percent, 100), 'status_color': b_status_color,
-            'color_hex': '#198754' if b_status_color == 'success' else ('#ffc107' if b_status_color == 'warning' else '#dc3545')
-        })
-
-        # เก็บข้อมูลเข้า Array ไว้ทำกราฟแท่ง (Bar Chart)
-        chart_categories.append(b.name)
-        chart_series_usage.append(b_usage)
-        chart_series_quota.append(b_quota)
-
-    forecast_data = []
-    days_to_monday = now.weekday()
-    current_monday = now - datetime.timedelta(days=days_to_monday)
-
-    def get_short_thai_date(d):
-        thai_months = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
-        return f"{d.day} {thai_months[d.month]}"
-
-    def get_full_thai_date(d):
-        thai_months = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."]
-        weekdays = ["จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์", "อาทิตย์"]
-        return f"{weekdays[d.weekday()]} {d.day} {thai_months[d.month]}"
-
-    remaining_backlog = total_pending_qty
-
-    for i in range(4):
-        if remaining_backlog >= max_quota:
-            booked_this_week = max_quota
-            remaining_backlog -= max_quota
+    # ====================================================
+    # 🌟 ฟังก์ชันแปลงวันที่แบบย่อ (เช่น จ.13-อา.19/4/69) 🌟
+    # ====================================================
+    def format_week_range(d):
+        iso_y, iso_w, _ = d.isocalendar()
+        monday = datetime.date.fromisocalendar(iso_y, iso_w, 1)
+        sunday = monday + datetime.timedelta(days=6)
+        y_str = str(sunday.year + 543)[-2:]
+        if monday.month == sunday.month:
+            return f"จ.{monday.day}-อา.{sunday.day}/{monday.month}/{y_str}"
         else:
-            booked_this_week = remaining_backlog
-            remaining_backlog = 0
+            return f"จ.{monday.day}/{monday.month}-อา.{sunday.day}/{sunday.month}/{y_str}"
 
-        avail = max_quota - booked_this_week
-        is_full = avail <= 0
+    # ====================================================
+    # 2. ข้อมูลกราฟที่ 1: สั่งผลิต vs ค้างส่ง vs จัดส่ง (ย้อนหลัง 4 สัปดาห์ - ล่วงหน้า 3 สัปดาห์)
+    # ====================================================
+    chart_labels = []
+    chart_labels_display = []
+    chart_week_starts = []
+    chart_week_ends = []
+    
+    chart1_ordered = []
+    chart1_pending = []
+    chart1_delivered = []
+    
+    start_date = today - datetime.timedelta(weeks=4)
+    for i in range(8):
+        w_date = start_date + datetime.timedelta(weeks=i)
+        iso_year, iso_week, _ = w_date.isocalendar()
+        cohort = f"{iso_year}-W{iso_week:02d}"
+        
+        monday = datetime.date.fromisocalendar(iso_year, iso_week, 1)
+        sunday = monday + datetime.timedelta(days=6)
+        
+        chart_labels.append(cohort)
+        chart_labels_display.append(format_week_range(w_date))
+        chart_week_starts.append(monday.strftime('%Y-%m-%d'))
+        chart_week_ends.append(sunday.strftime('%Y-%m-%d'))
 
-        o_start = current_monday + datetime.timedelta(days=7*i)
-        o_end = o_start + datetime.timedelta(days=6)
+        # 🌟 [FIXED] ดึงข้อมูล 3 แท่ง (ยอดรวมสั่งผลิต, ผลิตเสร็จค้างส่ง, จัดส่งแล้ว) 🌟
+        ordered = ProductionOrder.objects.filter(cohort_week=cohort).exclude(status='CANCELLED').aggregate(Sum('quantity'))['quantity__sum'] or 0
+        pending = ProductionOrder.objects.filter(cohort_week=cohort, status='COMPLETED', is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        deli = ProductionOrder.objects.filter(cohort_week=cohort, is_closed=True).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        
+        chart1_ordered.append(int(ordered))
+        chart1_pending.append(int(pending))
+        chart1_delivered.append(int(deli))
 
-        p_start = o_start + datetime.timedelta(days=7)
-        p_end = p_start + datetime.timedelta(days=6)
+    # ====================================================
+    # 3. ข้อมูลกราฟที่ 2: ยอดสั่งผลิตแยกตามโรงงาน (ฟิลเตอร์ 1 สัปดาห์)
+    # ====================================================
+    filter_date_str = request.GET.get('filter_date')
+    if filter_date_str:
+        try: filter_date = parse_date(filter_date_str) or today
+        except: filter_date = today
+    else:
+        filter_date = today
 
-        m_start = p_start + datetime.timedelta(days=7)
-        m_end = m_start + datetime.timedelta(days=6)
+    f_iso_year, f_iso_week, _ = filter_date.isocalendar()
+    target_cohort = f"{f_iso_year}-W{f_iso_week:02d}"
+    filter_week_display = format_week_range(filter_date)
 
-        d_start = m_start + datetime.timedelta(days=7)
-        d_end = d_start + datetime.timedelta(days=4)
-
-        forecast_data.append({
-            'week_num': i + 1,
-            'order_range': f"{get_short_thai_date(o_start)} - {get_short_thai_date(o_end)}",
-            'prep_range': f"{get_full_thai_date(p_start)} - {get_full_thai_date(p_end)}",
-            'prod_range': f"{get_full_thai_date(m_start)} - {get_full_thai_date(m_end)}",
-            'deliv_range': f"{get_full_thai_date(d_start)} - {get_full_thai_date(d_end)}",
-            'avail': avail,
-            'is_full': is_full,
-        })
+    branches = MfgBranch.objects.all().order_by('id')
+    chart2_labels = []
+    chart2_data = []
+    chart2_bg_colors = ['#0d6efd', '#ffc107', '#198754', '#dc3545', '#6f42c1', '#0dcaf0', '#fd7e14']
+    
+    for b in branches:
+        chart2_labels.append(b.name) # แกน X เป็นชื่อโรงงาน
+        qty = ProductionOrder.objects.filter(cohort_week=target_cohort, branch=b).aggregate(Sum('quantity'))['quantity__sum'] or 0
+        chart2_data.append(int(qty))
 
     return render(request, 'sales/sales_timeline.html', {
-        'active_jobs': active_jobs,
-        'unassigned_jobs': unassigned_jobs,
-        'branch_data': branch_data,
-        'max_quota': max_quota,
-        'current_usage': current_usage,
-        'overall_percent': min(overall_percent, 100),
-        'overall_color': overall_color,
-        'forecast_data': forecast_data,
-
-        # 🌟 ส่งตัวแปร JSON สำหรับกราฟ ApexCharts
-        'chart_categories_json': json.dumps(chart_categories),
-        'chart_series_usage_json': json.dumps(chart_series_usage),
-        'chart_series_quota_json': json.dumps(chart_series_quota),
+        'today': today,
+        'calc_deposit_date': calc_deposit_date,
+        'smart_eta_date': smart_eta_date,
+        'filter_date': filter_date,
+        'filter_week_display': filter_week_display,
+        'chart_labels_display_json': json.dumps(chart_labels_display),
+        'chart_week_starts_json': json.dumps(chart_week_starts),
+        'chart_week_ends_json': json.dumps(chart_week_ends),
+        'chart1_ordered_json': json.dumps(chart1_ordered),
+        'chart1_pending_json': json.dumps(chart1_pending),
+        'chart1_delivered_json': json.dumps(chart1_delivered),
+        'chart2_labels_json': json.dumps(chart2_labels),
+        'chart2_data_json': json.dumps(chart2_data),
+        'chart2_colors_json': json.dumps(chart2_bg_colors[:len(branches)]),
     })
 
 @login_required
@@ -685,8 +684,8 @@ def pos_checkout(request):
 
             customer_obj = None
             if cust_id:
-                try: customer_obj = Customer.objects.get(id=cust_id)
-                except: pass
+                 try: customer_obj = Customer.objects.get(id=cust_id)
+                 except: pass
 
             order = POSOrder.objects.create(
                 code=order_code,
@@ -814,7 +813,6 @@ def quotation_list(request):
         rank = current_emp.business_rank.lower()
         if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower(): is_manager = True
 
-    # 🌟 [NEW] เพิ่มการคำนวณวันจัดส่งอัตโนมัติ ส่งให้ Modal สั่งผลิต 🌟
     for qt in page_obj:
         if qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.exists():
             qt.auto_delivery_date = get_auto_delivery_date(qt)

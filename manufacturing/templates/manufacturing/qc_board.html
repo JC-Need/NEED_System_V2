@@ -1,0 +1,94 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="container-fluid py-4 px-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h3 class="fw-bold text-dark mb-1"><i class="fas fa-search-plus text-success me-2"></i>กระดานตรวจสอบคุณภาพ (QC)</h3>
+            <p class="text-muted small mb-0">ตรวจสอบงานจากฝ่ายผลิต รับเข้าคลัง หรือตีกลับให้แก้ไข</p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        {% for order in orders %}
+        <div class="col-md-6 col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 h-100 border-start border-success border-4">
+                <div class="card-body p-4">
+                    <div class="badge bg-info text-dark rounded-pill px-3 py-2 mb-3 shadow-sm">
+                        <i class="fas fa-search me-1"></i> รอ QC ตรวจสอบ
+                    </div>
+                    {% if order.rework_count > 0 %}
+                        <span class="badge bg-danger rounded-pill px-3 py-2 mb-3 ms-2 shadow-sm animate__animated animate__pulse animate__infinite">
+                            <i class="fas fa-redo me-1"></i> แก้งานมารอบที่ {{ order.rework_count }}
+                        </span>
+                    {% endif %}
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="badge bg-primary fs-6">{{ order.code }}</span>
+                    </div>
+                    <h5 class="fw-bold text-dark mb-3">{{ order.product.name }}</h5>
+                    
+                    <button type="button" class="btn btn-outline-dark w-100 fw-bold rounded-pill shadow-sm" data-bs-toggle="modal" data-bs-target="#qcModal-{{ order.id }}">
+                        <i class="fas fa-clipboard-check me-1"></i> เปิดฟอร์มตรวจ QC
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="qcModal-{{ order.id }}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <form method="POST" action="{% url 'process_qc' order.id %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="modal-content rounded-4 border-0 shadow-lg">
+                        <div class="modal-header bg-success text-white border-0 py-3">
+                            <h5 class="modal-title fw-bold"><i class="fas fa-tasks me-2"></i> ฟอร์มตรวจ QC: {{ order.code }}</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body p-4 bg-light">
+                            <h6 class="fw-bold text-dark mb-3">ตรวจสอบรายการต่อไปนี้:</h6>
+                            <div class="row g-3 mb-4">
+                                <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" checked disabled> <label class="form-check-label">1. งานเก็บสี</label></div></div>
+                                <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" checked disabled> <label class="form-check-label">2. งานตรวจภายใน</label></div></div>
+                                <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" checked disabled> <label class="form-check-label">3. งานตรวจภายนอก</label></div></div>
+                                <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" checked disabled> <label class="form-check-label">4. เช็คระบบไฟฟ้า</label></div></div>
+                                <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" checked disabled> <label class="form-check-label">5. เช็คระบบน้ำประปา</label></div></div>
+                                <div class="col-6"><div class="form-check"><input class="form-check-input" type="checkbox" checked disabled> <label class="form-check-label">6. เช็คระบบแอร์</label></div></div>
+                            </div>
+                            
+                            <hr>
+                            <h6 class="fw-bold text-danger mb-2"><i class="fas fa-exclamation-circle me-1"></i> กรณีตรวจ "ไม่ผ่าน" (ตีกลับให้ช่างแก้)</h6>
+                            <p class="small text-muted mb-2">กรุณาพิมพ์จุดที่ต้องแก้ และแนบรูปถ่ายหลักฐาน</p>
+                            
+                            <textarea name="comments" class="form-control mb-3 rounded-3" rows="3" placeholder="ระบุจุดที่ต้องแก้ไข..."></textarea>
+                            
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label class="small fw-bold">รูปภาพที่ 1</label>
+                                    <input type="file" name="defect_image_1" class="form-control form-control-sm" accept="image/*">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="small fw-bold">รูปภาพที่ 2</label>
+                                    <input type="file" name="defect_image_2" class="form-control form-control-sm" accept="image/*">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-white border-0 py-3 d-flex justify-content-between">
+                            <button type="submit" name="action" value="fail" class="btn btn-danger rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ยืนยันตีกลับงานให้ช่างแก้ไขใช่หรือไม่?');">
+                                <i class="fas fa-times-circle me-1"></i> ไม่ผ่าน (ตีกลับให้แก้)
+                            </button>
+                            <button type="submit" name="action" value="pass" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm" onclick="return confirm('ยืนยันตรวจผ่าน 100% และรับสินค้าเข้าคลังใช่หรือไม่?');">
+                                <i class="fas fa-check-circle me-1"></i> ผ่าน QC (รับเข้าคลัง)
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center py-5">
+            <i class="fas fa-check-double fa-4x text-success opacity-25 mb-3"></i>
+            <h4 class="fw-bold text-secondary">ไม่มีงานรอตรวจสอบ QC ในขณะนี้</h4>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

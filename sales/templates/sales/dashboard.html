@@ -11,7 +11,7 @@
     .hover-scale { transition: transform 0.2s; cursor: pointer; }
     .hover-scale:hover { transform: translateY(-3px); }
 
-    /* 🌟 [NEW] ดีไซน์ปุ่ม Quick Actions ใหม่ บังคับสีให้อ่านง่ายและสวยงาม 🌟 */
+    /* 🌟 ดีไซน์ปุ่ม Quick Actions ใหม่ 🌟 */
     .btn-quick-light { background-color: #ffffff; color: #2c3e50 !important; border: 1px solid #cbd5e1; transition: all 0.3s ease; }
     .btn-quick-light:hover { background-color: #f1f5f9; transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important; }
     
@@ -26,24 +26,30 @@
 </style>
 
 <div class="container-fluid py-4 px-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-bold text-dark mb-0">
-                <i class="fas fa-chart-line me-2 text-primary"></i>Sales Overview
-                <span id="sync-indicator" class="ms-2 fs-6 text-success" style="opacity: 0; transition: opacity 0.5s;"><i class="fas fa-sync-alt fa-spin"></i></span>
-            </h2>
-            <p class="text-muted mb-0">ข้อมูล <span id="label-date-range">วันนี้</span> | <span class="badge bg-info text-dark">{{ scope_title }}</span></p>
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+        
+        <div class="d-flex flex-wrap align-items-center gap-3">
+            <div>
+                <h2 class="fw-bold text-dark mb-0">
+                    <i class="fas fa-chart-line me-2 text-primary"></i>Sales Overview
+                    <span id="sync-indicator" class="ms-2 fs-6 text-success" style="opacity: 0; transition: opacity 0.5s;"><i class="fas fa-sync-alt fa-spin"></i></span>
+                </h2>
+                <p class="text-muted mb-0">ข้อมูล <span id="label-date-range">วันนี้</span> | <span class="badge bg-info text-dark">{{ scope_title }}</span></p>
+            </div>
+            
+            <div class="d-flex gap-2 mt-2 mt-md-0 ms-md-3">
+                <a href="{% url 'customer_list' %}" class="btn btn-quick-light rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center">
+                    <i class="fas fa-users me-2 text-primary"></i> ฐานข้อมูลลูกค้า
+                </a>
+                <a href="{% url 'sales_timeline' %}" class="btn btn-quick-primary rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center">
+                    <i class="fas fa-calendar-alt me-2"></i> Timeline งานผลิต
+                </a>
+            </div>
         </div>
 
         <div class="d-flex gap-2">
-            <a href="{% url 'customer_list' %}" class="btn btn-quick-light rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center">
-                <i class="fas fa-users me-2 text-primary"></i> ฐานข้อมูลลูกค้า
-            </a>
             <a href="{% url 'quotation_create' %}" class="btn btn-quick-success rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center">
                 <i class="fas fa-plus-circle me-2"></i> สร้างใบเสนอราคา
-            </a>
-            <a href="{% url 'sales_timeline' %}" class="btn btn-quick-primary rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center">
-                <i class="fas fa-calendar-alt me-2"></i> Timeline งานผลิต
             </a>
             <a href="{% url 'sales_hub' %}" class="btn btn-quick-dark rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center">
                 <i class="fas fa-cash-register me-2"></i> เปิดบิลขาย / POS
@@ -204,11 +210,12 @@
         const end = document.getElementById('filter_end').value;
         const url = `{% url 'api_dashboard_data' %}?start_date=${start}&end_date=${end}&group_by=${currentGroupBy}`;
         fetch(url).then(r => r.json()).then(data => {
+            // 🌟 [FIX] เปลี่ยน innerText เป็น innerHTML เพื่อให้แท็ก <small> ทำงานได้ 🌟
             document.getElementById('val-total-sales').innerText = '฿' + data.total_sales.toLocaleString(undefined, {minimumFractionDigits:2});
-            document.getElementById('val-total-orders').innerText = data.total_orders_today;
-            document.getElementById('val-pending-approval').innerText = data.pending_approval;
-            document.getElementById('val-pending-closing').innerText = data.pending_closing;
-            document.getElementById('val-in-production').innerText = data.in_production;
+            document.getElementById('val-total-orders').innerHTML = data.total_orders_today + ' <small class="text-muted" style="font-size: 0.6rem;">บิล</small>';
+            document.getElementById('val-pending-approval').innerHTML = data.pending_approval + ' <small class="text-muted" style="font-size: 0.6rem;">ใบ</small>';
+            document.getElementById('val-pending-closing').innerHTML = data.pending_closing + ' <small class="text-muted" style="font-size: 0.6rem;">ใบ</small>';
+            document.getElementById('val-in-production').innerHTML = data.in_production + ' <small class="text-muted" style="font-size: 0.6rem;">ใบ</small>';
 
             if (mainChart.config.type !== data.chart_type) {
                 initChart(data.chart_type);
@@ -228,6 +235,8 @@
             if (syncIcon) setTimeout(() => syncIcon.style.opacity = '0', 800);
         });
     }
+    
+    // ตั้งรีเฟรชข้อมูลทุกๆ 60 วินาที
     setInterval(fetchDashboardData, 60000);
 </script>
 {% endblock %}

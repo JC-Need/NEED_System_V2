@@ -4,24 +4,24 @@
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <style>
-    .table-tracker th { font-size: 0.85rem; vertical-align: middle; background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; color: #343a40; padding: 0.75rem; } [cite: 737, 738, 739]
-    .table-tracker td { font-size: 0.85rem; vertical-align: middle; padding: 0.75rem 0.5rem; } [cite: 739, 740]
+    .table-tracker th { font-size: 0.85rem; vertical-align: middle; background-color: #f8f9fa; border-bottom: 2px solid #dee2e6; color: #343a40; padding: 0.75rem; }
+    .table-tracker td { font-size: 0.85rem; vertical-align: middle; padding: 0.75rem 0.5rem; }
+    
+    .doc-badge { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; font-size: 0.75rem; text-decoration: none; transition: all 0.2s;}
+    .doc-active { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; box-shadow: 0 2px 4px rgba(15, 81, 50, 0.1); cursor: pointer; }
+    .doc-active:hover { background-color: #badbcc; color: #000; transform: translateY(-2px); }
+    .doc-inactive { background-color: #f8f9fa; color: #adb5bd; border: 1px dashed #ced4da; pointer-events: none; }
+    
+    .dropdown-toggle::after { display: none; }
+    
+    .flatpickr-input { background-color: #fff !important; cursor: pointer; }
+    .status-badge { font-size: 0.75rem; padding: 0.4rem 0.8rem; border-radius: 50rem; font-weight: bold; }
+    .req-btn { font-size: 0.7rem; padding: 0.2rem 0.5rem; }
+    
+    .input-locked { background-color: #e9ecef !important; pointer-events: none; color: #6c757d; }
 
-    .doc-badge { width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; font-weight: bold; font-size: 0.75rem; text-decoration: none; transition: all 0.2s;} [cite: 740, 741]
-    .doc-active { background-color: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; box-shadow: 0 2px 4px rgba(15, 81, 50, 0.1); cursor: pointer; } [cite: 741, 742, 743]
-    .doc-active:hover { background-color: #badbcc; color: #000; transform: translateY(-2px); } [cite: 743]
-    .doc-inactive { background-color: #f8f9fa; color: #adb5bd; border: 1px dashed #ced4da; pointer-events: none; } [cite: 743, 744]
-
-    .dropdown-toggle::after { display: none; } [cite: 744, 745]
-
-    .flatpickr-input { background-color: #fff !important; cursor: pointer; } [cite: 745, 746]
-    .status-badge { font-size: 0.75rem; padding: 0.4rem 0.8rem; border-radius: 50rem; font-weight: bold; } [cite: 746, 747]
-    .req-btn { font-size: 0.7rem; padding: 0.2rem 0.5rem; } [cite: 747, 748]
-
-    .input-locked { background-color: #e9ecef !important; pointer-events: none; color: #6c757d; } [cite: 748, 749]
-
-    .table-items th { background-color: #f8f9fa; font-size: 0.8rem; padding: 0.5rem; } [cite: 749, 750]
-    .table-items td { padding: 0.5rem; vertical-align: middle; } [cite: 750, 751]
+    .table-items th { background-color: #f8f9fa; font-size: 0.8rem; padding: 0.5rem; }
+    .table-items td { padding: 0.5rem; vertical-align: middle; }
 
     /* 🌟 แต่งปุ่มค้นหาสินค้า 🌟 */
     .catalog-search-btn { transition: all 0.2s ease; }
@@ -76,22 +76,22 @@
                         <th rowspan="2" width="13%" class="text-start">PQ No. / ผู้ขาย</th>
                         <th rowspan="2" width="15%" class="text-start">รายการสินค้า / ETA</th>
                         <th rowspan="2" width="9%">ยอดชำระจริง / สถานะ</th>
-
+                        
                         <th colspan="3" width="18%" class="bg-warning bg-opacity-10">การชำระมัดจำ</th>
                         <th colspan="3" width="18%" class="bg-info bg-opacity-10">การชำระส่วนที่เหลือ</th>
                         <th colspan="6" width="18%" class="bg-success bg-opacity-10">เอกสารนำเข้า</th>
-
+                        
                         <th rowspan="2" width="5%">จัดการ</th>
                     </tr>
                     <tr>
                         <th class="bg-warning bg-opacity-10" style="font-size: 0.75rem;">วันที่</th>
                         <th class="bg-warning bg-opacity-10" style="font-size: 0.75rem;">ยอดมัดจำ</th>
                         <th class="bg-warning bg-opacity-10" style="font-size: 0.75rem;">เบิกบัญชี</th>
-
+                        
                         <th class="bg-info bg-opacity-10" style="font-size: 0.75rem;">วันที่</th>
                         <th class="bg-info bg-opacity-10" style="font-size: 0.75rem;">ยอดคงเหลือ</th>
                         <th class="bg-info bg-opacity-10" style="font-size: 0.75rem;">เบิกบัญชี</th>
-
+                        
                         <th class="bg-success bg-opacity-10" style="font-size: 0.7rem;">PI</th>
                         <th class="bg-success bg-opacity-10" style="font-size: 0.7rem;">FE</th>
                         <th class="bg-success bg-opacity-10" style="font-size: 0.7rem;">BL</th>
@@ -104,7 +104,7 @@
                     {% for po in overseas_pos %}
                     <tr>
                         <td class="text-muted">{{ forloop.counter }}</td>
-
+                        
                         <td class="text-start">
                             <div class="text-primary fw-bold"><i class="fas fa-file-invoice me-1"></i>{{ po.po_number|default:"[รอกำหนดเลข PQ]" }}</div>
                             <div class="text-muted small mb-1">PI: {{ po.pi_number|default:"<span class='fst-italic'>-รอเอกสาร-</span>"|safe }}</div>
@@ -232,13 +232,13 @@
                         <td>
                             <div class="d-flex justify-content-center gap-1">
                                 <a href="{% url 'overseas_po_print' po.id %}" target="_blank" class="btn btn-sm btn-light text-success border shadow-sm" title="พิมพ์ใบสั่งซื้อ"><i class="fas fa-print"></i></a>
-
+                                
                                 <button type="button" class="btn btn-sm btn-light text-primary border shadow-sm" onclick='editModal({{ po.id }}, "{{ po.supplier_id|default:'' }}", "{{ po.po_number|escapejs }}", "{{ po.pi_number|escapejs }}", "{{ po.ship_to_port|escapejs }}", "{{ po.total_amount }}", "{{ po.deposit_date|date:"Y-m-d" }}", "{{ po.deposit_amount }}", "{{ po.balance_date|date:"Y-m-d" }}", "{{ po.balance_amount }}", "{{ po.status }}", "{{ po.po_date|date:"Y-m-d" }}", "{{ po.eta_date|date:"Y-m-d" }}", "{% if po.is_deposit_requested or po.is_deposit_approved %}true{% else %}false{% endif %}", "{% if po.is_balance_requested or po.is_balance_approved %}true{% else %}false{% endif %}")'><i class="fas fa-pen"></i></button>
                                 <a href="{% url 'overseas_po_delete' po.id %}" class="btn btn-sm btn-light text-danger border shadow-sm" onclick="return confirm('ลบรายการนี้ใช่หรือไม่?')"><i class="fas fa-trash"></i></a>
                             </div>
                         </td>
                     </tr>
-
+                    
                     <div id="items_data_{{ po.id }}" class="d-none">
                         [
                         {% for item in po.overseas_items.all %}
@@ -246,7 +246,7 @@
                         {% endfor %}
                         ]
                     </div>
-
+                    
                     {% empty %}
                     <tr><td colspan="15" class="py-5 text-muted">
                         <i class="fas fa-ship fa-3x mb-3 text-light"></i><br>
@@ -269,9 +269,9 @@
                     <h5 class="modal-title fw-bold" id="modalTitle"><i class="fas fa-edit me-2"></i> บันทึกใบสั่งซื้อนำเข้า (Overseas PO)</h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-
+                
                 <div class="modal-body p-4 bg-light">
-
+                    
                     <div class="card border-0 shadow-sm mb-4 rounded-4">
                         <div class="card-header bg-white py-3 border-bottom px-4">
                             <h6 class="mb-0 fw-bold text-primary fs-5"><i class="fas fa-info-circle me-2"></i>ข้อมูลเอกสาร (PO & PI Details)</h6>
@@ -300,7 +300,7 @@
                                     <option value="CANCELLED">ยกเลิก</option>
                                 </select>
                             </div>
-
+                            
                             <div class="col-md-3">
                                 <label class="form-label fw-bold text-dark">เลขที่เอกสารโรงงาน (PI)</label>
                                 <input type="text" name="pi_number" id="modal_pi" class="form-control form-control-lg fs-6" placeholder="(รอโรงงานส่งมาให้)">
@@ -331,7 +331,7 @@
                     <div class="card border-0 shadow-sm mb-4 rounded-4 border-start border-primary" style="border-left-width: 5px !important;">
                         <div class="card-header bg-white py-3 border-bottom px-4 d-flex justify-content-between align-items-center flex-wrap gap-2">
                             <h6 class="mb-0 fw-bold text-primary fs-5"><i class="fas fa-boxes me-2"></i>รายการสินค้า (Item List)</h6>
-
+                            
                             <div class="d-flex align-items-center">
                                 <button type="button" class="btn btn-sm btn-primary catalog-search-btn rounded-pill fw-bold px-4 me-2 shadow-sm text-nowrap" onclick="openCatalogSearch()">
                                     <i class="fas fa-search me-1"></i> 🔍 เลือกสินค้าจากคลัง (RM/FG)
@@ -380,7 +380,7 @@
                                         <span id="dep_lock_badge" class="badge bg-danger d-none"><i class="fas fa-lock"></i> ส่งเรื่องเบิกแล้ว</span>
                                     </div>
                                     <input type="text" name="deposit_date" id="modal_dep_date" class="form-control form-control-lg fs-6 mb-4 datepicker" placeholder="เลือกวันที่">
-
+                                    
                                     <label class="fw-bold text-dark mb-1">จำนวนเงินมัดจำ (ชำระจริง THB)</label>
                                     <input type="text" name="deposit_amount" id="modal_dep_amt" class="form-control form-control-lg text-end number-format fw-bold text-success fs-4" style="background-color: #f8fff9;" placeholder="0.00">
                                 </div>
@@ -395,7 +395,7 @@
                                         <span id="bal_lock_badge" class="badge bg-danger d-none"><i class="fas fa-lock"></i> ส่งเรื่องเบิกแล้ว</span>
                                     </div>
                                     <input type="text" name="balance_date" id="modal_bal_date" class="form-control form-control-lg fs-6 mb-4 datepicker" placeholder="เลือกวันที่">
-
+                                    
                                     <label class="fw-bold text-dark mb-1">จำนวนเงินส่วนที่เหลือ (ชำระจริง THB)</label>
                                     <input type="text" name="balance_amount" id="modal_bal_amt" class="form-control form-control-lg text-end number-format fw-bold text-info fs-4" style="background-color: #f4faff;" placeholder="0.00">
                                 </div>
@@ -462,7 +462,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4 bg-light">
-
+                
                 <div class="row g-3 mb-4">
                     <div class="col-md-4">
                         <label class="form-label fw-bold text-muted small">ประเภท (Type)</label>
@@ -510,7 +510,7 @@
 <script>
     let itemRowCount = 0;
     const catalogData = {{ products_json|safe }};
-
+    
     // 🌟 ฟังก์ชันจัดการ Popup ค้นหาสินค้า 🌟
     function openCatalogSearch() {
         // เตรียม Category Dropdown ให้พร้อม
@@ -528,7 +528,7 @@
         document.getElementById('filterType').value = 'ALL';
         document.getElementById('filterCategory').value = 'ALL';
         document.getElementById('filterText').value = '';
-
+        
         renderCatalogList();
         new bootstrap.Modal(document.getElementById('catalogSearchModal')).show();
     }
@@ -536,7 +536,7 @@
     function renderCatalogList() {
         let tbody = document.getElementById('catalogResultsBody');
         tbody.innerHTML = '';
-
+        
         let typeVal = document.getElementById('filterType').value;
         let catVal = document.getElementById('filterCategory').value;
         let textVal = document.getElementById('filterText').value.toLowerCase();
@@ -555,7 +555,7 @@
 
         filtered.slice(0, 50).forEach(p => { // โชว์ทีละ 50 รายการกันหน่วง
             let imgHtml = p.img_url ? `<img src="${p.img_url}" height="40" class="rounded border shadow-sm" style="object-fit: contain; width:40px;">` : `<div class="text-muted small border rounded p-1" style="width:40px; height:40px; display:flex; align-items:center; justify-content:center;">No Img</div>`;
-
+            
             let tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="text-center">${imgHtml}</td>
@@ -574,6 +574,23 @@
     }
 
     function selectCatalogItem(id, name, img_url) {
+        let tbody = document.getElementById('itemTableBody');
+        let rows = tbody.querySelectorAll('tr');
+
+        // 🌟 เวทมนตร์: หาแถวที่ว่างเปล่า (Manual) เพื่อทำการลบทิ้งก่อนเพิ่มของใหม่ 🌟
+        for (let i = 0; i < rows.length; i++) {
+            let descInput = rows[i].querySelector('input[name="item_desc[]"]');
+            let productIdInput = rows[i].querySelector('input[name="item_product_id[]"]');
+            
+            // ถ้าช่องรายละเอียดยังว่าง และ ยังไม่มีการผูกรหัสสินค้า (เป็นแถว Manual ว่างๆ)
+            if (descInput && descInput.value.trim() === '' && (!productIdInput || productIdInput.value === '')) {
+                rows[i].remove();
+                updatePoTotal(); // อัปเดตยอดเผื่อไว้
+                break; // ลบแค่แถวเดียวพอ เพื่อให้แถวว่างอื่นๆ (ถ้ามี) ยังอยู่
+            }
+        }
+
+        // เพิ่มรายการสินค้าจากคลังลงไป
         addItemRow('', name, 1, 0, img_url, true, id);
         bootstrap.Modal.getInstance(document.getElementById('catalogSearchModal')).hide();
     }
@@ -594,13 +611,12 @@
         }
     }
 
-    // 🌟 ฟังก์ชันเพิ่มแถวตาราง (เพิ่ม product_id เพื่อลิงก์สต็อก) 🌟
+    // 🌟 ฟังก์ชันเพิ่มแถวตาราง (นำป้าย typeBadge ออกตามคำขอ) 🌟
     function addItemRow(id='', desc='', qty=1, price=0, img_url='', auto_fetch=false, product_id='') {
         let tbody = document.getElementById('itemTableBody');
         let tr = document.createElement('tr');
-
+        
         let imgHtml = img_url ? `<div class="mt-2"><img src="${img_url}" height="45" class="rounded border shadow-sm"></div>` : '';
-        let typeBadge = product_id ? `<span class="badge bg-success mt-1" style="font-size:0.6rem;"><i class="fas fa-link"></i> ลิงก์คลังแล้ว</span>` : `<span class="badge bg-secondary mt-1" style="font-size:0.6rem;"><i class="fas fa-edit"></i> Manual (นอกคลัง)</span>`;
 
         tr.innerHTML = `
             <td>
@@ -611,7 +627,6 @@
             </td>
             <td>
                 <input type="text" name="item_desc[]" class="form-control form-control-sm fw-bold" value="${desc}" required placeholder="ระบุชื่อ/สเปกสินค้า">
-                ${typeBadge}
             </td>
             <td><input type="number" name="item_qty[]" class="form-control form-control-sm item-qty text-center" value="${qty}" min="0" step="0.01" oninput="calcItemRow(this)"></td>
             <td><input type="number" name="item_price[]" class="form-control form-control-sm item-price text-end" value="${price}" min="0" step="0.01" oninput="calcItemRow(this)"></td>
@@ -619,7 +634,7 @@
             <td><button type="button" class="btn btn-sm btn-outline-danger rounded-circle" onclick="this.closest('tr').remove(); updatePoTotal();"><i class="fas fa-times"></i></button></td>
         `;
         tbody.appendChild(tr);
-
+        
         // ถ้าดึงจากคลัง ให้เรียกเวทมนตร์ดูดรูป
         if (auto_fetch && img_url) {
             let fileInput = tr.querySelector('.file-magic-input');
@@ -649,15 +664,15 @@
 
     document.addEventListener("DOMContentLoaded", function() {
         flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
-
+        
         function updateAutoTotal() {
             let depVal = document.getElementById('modal_dep_amt').value.replace(/,/g, '');
             let balVal = document.getElementById('modal_bal_amt').value.replace(/,/g, '');
-
+            
             let dep = parseFloat(depVal) || 0;
             let bal = parseFloat(balVal) || 0;
             let total = dep + bal;
-
+            
             document.getElementById('modal_total').value = total.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         }
 
@@ -672,7 +687,7 @@
                 }
                 updateAutoTotal();
             });
-
+            
             input.addEventListener('blur', function(e) {
                 let val = this.value.replace(/,/g, '');
                 if(val && !isNaN(val)) {
@@ -686,10 +701,10 @@
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-plus-circle me-2"></i> สร้างใบสั่งซื้อนำเข้า (Overseas PO)';
         document.getElementById('overseasForm').reset();
         document.getElementById('modal_po_id').value = '';
-
+        
         document.getElementById('modal_po_date')._flatpickr.clear();
         document.getElementById('modal_eta_date')._flatpickr.clear();
-
+        
         let depDate = document.getElementById('modal_dep_date');
         let depAmt = document.getElementById('modal_dep_amt');
         depDate._flatpickr.clear();
@@ -698,7 +713,7 @@
         depAmt.readOnly = false;
         depAmt.classList.remove('input-locked');
         document.getElementById('dep_lock_badge').classList.add('d-none');
-
+        
         let balDate = document.getElementById('modal_bal_date');
         let balAmt = document.getElementById('modal_bal_amt');
         balDate._flatpickr.clear();
@@ -707,13 +722,15 @@
         balAmt.readOnly = false;
         balAmt.classList.remove('input-locked');
         document.getElementById('bal_lock_badge').classList.add('d-none');
-
+        
         document.getElementById('modal_total').value = '0.00';
-
+        
         document.getElementById('itemTableBody').innerHTML = '';
         itemRowCount = 0;
+        
+        // ใส่มาให้ 1 บรรทัดว่างเสมอตอนเปิดหน้าต่างใหม่
         addItemRow();
-
+        
         var poModal = new bootstrap.Modal(document.getElementById('poModal'));
         poModal.show();
     }
@@ -721,7 +738,7 @@
     function editModal(id, sup_id, po_num, pi_num, ship_to, total, d_date, d_amt, b_date, b_amt, status, po_date, eta_date, lock_dep, lock_bal) {
         document.getElementById('modalTitle').innerHTML = '<i class="fas fa-edit me-2"></i> แก้ไขใบสั่งซื้อนำเข้า';
         document.getElementById('overseasForm').reset();
-
+        
         document.getElementById('modal_po_id').value = id;
         document.getElementById('modal_supplier_id').value = sup_id;
         document.getElementById('modal_po_number').value = po_num;
@@ -729,15 +746,15 @@
         document.getElementById('modal_ship_to').value = ship_to;
         document.getElementById('modal_status').value = status;
         document.getElementById('modal_total').value = parseFloat(total || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
+        
         document.getElementById('modal_po_date')._flatpickr.setDate(po_date !== 'None' ? po_date : '');
         document.getElementById('modal_eta_date')._flatpickr.setDate(eta_date !== 'None' ? eta_date : '');
-
+        
         let depDate = document.getElementById('modal_dep_date');
         let depAmt = document.getElementById('modal_dep_amt');
         depDate._flatpickr.setDate(d_date !== 'None' ? d_date : '');
         depAmt.value = parseFloat(d_amt || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
+        
         if (lock_dep === 'true') {
             depDate._flatpickr.set('clickOpens', false);
             if(depDate._flatpickr.altInput) depDate._flatpickr.altInput.classList.add('input-locked');
@@ -751,12 +768,12 @@
             depAmt.classList.remove('input-locked');
             document.getElementById('dep_lock_badge').classList.add('d-none');
         }
-
+        
         let balDate = document.getElementById('modal_bal_date');
         let balAmt = document.getElementById('modal_bal_amt');
         balDate._flatpickr.setDate(b_date !== 'None' ? b_date : '');
         balAmt.value = parseFloat(b_amt || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-
+        
         if (lock_bal === 'true') {
             balDate._flatpickr.set('clickOpens', false);
             if(balDate._flatpickr.altInput) balDate._flatpickr.altInput.classList.add('input-locked');
@@ -778,12 +795,11 @@
         try { items = JSON.parse(items_data_str); } catch (e) {}
 
         if(items.length > 0) {
-            // ส่งค่า product_id ไปด้วยเวลาแก้บิล จะได้รู้ว่าเคยผูกคลังไว้ไหม
             items.forEach(it => addItemRow(it.id, it.desc, it.qty, it.price, it.img_url, false, it.product_id));
         } else {
             addItemRow();
         }
-
+        
         var poModal = new bootstrap.Modal(document.getElementById('poModal'));
         poModal.show();
     }

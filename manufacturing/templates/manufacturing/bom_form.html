@@ -2,6 +2,10 @@
 {% load static %}
 
 {% block content %}
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
 <div class="container py-4">
     <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
@@ -57,7 +61,9 @@
                         <tr class="item-row">
                             <td class="ps-4">
                                 {{ item_form.id }}
-                                {{ item_form.raw_material }}
+                                <div class="target-select2-container w-100">
+                                    {{ item_form.raw_material }}
+                                </div>
                             </td>
                             <td>{{ item_form.quantity }}</td>
                             <td class="pe-4 text-center align-middle">
@@ -93,7 +99,9 @@
         <tr class="item-row">
             <td class="ps-4">
                 {{ formset.empty_form.id }}
-                {{ formset.empty_form.raw_material }}
+                <div class="target-select2-container w-100">
+                    {{ formset.empty_form.raw_material }}
+                </div>
             </td>
             <td>{{ formset.empty_form.quantity }}</td>
             <td class="pe-4 text-center align-middle">
@@ -108,18 +116,26 @@
     </tbody>
 </table>
 
+<style>
+    .target-select2-container .select2-container { width: 100% !important; text-align: left; }
+    .select2-selection__rendered { line-height: 36px !important; }
+    .select2-container .select2-selection--single { height: 38px !important; border: 1px solid #ced4da; border-radius: 0.375rem; }
+    .select2-selection__arrow { height: 36px !important; }
+</style>
+
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
+    // 🌟 เปลี่ยนมาใช้ $(document).ready ของ jQuery เพื่อให้ชัวร์ว่าโหลดสำเร็จ 🌟
+    $(document).ready(function() {
         
-        // 🌟 [NEW] ฟังก์ชันสำหรับเปิดระบบค้นหาอัจฉริยะ (AJAX Select2)
         function initSelect2Ajax(element) {
             $(element).select2({
                 width: '100%',
                 placeholder: 'พิมพ์รหัสหรือชื่อวัตถุดิบเพื่อค้นหา...',
+                allowClear: true,
                 ajax: {
                     url: "{% url 'ajax_search_raw_material' %}",
                     dataType: 'json',
-                    delay: 250, // หน่วงเวลาพิมพ์นิดนึงเพื่อไม่ให้เซิร์ฟเวอร์โหลดหนัก
+                    delay: 250, 
                     data: function (params) {
                         return { q: params.term || '' };
                     },
@@ -128,16 +144,14 @@
                     },
                     cache: true
                 },
-                minimumInputLength: 0
+                minimumInputLength: 0 // พิมพ์ 0 ตัวก็ให้โหลดข้อมูลมาแสดงเลย
             });
         }
 
-        // เปิดใช้งานกับกล่องที่มีอยู่แล้วในหน้าจอ
-        if (typeof jQuery !== 'undefined' && typeof jQuery.fn.select2 !== 'undefined') {
-            $('#items-table .select2-ajax').each(function() {
-                initSelect2Ajax(this);
-            });
-        }
+        // เปิดใช้งานให้กับ Dropdown ที่มีอยู่แล้วตอนโหลดหน้าเว็บ
+        $('#formset-container .target-select2-container select').each(function() {
+            initSelect2Ajax(this);
+        });
 
         const addButton = document.getElementById('add-item-btn');
         const container = document.getElementById('formset-container');
@@ -152,24 +166,22 @@
             container.insertAdjacentHTML('beforeend', newRowHtml);
             let newRow = container.lastElementChild;
             
-            // ลบขยะของ Select2 เดิมออก
+            // ลบขยะของ Select2 เดิมออก (ถ้ามีติดมา)
             const select2Containers = newRow.querySelectorAll('.select2-container');
             select2Containers.forEach(el => el.remove());
             
-            const selectElement = newRow.querySelector('.select2-ajax');
+            // เปลี่ยนเป้าหมายไปหา select ภายในบรรทัดใหม่
+            const selectElement = newRow.querySelector('.target-select2-container select');
             if (selectElement) {
                 selectElement.classList.remove('select2-hidden-accessible');
                 selectElement.removeAttribute('data-select2-id');
                 selectElement.removeAttribute('tabindex');
                 selectElement.removeAttribute('aria-hidden');
                 
-                // คืนค่ากล่องให้ว่างเปล่า
-                selectElement.innerHTML = '<option value="" selected>---------</option>';
+                selectElement.innerHTML = '<option value="" selected="selected"></option>';
                 
                 // เปิดใช้งานกล่องค้นหาอัจฉริยะบนบรรทัดใหม่
-                if (typeof jQuery !== 'undefined' && typeof jQuery.fn.select2 !== 'undefined') {
-                    initSelect2Ajax(selectElement);
-                }
+                initSelect2Ajax(selectElement);
             }
 
             totalFormsInput.value = formIdx + 1;
@@ -188,7 +200,7 @@
             }
         });
 
-        // --- ระบบ Cascading Dropdown ---
+        // --- ระบบ Cascading Dropdown (หมวดหมู่ -> สินค้า FG) ---
         const categorySelect = document.getElementById('id_category');
         const productSelect = document.getElementById('id_product');
 

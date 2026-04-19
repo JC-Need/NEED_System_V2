@@ -97,6 +97,9 @@ class Employee(models.Model):
     ROLE_CHOICES = [('LEADER', 'หัวหน้ากลุ่ม'), ('LEVEL1', 'พนักงานระดับ 1'), ('LEVEL2', 'พนักงานระดับ 2'), ('MEMBER', 'สมาชิก/อิสระ')]
     group_role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='MEMBER', verbose_name="บทบาทในทีม")
 
+    # 🌟 [NEW] ฟิลด์เชื่อมโยงกับทีมช่างผลิต 🌟
+    production_team = models.ForeignKey('manufacturing.ProductionTeam', on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สังกัดทีมช่างผลิต")
+
     # (ของเดิม) Network & Rank
     introducer = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='downlines', verbose_name='ผู้แนะนำ (Upline)')
     RANK_CHOICES = [('member', 'Member'), ('supervisor', 'Supervisor'), ('manager', 'Manager'), ('director', 'Director')]

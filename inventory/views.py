@@ -8,6 +8,7 @@ from django.utils.dateparse import parse_date
 from django.http import JsonResponse
 from django.urls import reverse
 import json
+from decimal import Decimal, InvalidOperation # 🌟 นำเข้า Decimal มาใช้คำนวณ
 
 from .models import Product, StockMovement, InventoryDoc, ProductSupplier, SupplierPriceHistory
 from .forms import StockInForm, StockOutForm, ProductForm, ProductSupplierFormSet
@@ -23,8 +24,6 @@ def inventory_dashboard(request):
     low_stock_count = all_products.filter(stock_qty__lte=models.F('min_level')).count()
 
     pending_po_count = PurchaseOrder.objects.filter(status='APPROVED', receipt_status__in=['PENDING', 'PARTIAL']).count()
-    
-    # 🌟 [NEW] นับบิล PQ ที่พร้อมรับเข้าคลัง 🌟
     pending_pq_count = OverseasPO.objects.filter(status__in=['FULLY_PAID', 'DEPOSITED']).count()
 
     fg_products = fg_qs.order_by('code')[:5]
@@ -36,7 +35,7 @@ def inventory_dashboard(request):
         'fg_count': fg_qs.count(), 'rm_count': rm_qs.count(),       
         'low_stock_count': low_stock_count, 'recent_docs': recent_docs,
         'pending_po_count': pending_po_count,
-        'pending_pq_count': pending_pq_count # ส่งไปโชว์ตัวแดงๆ
+        'pending_pq_count': pending_pq_count 
     })
 
 @login_required
@@ -117,7 +116,6 @@ def stock_out(request):
 def product_create(request):
     p_type = request.GET.get('type')
     
-    # 🌟 [UPDATE] ระบบดักจับการบังคับสร้างรหัสสินค้าจากใบ PQ (Auto Fill ข้อมูลจากบิล)
     from_pq = request.GET.get('from_pq')
     pq_item_id = request.GET.get('pq_item')
     auto_name = ""
@@ -148,7 +146,6 @@ def product_create(request):
                 )
             messages.success(request, f"✅ สร้าง '{product.name}' เรียบร้อย")
             
-            # 🌟 [UPDATE] ถ้ามาจากใบ PQ ให้ผูกรหัสให้เลย แล้วเด้งกลับไปหน้ารับของ PQ
             if from_pq and pq_item_id:
                 pq_item = OverseasPOItem.objects.filter(id=pq_item_id).first()
                 if pq_item:
@@ -159,7 +156,6 @@ def product_create(request):
 
             return redirect(f"{reverse('product_list')}?type={p_type}")
     else:
-        # ยัดค่าเริ่มต้นถ้ามาจากใบ PQ
         form = ProductForm(initial={'product_type': p_type, 'name': auto_name, 'cost_price': auto_price})
         form.fields['product_type'].widget = forms.HiddenInput()
         formset = ProductSupplierFormSet()
@@ -289,29 +285,41 @@ def po_receive_process(request, po_id):
         for item in po.items.all():
             input_name = f"qty_{item.id}"
             receive_val = request.POST.get(input_name, '0')
-            try: receive_qty = float(receive_val.replace(',', ''))
-            except ValueError: receive_qty = 0
+            try: 
+                receive_qty = Decimal(receive_val.replace(',', ''))
+            except (ValueError, InvalidOperation): 
+                receive_qty = Decimal('0')
+                
             if receive_qty > 0:
-                remaining = float(item.quantity) - float(item.received_qty)
+                remaining = Decimal(str(item.quantity)) - Decimal(str(item.received_qty))
                 if receive_qty > remaining:
                     messages.error(request, f"❌ รับของเกิน! {item.product.name} สั่ง {item.quantity} (รับได้อีกไม่เกิน {remaining})")
                     has_error = True
                     break
                 items_to_receive.append({'item_obj': item, 'receive_qty': receive_qty})
+                
         if not has_error and items_to_receive:
             doc = InventoryDoc.objects.create(doc_type='GR', po_reference=po, reference=reference_doc, description=note, created_by=request.user)
             for data in items_to_receive:
                 item = data['item_obj']
                 qty = data['receive_qty']
                 StockMovement.objects.create(doc=doc, product=item.product, quantity=qty, movement_type='IN', created_by=request.user)
-                item.received_qty = float(item.received_qty) + float(qty)
+                
+                # 🌟 [FIX] บวกยอดสต็อกเข้าชั้นวางจริงๆ 🌟
+                item.product.stock_qty = (item.product.stock_qty or Decimal('0')) + qty
+                item.product.save()
+                
+                # อัปเดตยอดรับแล้วในบิล PO
+                item.received_qty = Decimal(str(item.received_qty)) + qty
                 item.save()
+                
             po.refresh_from_db()
             all_completed = True
             any_received = False
             for item in po.items.all():
-                if float(item.received_qty) > 0: any_received = True
-                if float(item.received_qty) < float(item.quantity): all_completed = False
+                if Decimal(str(item.received_qty)) > 0: any_received = True
+                if Decimal(str(item.received_qty)) < Decimal(str(item.quantity)): all_completed = False
+                
             if all_completed: po.receipt_status = 'COMPLETED'
             elif any_received: po.receipt_status = 'PARTIAL'
             po.save()
@@ -323,11 +331,10 @@ def po_receive_process(request, po_id):
 
 
 # ==========================================
-# 🌟 [NEW] ระบบรับสินค้าจาก PQ ต่างประเทศ (GR) 🌟
+# 🌟 ระบบรับสินค้าจาก PQ ต่างประเทศ (GR) 🌟
 # ==========================================
 @login_required
 def pq_receive_list(request):
-    # ดึง PQ ที่จ่ายเงินครบ หรือจ่ายมัดจำแล้วมาโชว์ให้รับของ
     pending_pqs = OverseasPO.objects.filter(status__in=['FULLY_PAID', 'DEPOSITED']).order_by('eta_date', '-id')
     return render(request, 'inventory/pq_receive_list.html', {'pos': pending_pqs})
 
@@ -336,32 +343,29 @@ def pq_receive_list(request):
 def pq_receive_process(request, pq_id):
     pq = get_object_or_404(OverseasPO, id=pq_id, status__in=['FULLY_PAID', 'DEPOSITED'])
     
-    # 🌟 ดักจับรายการที่ยังไม่มีรหัสสินค้า (Manual Items)
     unlinked_items = []
     for item in pq.overseas_items.all():
-        if not item.product:  # ถ้ายังไม่ได้ผูกตาราง Product
+        if not item.product: 
             unlinked_items.append(item)
             
-    # ถ้ามีของไม่มีรหัส ให้แสดงหน้าต่างบังคับสร้างรหัสก่อน
     if unlinked_items:
         messages.warning(request, f"🚨 บิล PQ นี้มีรายการ 'พิมพ์เพิ่มเอง' ที่ยังไม่ได้สร้างรหัสในระบบคลัง! กรุณาสร้างรหัสก่อนรับสินค้าเข้าคลังค่ะ")
         return render(request, 'inventory/pq_force_create_product.html', {'pq': pq, 'unlinked_items': unlinked_items})
 
-    # ถ้ารหัสครบหมดแล้ว ก็ทำกระบวนการรับเข้าปกติ (จำลองใบ GR)
     if request.method == 'POST':
-        reference_doc = request.POST.get('reference_doc', pq.pi_number) # ใช้ PI เป็นใบอ้างอิงปริยาย
+        reference_doc = request.POST.get('reference_doc', pq.pi_number) 
         note = request.POST.get('note', f'รับสินค้าจากใบสั่งซื้อต่างประเทศ {pq.po_number}')
         
-        # ถือว่ารับเข้าคลังครบ 100% ตามใบ PQ ทันทีเพื่อความรวดเร็ว
         doc = InventoryDoc.objects.create(doc_type='GR', reference=reference_doc, description=note, created_by=request.user)
         for item in pq.overseas_items.all():
             if item.product and item.quantity > 0:
-                StockMovement.objects.create(doc=doc, product=item.product, quantity=item.quantity, movement_type='IN', created_by=request.user)
-                # เพิ่มสต็อกจริงๆ
-                item.product.stock_qty += item.quantity
-                item.product.save()
+                qty_decimal = Decimal(str(item.quantity))
+                StockMovement.objects.create(doc=doc, product=item.product, quantity=qty_decimal, movement_type='IN', created_by=request.user)
                 
-        # ปิดบิล PQ
+                # 🌟 [FIX] บวกยอดสต็อกเข้าชั้นวางจริงๆ 🌟
+                item.product.stock_qty = (item.product.stock_qty or Decimal('0')) + qty_decimal
+                item.product.save()
+                 
         pq.status = 'COMPLETED'
         pq.save()
         messages.success(request, f"✅ รับสินค้าจาก PQ: {pq.po_number} เข้าคลังสำเร็จ! (เลขที่ใบรับ: {doc.doc_no})")

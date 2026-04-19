@@ -2,17 +2,18 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
-# 🌟 [UPDATE] เพิ่ม Sum, F, FloatField เข้ามาเพื่อคำนวณต้นทุน
 from django.db.models import Max, Count, Q, Sum, F, FloatField
 from django.db import transaction
 from django.http import JsonResponse
 from django.core.paginator import Paginator
+from decimal import Decimal, InvalidOperation
 import datetime
 import calendar
 import json
 import pandas as pd
 
-from .models import ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter
+# 🌟 [FIXED] เพิ่ม QCInspectionLog เข้ามาในการนำเข้า
+from .models import ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch, MfgBranch, Salesperson, ProductionStatus, ProductionTeam, DeliveryStatus, Transporter, QCInspectionLog
 from master_data.models import CompanyInfo
 from inventory.models import Product, InventoryDoc, StockMovement
 from purchasing.models import PurchaseOrder, PurchaseOrderItem, PurchasePreparation
@@ -29,10 +30,11 @@ def production_list(request):
     search_salesperson = request.GET.get('salesperson', '')
     search_team = request.GET.get('team', '')
     search_status = request.GET.get('status', '')
+    search_branch = request.GET.get('branch', '')
 
     orders = ProductionOrder.objects.select_related(
         'product', 'quotation_ref', 'salesperson',
-        'production_team', 'delivery_status', 'transporter'
+        'production_team', 'delivery_status', 'transporter', 'branch'
     ).prefetch_related('completed_departments').all().order_by('-id')
 
     if start_date:
@@ -41,11 +43,11 @@ def production_list(request):
         orders = orders.filter(start_date__lte=end_date)
     if search_status:
         orders = orders.filter(status=search_status)
+    if search_branch:
+        orders = orders.filter(branch_id=search_branch)
     if search_q:
         orders = orders.filter(
-            Q(code__icontains=search_q) |
-            Q(customer_name__icontains=search_q) |
-            Q(quotation_ref__code__icontains=search_q)
+            Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(quotation_ref__code__icontains=search_q)
         )
     if search_salesperson:
         orders = orders.filter(salesperson_id=search_salesperson)
@@ -68,6 +70,7 @@ def production_list(request):
     if 'closed_page' in url_params: del url_params['closed_page']
     filter_string = url_params.urlencode()
 
+    branches = MfgBranch.objects.all().order_by('name')
     prod_statuses = ProductionStatus.objects.all().order_by('sequence', 'id')
     prod_teams = ProductionTeam.objects.all().order_by('name')
     deliv_statuses = DeliveryStatus.objects.all().order_by('name')
@@ -77,6 +80,8 @@ def production_list(request):
     system_status_choices = ProductionOrder.STATUS_CHOICES
 
     can_add_master_data = False
+    is_sales = False # 🌟 ตัวแปรสำหรับเช็กสิทธิ์ว่าเป็นเซลส์หรือไม่
+
     if request.user.is_superuser:
         can_add_master_data = True
     else:
@@ -96,7 +101,11 @@ def production_list(request):
             if rank in ['manager', 'director'] or 'manager' in job_title:
                 is_manager = True
             if 'วางแผน' in dept_name or 'ผลิต' in dept_name:
-                is_planner = True
+                 is_planner = True
+
+            # 🌟 ดักจับว่าอยู่แผนกขายหรือไม่
+            if 'ขาย' in dept_name or 'sales' in dept_name.lower():
+                 is_sales = True
 
         if is_manager and is_planner:
             can_add_master_data = True
@@ -104,6 +113,7 @@ def production_list(request):
     return render(request, 'manufacturing/production_list.html', {
         'active_orders': active_orders,
         'closed_orders': closed_orders,
+        'branches': branches,
         'prod_statuses': prod_statuses,
         'prod_teams': prod_teams,
         'deliv_statuses': deliv_statuses,
@@ -112,19 +122,64 @@ def production_list(request):
         'start_date': start_date,
         'end_date': end_date,
         'search_q': search_q,
+        'search_branch': search_branch,
         'search_salesperson': search_salesperson,
         'search_team': search_team,
         'search_status': search_status,
         'system_status_choices': system_status_choices,
         'filter_string': filter_string,
         'can_add_master_data': can_add_master_data,
+        'is_sales': is_sales,
         'total_departments_count': total_departments_count,
     })
 
 @login_required
 def planner_board(request):
-    orders = ProductionOrder.objects.filter(status='PLANNED', is_closed=False).order_by('deadline_date', '-id')
-    return render(request, 'manufacturing/planner_board.html', {'orders': orders})
+    today = timezone.now().date()
+    default_start = today - datetime.timedelta(days=30)
+
+    start_date = request.GET.get('start_date', default_start.strftime('%Y-%m-%d'))
+    end_date = request.GET.get('end_date', today.strftime('%Y-%m-%d'))
+    search_q = request.GET.get('q', '')
+    search_branch = request.GET.get('branch', '')
+    search_team = request.GET.get('team', '')
+    search_salesperson = request.GET.get('salesperson', '')
+
+    orders = ProductionOrder.objects.select_related(
+        'product', 'branch', 'production_team', 'salesperson', 'salesperson__branch', 'quotation_ref'
+    ).all().order_by('-id')
+
+    if start_date: orders = orders.filter(start_date__gte=start_date)
+    if end_date: orders = orders.filter(start_date__lte=end_date)
+    if search_q:
+        orders = orders.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(product__name__icontains=search_q))
+    if search_branch: orders = orders.filter(branch_id=search_branch)
+    if search_team: orders = orders.filter(production_team_id=search_team)
+    if search_salesperson: orders = orders.filter(salesperson_id=search_salesperson)
+
+    branches = MfgBranch.objects.all().order_by('name')
+    teams = ProductionTeam.objects.all().order_by('name')
+    salespersons = Salesperson.objects.select_related('branch').all().order_by('name')
+
+    prod_statuses = ProductionStatus.objects.all().order_by('sequence', 'id')
+    deliv_statuses = DeliveryStatus.objects.all().order_by('name')
+    transporters = Transporter.objects.all().order_by('name')
+
+    return render(request, 'manufacturing/planner_board.html', {
+        'orders': orders,
+        'branches': branches,
+        'teams': teams,
+        'salespersons': salespersons,
+        'prod_statuses': prod_statuses,
+        'deliv_statuses': deliv_statuses,
+        'transporters': transporters,
+        'start_date': start_date,
+        'end_date': end_date,
+        'search_q': search_q,
+        'search_branch': search_branch,
+        'search_team': search_team,
+        'search_salesperson': search_salesperson,
+    })
 
 @login_required
 def inventory_board(request):
@@ -135,15 +190,15 @@ def inventory_board(request):
         shortage = []
         for item in order.materials.all():
             mat_id = item.raw_material.id
-            required_qty = float(item.quantity)
+            required_qty = Decimal(str(item.quantity))
 
             if mat_id not in virtual_stock:
-                virtual_stock[mat_id] = max(0, float(item.raw_material.stock_qty))
+                virtual_stock[mat_id] = max(Decimal('0'), item.raw_material.stock_qty or Decimal('0'))
 
             if virtual_stock[mat_id] < required_qty:
                 missing = required_qty - virtual_stock[mat_id]
                 shortage.append(f"{item.raw_material.name} (ขาดอีก {missing:.2f})")
-                virtual_stock[mat_id] = 0
+                virtual_stock[mat_id] = Decimal('0')
             else:
                 virtual_stock[mat_id] -= required_qty
 
@@ -173,7 +228,7 @@ def production_create(request):
             order = ProductionOrder(
                 product=product,
                 quantity=1,
-                status='PLANNED',
+                status='NEW_JOB',
                 note=note,
                 customer_name=customer_name,
                 responsible_person=getattr(request.user, 'employee', None)
@@ -181,12 +236,11 @@ def production_create(request):
 
             if start_date: order.start_date = start_date
             if delivery_date: order.delivery_date = delivery_date
-            if branch_id: order.branch_id = branch_id
             if salesperson_id: order.salesperson_id = salesperson_id
 
             order.save()
-            messages.success(request, f"✅ สร้างใบสั่งผลิต {order.code} สำเร็จ! (สถานะ: รอตรวจสอบแบบแปลน)")
-            return redirect('production_list')
+            messages.success(request, f"✅ สร้างใบสั่งผลิต {order.code} สำเร็จ! งานถูกส่งไปยังคอลัมน์รอจ่ายงาน (W1)")
+            return redirect('planner_board')
         else:
             messages.error(request, "❌ กรุณาเลือกแบบบ้านที่ต้องการผลิต")
 
@@ -225,7 +279,7 @@ def ppo_prepare(request):
                 bom = BOM.objects.filter(product=job.product).first()
                 if bom:
                     for item in bom.items.all():
-                        total_needed = float(item.quantity)
+                        total_needed = Decimal(str(item.quantity))
                         supplier = item.raw_material.supplier
                         sup_id = supplier.id if supplier else "none"
                         sup_name = supplier.name if supplier else "ไม่ได้ระบุร้านค้า"
@@ -233,10 +287,25 @@ def ppo_prepare(request):
                         if sup_id not in materials_by_supplier: materials_by_supplier[sup_id] = {'name': sup_name, 'items': {}}
 
                         if mat_id not in materials_by_supplier[sup_id]['items']:
-                            materials_by_supplier[sup_id]['items'][mat_id] = {'product_id': item.raw_material.id, 'product_name': item.raw_material.name, 'product_code': item.raw_material.code, 'qty': 0, 'cost': float(item.raw_material.cost_price), 'total': 0}
+                            materials_by_supplier[sup_id]['items'][mat_id] = {
+                                'product_id': item.raw_material.id,
+                                'product_name': item.raw_material.name,
+                                'product_code': item.raw_material.code,
+                                'qty': Decimal('0'),
+                                'cost': item.raw_material.cost_price or Decimal('0'),
+                                'total': Decimal('0')
+                            }
                         materials_by_supplier[sup_id]['items'][mat_id]['qty'] += total_needed
                         materials_by_supplier[sup_id]['items'][mat_id]['total'] = materials_by_supplier[sup_id]['items'][mat_id]['qty'] * materials_by_supplier[sup_id]['items'][mat_id]['cost']
-            for sup_id in materials_by_supplier: materials_by_supplier[sup_id]['items'] = list(materials_by_supplier[sup_id]['items'].values())
+
+            for sup_id in materials_by_supplier:
+                items_list = []
+                for v in materials_by_supplier[sup_id]['items'].values():
+                    v['qty'] = float(v['qty'])
+                    v['cost'] = float(v['cost'])
+                    v['total'] = float(v['total'])
+                    items_list.append(v)
+                materials_by_supplier[sup_id]['items'] = items_list
 
             jobs.update(is_materials_ordered=True, status='WAITING_INVENTORY')
         else:
@@ -254,8 +323,8 @@ def materials_ready(request, pk):
 
     shortage = []
     for item in job_materials:
-        required_qty = float(item.quantity)
-        actual_stock = max(0, float(item.raw_material.stock_qty))
+        required_qty = Decimal(str(item.quantity))
+        actual_stock = max(Decimal('0'), item.raw_material.stock_qty or Decimal('0'))
         if actual_stock < required_qty:
             shortage.append(f"{item.raw_material.name} (ขาด {required_qty - actual_stock:.2f})")
 
@@ -266,8 +335,8 @@ def materials_ready(request, pk):
 
     doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบเตรียมผลิต {order.product.name}", created_by=request.user)
     for item in job_materials:
-        StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=float(item.quantity), movement_type='OUT', created_by=request.user)
-        item.raw_material.stock_qty = float(item.raw_material.stock_qty) - float(item.quantity)
+        StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=Decimal(str(item.quantity)), movement_type='OUT', created_by=request.user)
+        item.raw_material.stock_qty = (item.raw_material.stock_qty or Decimal('0')) - Decimal(str(item.quantity))
         item.raw_material.save()
 
     order.status = 'IN_PROGRESS'
@@ -289,8 +358,7 @@ def production_process(request, pk):
 
     alloc_code = f"{order.product.code}-{order.code}"
     alloc_name = f"{order.product.name} [{order.code}]"
-    if order.customer_name:
-        alloc_name += f" (ลค. {order.customer_name})"
+    if order.customer_name: alloc_name += f" (ลค. {order.customer_name})"
 
     allocated_product, created = Product.objects.get_or_create(
         code=alloc_code,
@@ -307,9 +375,9 @@ def production_process(request, pk):
     )
 
     doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code}", created_by=request.user)
-    StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=order.quantity, movement_type='IN', created_by=request.user)
+    StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
 
-    allocated_product.stock_qty += order.quantity
+    allocated_product.stock_qty = (allocated_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
     allocated_product.save()
 
     order.status = 'COMPLETED'
@@ -377,7 +445,10 @@ def add_additional_material(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
     if request.method == 'POST':
         product_id = request.POST.get('raw_material')
-        qty = float(request.POST.get('quantity', 0))
+        try:
+            qty = Decimal(request.POST.get('quantity', '0'))
+        except:
+            qty = Decimal('0')
 
         if product_id and qty > 0:
             rm = get_object_or_404(Product, pk=product_id)
@@ -420,12 +491,8 @@ def production_print(request, po_id):
     company = CompanyInfo.objects.first()
     return render(request, 'manufacturing/production_print.html', {'po': po, 'bom': bom, 'company': company})
 
-# ==========================================
-# 🌟 ระบบสูตรผลิต (BOM) 🌟
-# ==========================================
 @login_required
 def bom_list(request):
-    # 🌟 [UPDATE] สั่งให้ฐานข้อมูลคำนวณ 'ต้นทุนวัตถุดิบรวม' มาให้เสร็จสรรพเลยค่ะ 
     boms = BOM.objects.select_related('product').annotate(
         item_count=Count('items', distinct=True),
         total_rm_cost=Sum(
@@ -441,11 +508,11 @@ def bom_create(request):
         form = BOMForm(request.POST)
         formset = BOMItemFormSet(request.POST)
         if form.is_valid() and formset.is_valid():
-            bom = form.save()
-            formset.instance = bom
-            formset.save()
-            messages.success(request, f"✅ สร้างสูตรผลิตสำหรับ {bom.product.name} เรียบร้อยแล้ว!")
-            return redirect('bom_detail', pk=bom.pk)
+             bom = form.save()
+             formset.instance = bom
+             formset.save()
+             messages.success(request, f"✅ สร้างสูตรผลิตสำหรับ {bom.product.name} เรียบร้อยแล้ว!")
+             return redirect('bom_detail', pk=bom.pk)
     else:
         form = BOMForm()
         formset = BOMItemFormSet()
@@ -456,9 +523,9 @@ def bom_detail(request, pk):
     bom = get_object_or_404(BOM, pk=pk)
     items = bom.items.select_related('raw_material', 'raw_material__supplier').all()
 
-    total_cost = 0
+    total_cost = Decimal('0')
     for item in items:
-        item.calculated_total_cost = float(item.quantity) * float(item.raw_material.cost_price)
+        item.calculated_total_cost = Decimal(str(item.quantity)) * (item.raw_material.cost_price or Decimal('0'))
         total_cost += item.calculated_total_cost
 
     return render(request, 'manufacturing/bom_detail.html', {'bom': bom, 'items': items, 'total_cost': total_cost})
@@ -486,9 +553,9 @@ def print_master_bom(request, pk):
     bom = get_object_or_404(BOM, pk=pk)
     items = bom.items.select_related('raw_material', 'raw_material__supplier').all()
 
-    total_cost = 0
+    total_cost = Decimal('0')
     for item in items:
-        item.calculated_total_cost = float(item.quantity) * float(item.raw_material.cost_price)
+        item.calculated_total_cost = Decimal(str(item.quantity)) * (item.raw_material.cost_price or Decimal('0'))
         total_cost += item.calculated_total_cost
 
     company = CompanyInfo.objects.first()
@@ -503,25 +570,80 @@ def print_master_bom(request, pk):
 def update_production_board(request, pk):
     if request.method == 'POST':
         order = get_object_or_404(ProductionOrder, pk=pk)
+        action = request.POST.get('action')
 
-        selected_depts = request.POST.getlist('completed_departments')
-        order.completed_departments.set(selected_depts)
+        if 'completed_departments' in request.POST:
+            selected_depts = request.POST.getlist('completed_departments')
+            order.completed_departments.set(selected_depts)
+        elif action in ['update_progress', 'qc_complete_and_receive']:
+            order.completed_departments.clear()
 
-        order.production_team_id = request.POST.get('production_team') or None
-        order.delivery_status_id = request.POST.get('delivery_status') or None
-        order.transporter_id = request.POST.get('transporter') or None
+        if 'production_team' in request.POST:
+            order.production_team_id = request.POST.get('production_team') or None
+        if 'delivery_status' in request.POST:
+            order.delivery_status_id = request.POST.get('delivery_status') or None
+        if 'transporter' in request.POST:
+            order.transporter_id = request.POST.get('transporter') or None
+        if 'branch' in request.POST:
+            order.branch_id = request.POST.get('branch') or None
+
+        if action == 'dispatch' and order.status == 'NEW_JOB':
+            order.status = 'PLANNED'
+            messages.success(request, f"✅ จ่ายงาน {order.code} ไปยัง {order.branch.name if order.branch else 'ไม่ระบุโรงงาน'} เรียบร้อยแล้ว! (สถานะ: ตรวจแบบแปลน)")
+
+        elif action in ['update_progress', 'qc_complete_and_receive']:
+            # 🌟 รับค่าติ๊ก Checklist QC 6 ข้อ
+            order.qc_paint = request.POST.get('qc_paint') == 'on'
+            order.qc_internal = request.POST.get('qc_internal') == 'on'
+            order.qc_external = request.POST.get('qc_external') == 'on'
+            order.qc_electrical = request.POST.get('qc_electrical') == 'on'
+            order.qc_plumbing = request.POST.get('qc_plumbing') == 'on'
+            order.qc_aircon = request.POST.get('qc_aircon') == 'on'
+
+            # 🌟 ย้ายลอจิกการรับเข้าคลังมาไว้ที่ปุ่มนี้
+            if action == 'qc_complete_and_receive':
+                if order.status != 'COMPLETED':
+                    alloc_code = f"{order.product.code}-{order.code}"
+                    alloc_name = f"{order.product.name} [{order.code}]"
+                    if order.customer_name: alloc_name += f" (ลค. {order.customer_name})"
+
+                    allocated_product, created = Product.objects.get_or_create(
+                        code=alloc_code,
+                        defaults={
+                            'name': alloc_name[:255],
+                            'category': order.product.category,
+                            'product_type': 'FG',
+                            'sell_price': order.product.sell_price,
+                            'cost_price': order.product.cost_price,
+                            'min_level': 0,
+                            'stock_qty': 0,
+                            'is_active': True,
+                        }
+                    )
+
+                    doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code} (QC Pass)", created_by=request.user)
+                    StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
+
+                    allocated_product.stock_qty = (allocated_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
+                    allocated_product.save()
+
+                    order.status = 'COMPLETED'
+                    order.finish_date = timezone.now().date()
+                    order.is_qc_passed = True
+                    messages.success(request, f"🎉 ผ่าน QC และรับ {allocated_product.name} เข้าคลังแล้ว! งานย้ายไปช่อง W4")
+            else:
+                messages.success(request, f"✅ อัปเดตความคืบหน้า {order.code} เรียบร้อยแล้ว!")
 
         is_closed = request.POST.get('is_closed')
         if is_closed == 'on':
             order.is_closed = True
-            messages.success(request, f"✅ ปิดจ๊อบ {order.code} เรียบร้อยแล้ว! (ย้ายไปแท็บประวัติ)")
-        else:
+            messages.success(request, f"✅ ปิดจ๊อบ {order.code} อย่างสมบูรณ์แล้ว! (ย้ายไปแท็บประวัติ)")
+        elif action in ['update_progress', 'qc_complete_and_receive'] and not is_closed:
             order.is_closed = False
-            messages.success(request, f"✅ อัปเดตความคืบหน้า {order.code} เรียบร้อยแล้ว!")
 
         order.save()
 
-    return redirect('production_list')
+    return redirect(request.META.get('HTTP_REFERER', 'production_list'))
 
 @login_required
 def ajax_add_branch(request):
@@ -597,64 +719,257 @@ def ajax_get_fg_by_category(request):
 def import_bom_excel(request):
     if request.method == 'POST' and request.FILES.get('excel_file'):
         excel_file = request.FILES['excel_file']
-
         try:
             df = pd.read_excel(excel_file)
-
             required_columns = ['FG SKU', 'RM SKU', 'Quantity']
             if not all(col in df.columns for col in required_columns):
                 messages.error(request, "❌ รูปแบบไฟล์ไม่ถูกต้อง กรุณาใช้คอลัมน์: FG SKU, RM SKU, Quantity")
                 return redirect('import_bom_excel')
-
             with transaction.atomic():
                 import_count = 0
                 for _, row in df.iterrows():
                     fg_sku = str(row['FG SKU']).strip()
                     rm_sku = str(row['RM SKU']).strip()
                     try:
-                        qty = float(row['Quantity'])
-                    except (ValueError, TypeError):
-                        continue # ข้ามถ้าระบุจำนวนไม่ถูกต้อง
-
-                    # 1. หาตัวสินค้าสำเร็จรูป (FG)
+                        qty = Decimal(str(row['Quantity']))
+                    except (ValueError, TypeError, InvalidOperation):
+                        continue
                     fg_product = Product.objects.filter(code=fg_sku, product_type='FG').first()
                     if not fg_product:
                         continue
-
-                    # 2. สร้างหรือดึงหัวสูตร BOM
                     bom_obj, _ = BOM.objects.get_or_create(
                         product=fg_product,
                         defaults={'name': f"สูตรมาตรฐาน - {fg_product.name}"}
                      )
-
-                    # 3. หาตัววัตถุดิบ (RM)
                     rm_product = Product.objects.filter(code=rm_sku, product_type='RM').first()
                     if rm_product:
-                        # 4. สร้างหรืออัปเดตรายการในสูตร
                         BOMItem.objects.update_or_create(
                             bom=bom_obj,
                             raw_material=rm_product,
                             defaults={'quantity': qty}
                         )
                         import_count += 1
-
             messages.success(request, f"✅ นำเข้าข้อมูลสูตรผลิตสำเร็จทั้งหมด {import_count} รายการ")
             return redirect('import_bom_excel')
-
         except Exception as e:
             messages.error(request, f"❌ เกิดข้อผิดพลาด: {str(e)}")
-
     return render(request, 'manufacturing/import_bom.html')
 
 @login_required
 def ajax_search_raw_material(request):
     q = request.GET.get('q', '')
     products = Product.objects.filter(product_type='RM', is_active=True)
-
-    if q:
-        products = products.filter(Q(code__icontains=q) | Q(name__icontains=q))
-
+    if q: products = products.filter(Q(code__icontains=q) | Q(name__icontains=q))
     products = products.order_by('code')[:30]
-
     results = [{'id': p.id, 'text': f"{p.code} - {p.name}"} for p in products]
     return JsonResponse({'results': results})
+
+# ==========================================
+# 🌟 [NEW] กระดานสำหรับหัวหน้าแผนกผลิต (ช่าง) 🌟
+# ==========================================
+@login_required
+def production_head_board(request):
+    today = timezone.now().date()
+    default_start = today - datetime.timedelta(days=30)
+
+    # 🌟 1. คำนวณวันที่ สัปดาห์ปัจจุบัน และ สัปดาห์หน้า 🌟
+    current_monday = today - datetime.timedelta(days=today.weekday())
+    current_sunday = current_monday + datetime.timedelta(days=6)
+    next_monday = current_monday + datetime.timedelta(days=7)
+    next_sunday = next_monday + datetime.timedelta(days=6)
+
+    thai_year_curr = str(current_sunday.year + 543)[-2:]
+    thai_year_next = str(next_sunday.year + 543)[-2:]
+
+    # สร้างข้อความ เช่น "13-19/4/69"
+    if current_monday.month == current_sunday.month:
+        str_current_week = f"{current_monday.day}-{current_sunday.day}/{current_monday.month}/{thai_year_curr}"
+    else:
+        str_current_week = f"{current_monday.day}/{current_monday.month}-{current_sunday.day}/{current_sunday.month}/{thai_year_curr}"
+
+    if next_monday.month == next_sunday.month:
+        str_next_week = f"{next_monday.day}-{next_sunday.day}/{next_monday.month}/{thai_year_next}"
+    else:
+        str_next_week = f"{next_monday.day}/{next_monday.month}-{next_sunday.day}/{next_sunday.month}/{thai_year_next}"
+
+    # 2. รับค่าตัวกรองจากหน้าเว็บ
+    start_date = request.GET.get('start_date', default_start.strftime('%Y-%m-%d'))
+    end_date = request.GET.get('end_date', today.strftime('%Y-%m-%d'))
+    search_q = request.GET.get('q', '')
+    search_branch = request.GET.get('branch', '')
+    search_team = request.GET.get('team', '')
+    search_salesperson = request.GET.get('salesperson', '')
+
+    # 3. ดึงข้อมูลงาน (PLANNED = เตรียมเข้าใหม่, IN_PROGRESS = กำลังทำ, REWORK = ซ่อม)
+    orders = ProductionOrder.objects.select_related(
+        'product', 'branch', 'production_team', 'salesperson', 'salesperson__branch', 'quotation_ref'
+    ).prefetch_related('completed_departments', 'qc_logs').filter(
+        status__in=['PLANNED', 'IN_PROGRESS', 'REWORK'], is_closed=False
+    ).order_by('start_date', '-id')
+
+    # 🌟 4. ลอจิกจำกัดสิทธิ์การมองเห็น (Role-Based Visibility) 🌟
+    emp = getattr(request.user, 'employee', None)
+    is_manager = False
+
+    if request.user.is_superuser:
+        is_manager = True
+    elif emp:
+        rank = emp.business_rank.lower() if emp.business_rank else ""
+        job_title = emp.position.title.lower() if emp.position else ""
+        if rank in ['manager', 'director'] or 'manager' in job_title:
+            is_manager = True
+
+    # ถ้าไม่ใช่ผู้จัดการ และมีการระบุทีมช่าง ให้กรองเฉพาะงานของทีมตัวเอง!
+    if not is_manager and emp and emp.production_team:
+        orders = orders.filter(production_team=emp.production_team)
+
+    # 5. ใส่ Filter ค้นหา
+    if start_date: orders = orders.filter(start_date__gte=start_date)
+    if end_date: orders = orders.filter(start_date__lte=end_date)
+    if search_q:
+        orders = orders.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(product__name__icontains=search_q))
+    if search_branch: orders = orders.filter(branch_id=search_branch)
+    if search_team: orders = orders.filter(production_team_id=search_team)
+    if search_salesperson: orders = orders.filter(salesperson_id=search_salesperson)
+
+    # 🌟 6. ฟังก์ชันแปลงวันที่ ให้กลายเป็นป้ายสัปดาห์คิวงาน (บนการ์ด) 🌟
+    def format_week_range(d):
+        iso_y, iso_w, _ = d.isocalendar()
+        monday = datetime.date.fromisocalendar(iso_y, iso_w, 1)
+        sunday = monday + datetime.timedelta(days=6)
+        y_str = str(sunday.year + 543)[-2:]
+        if monday.month == sunday.month:
+            return f"จ.{monday.day}-อา.{sunday.day}/{monday.month}/{y_str}"
+        else:
+            return f"จ.{monday.day}/{monday.month}-อา.{sunday.day}/{sunday.month}/{y_str}"
+
+    # 🌟 7. แยกการ์ดออกเป็น 4 คอลัมน์ ตามเงื่อนไขเวลา 🌟
+    col1_upcoming = []  # งานสัปดาห์หน้า (PLANNED)
+    col2_current = []   # งานผลิตรอบปัจจุบัน (IN_PROGRESS สัปดาห์นี้)
+    col3_overdue = []   # งานค้าง (IN_PROGRESS เก่ากว่าสัปดาห์นี้)
+    col4_rework = []    # งานแจ้งซ่อมจาก QC (REWORK)
+
+    for order in orders:
+        order.display_cohort = format_week_range(order.start_date)
+
+        if order.status == 'PLANNED':
+            col1_upcoming.append(order)
+        elif order.status == 'REWORK':
+            col4_rework.append(order)
+        elif order.status == 'IN_PROGRESS':
+            # ถ้า start_date เก่ากว่าวันจันทร์ของสัปดาห์นี้ ถือว่าค้าง (Overdue)
+            if order.start_date < current_monday:
+                col3_overdue.append(order)
+            else:
+                col2_current.append(order)
+
+    # ดึงข้อมูล Master Data สำหรับช่อง Filter
+    branches = MfgBranch.objects.all().order_by('name')
+    teams = ProductionTeam.objects.all().order_by('name')
+    salespersons = Salesperson.objects.select_related('branch').all().order_by('name')
+    prod_statuses = ProductionStatus.objects.all().order_by('sequence', 'id')
+
+    return render(request, 'manufacturing/production_head_board.html', {
+        'orders': orders, # ส่งไปให้ Modal
+        'col1_upcoming': col1_upcoming,
+        'col2_current': col2_current,
+        'col3_overdue': col3_overdue,
+        'col4_rework': col4_rework,
+        'str_current_week': str_current_week,
+        'str_next_week': str_next_week,
+        'branches': branches,
+        'teams': teams,
+        'salespersons': salespersons,
+        'prod_statuses': prod_statuses,
+        'start_date': start_date,
+        'end_date': end_date,
+        'search_q': search_q,
+        'search_branch': search_branch,
+        'search_team': search_team,
+        'search_salesperson': search_salesperson,
+    })
+
+@login_required
+def submit_to_qc(request, pk):
+    # ฟังก์ชันสำหรับช่างกดส่งงานให้ QC
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    if order.status in ['IN_PROGRESS', 'REWORK']:
+        order.status = 'WAITING_QC'
+        order.save()
+        messages.success(request, f"✅ ส่งงาน {order.code} ให้แผนก QC ตรวจสอบเรียบร้อยแล้ว!")
+    return redirect('production_head_board')
+
+# ==========================================
+# 🌟 [NEW] กระดานสำหรับหัวหน้าแผนก QC (ตรวจสอบคุณภาพ) 🌟
+# ==========================================
+@login_required
+def qc_board(request):
+    # ดึงเฉพาะงานที่ช่างส่งมาให้ตรวจ (WAITING_QC)
+    orders = ProductionOrder.objects.filter(status='WAITING_QC', is_closed=False).order_by('start_date')
+    return render(request, 'manufacturing/qc_board.html', {'orders': orders})
+
+@login_required
+@transaction.atomic
+def process_qc(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        # 1. 🌟 กรณีที่ QC ตรวจผ่าน 100% (รับเข้าคลัง) 🌟
+        if action == 'pass':
+            alloc_code = f"{order.product.code}-{order.code}"
+            alloc_name = f"{order.product.name} [{order.code}]"
+            if order.customer_name: alloc_name += f" (ลค. {order.customer_name})"
+
+            allocated_product, created = Product.objects.get_or_create(
+                code=alloc_code,
+                defaults={
+                    'name': alloc_name[:255], 'category': order.product.category,
+                    'product_type': 'FG', 'sell_price': order.product.sell_price,
+                    'cost_price': order.product.cost_price, 'min_level': 0,
+                    'stock_qty': 0, 'is_active': True,
+                }
+            )
+
+            # บันทึกรับเข้าคลัง (Stock-In)
+            doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าจากฝ่ายผลิต {order.code} (ผ่าน QC)", created_by=request.user)
+            StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
+
+            allocated_product.stock_qty = (allocated_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
+            allocated_product.save()
+
+            # อัปเดตสถานะงาน
+            order.status = 'COMPLETED'
+            order.finish_date = timezone.now().date()
+            order.is_qc_passed = True
+            order.save()
+
+            messages.success(request, f"🎉 ตรวจผ่านเรียบร้อย! รับ {allocated_product.name} เข้าคลังแล้ว งานย้ายไปช่อง W4 พร้อมส่ง")
+
+        # 2. 🌟 กรณีที่ QC ตรวจไม่ผ่าน (ตีกลับไปให้ช่างแก้) 🌟
+        elif action == 'fail':
+            comments = request.POST.get('comments', '')
+            order.rework_count += 1
+            order.status = 'REWORK' # เปลี่ยนสถานะตีกลับ
+
+            # เก็บประวัติการตีกลับลง Log อัตโนมัติ (ไม่จำกัดจำนวนครั้ง)
+            log = QCInspectionLog.objects.create(
+                production_order=order,
+                round_number=order.rework_count,
+                inspector=getattr(request.user, 'employee', None),
+                status='FAILED',
+                comments=comments
+            )
+
+            if 'defect_image_1' in request.FILES:
+                log.defect_image_1 = request.FILES['defect_image_1']
+            if 'defect_image_2' in request.FILES:
+                log.defect_image_2 = request.FILES['defect_image_2']
+
+            log.save()
+            order.save()
+
+            messages.warning(request, f"🚨 ตีกลับงาน {order.code} ให้ช่างแก้ไขเรียบร้อยแล้ว (การตีกลับรอบที่ {order.rework_count})")
+
+    return redirect('qc_board')

@@ -40,8 +40,11 @@ class Product(models.Model):
     
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาทุน")
     sell_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาขาย")
-    stock_qty = models.IntegerField(default=0, verbose_name="จำนวนคงเหลือ")
-    min_level = models.IntegerField(default=5, verbose_name="จุดสั่งซื้อ (Low Stock)")
+    
+    # 🌟 [UPDATE] ปลดล็อคให้รองรับทศนิยม 2 ตำแหน่ง 🌟
+    stock_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="จำนวนคงเหลือ")
+    min_level = models.DecimalField(max_digits=12, decimal_places=2, default=5, verbose_name="จุดสั่งซื้อ (Low Stock)")
+    
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ซัพพลายเออร์หลัก (Legacy)")
     image = models.ImageField(upload_to='products/', blank=True, null=True, verbose_name="รูปสินค้า")
     standard_blueprint = models.FileField(upload_to='standard_blueprints/', blank=True, null=True, verbose_name="ไฟล์แบบแปลนมาตรฐาน (PDF/รูปภาพ)")
@@ -65,7 +68,6 @@ class Product(models.Model):
         super().save(*args, **kwargs)
 
     class Meta:
-        # 🌟 [UPDATE] ปรับชื่อให้รู้ว่าเป็นหลังบ้าน
         verbose_name = "2. จัดการคลังสินค้า/วัตถุดิบ (Master)"
         verbose_name_plural = "2. จัดการคลังสินค้า/วัตถุดิบ (Master)"
 
@@ -107,7 +109,10 @@ class InventoryDoc(models.Model):
 class StockMovement(models.Model):
     doc = models.ForeignKey(InventoryDoc, on_delete=models.CASCADE, related_name='movements', verbose_name="เลขที่เอกสาร", null=True, blank=True)
     product = models.ForeignKey(Product, on_delete=models.CASCADE, verbose_name="สินค้า")
-    quantity = models.IntegerField(verbose_name="จำนวน")
+    
+    # 🌟 [UPDATE] ปลดล็อคให้รองรับทศนิยม 2 ตำแหน่ง 🌟
+    quantity = models.DecimalField(max_digits=12, decimal_places=2, verbose_name="จำนวน")
+    
     movement_type = models.CharField(max_length=10, choices=[('IN', 'เข้า'), ('OUT', 'ออก')], verbose_name="ประเภท")
     reference_doc = models.CharField(max_length=50, blank=True, verbose_name="อ้างอิงเดิม (Legacy)")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
@@ -128,7 +133,6 @@ class StockMovement(models.Model):
 class FinishedGood(Product):
     class Meta: 
         proxy = True
-        # 🌟 [UPDATE] ปรับชื่อให้พนักงานขายเข้าใจง่าย
         verbose_name = "2.1 แคตตาล็อกสินค้าพร้อมขาย (สำหรับฝ่ายขาย)"
         verbose_name_plural = "2.1 แคตตาล็อกสินค้าพร้อมขาย (สำหรับฝ่ายขาย)"
 

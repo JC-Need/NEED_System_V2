@@ -78,7 +78,6 @@
                             <li><a class="dropdown-item" href="{% url 'quotation_list' %}"><i class="fas fa-file-invoice me-2 text-secondary"></i> รายการใบเสนอราคา</a></li>
                             <li><a class="dropdown-item" href="{% url 'deposit_list' %}"><i class="fas fa-hand-holding-usd me-2 text-info"></i> รายการใบรับเงินมัดจำ</a></li>
                             <li><a class="dropdown-item" href="{% url 'invoice_list' %}"><i class="fas fa-receipt me-2 text-success"></i> รายการใบขาย (ชำระเต็ม)</a></li>
-                            
                             <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item fw-bold text-dark" href="{% url 'customer_list' %}"><i class="fas fa-users me-2 text-primary"></i> ฐานข้อมูลลูกค้า</a></li>
                         </ul>
@@ -116,7 +115,10 @@
                         </a>
                         <ul class="dropdown-menu border-0 shadow-lg">
                             <li><a class="dropdown-item" href="{% url 'planner_board' %}"><i class="fas fa-clipboard-list me-2 text-info"></i> กระดานวางแผนการผลิต</a></li>
-                            <li><a class="dropdown-item" href="{% url 'production_list' %}"><i class="fas fa-tools me-2 text-primary"></i> กระดานควบคุมงานผลิต (ช่าง)</a></li>
+                            <li><a class="dropdown-item" href="{% url 'production_list' %}"><i class="fas fa-table me-2 text-secondary"></i> กระดานควบคุมงานผลิต (ดูภาพรวม)</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item fw-bold text-dark" href="{% url 'production_head_board' %}"><i class="fas fa-hammer me-2 text-warning"></i> กระดานหัวหน้าแผนกผลิต (ช่าง)</a></li>
+                            <li><a class="dropdown-item fw-bold text-dark" href="{% url 'qc_board' %}"><i class="fas fa-search-plus me-2 text-success"></i> กระดานตรวจสอบคุณภาพ (QC)</a></li>
                         </ul>
                     </li>
                     {% endif %}
@@ -128,7 +130,7 @@
                         <ul class="dropdown-menu">
                              <li><a class="dropdown-item" href="{% url 'employee_dashboard' %}"><i class="fas fa-id-card me-2 text-primary"></i> แดชบอร์ดพนักงาน (ฉัน)</a></li>
                             {% if request.user.is_superuser or request.user.groups.all.0.name == "Manager_Team" or request.user.groups.all.0.name == "HR_Team" %}
-                             <li><hr class="dropdown-divider"></li>
+                            <li><hr class="dropdown-divider"></li>
                             <li><a class="dropdown-item" href="{% url 'manager_dashboard' %}"><i class="fas fa-user-tie me-2 text-warning"></i> อนุมัติการลา (หัวหน้างาน)</a></li>
                             {% endif %}
                             {% if request.user.is_superuser or request.user.groups.all.0.name == "HR_Team" %}
