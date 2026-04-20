@@ -21,6 +21,9 @@
     .btn-quick-primary { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
     .btn-quick-primary:hover { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(59, 130, 246, 0.3) !important; }
     
+    .btn-quick-info { background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
+    .btn-quick-info:hover { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(2, 132, 199, 0.3) !important; }
+    
     .btn-quick-dark { background: linear-gradient(135deg, #334155 0%, #1e293b 100%); color: #ffffff !important; border: none; transition: all 0.3s ease; }
     .btn-quick-dark:hover { background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); transform: translateY(-2px); box-shadow: 0 6px 12px rgba(30, 41, 59, 0.3) !important; }
 </style>
@@ -48,6 +51,9 @@
         </div>
 
         <div class="d-flex gap-2">
+            <a href="{% url 'crm_board' %}" class="btn btn-quick-info rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center">
+                <i class="fas fa-headset me-2"></i> ระบบ CRM ติดตามลูกค้า
+            </a>
             <a href="{% url 'quotation_create' %}" class="btn btn-quick-success rounded-pill px-4 fw-bold shadow-sm d-flex align-items-center">
                 <i class="fas fa-plus-circle me-2"></i> สร้างใบเสนอราคา
             </a>
@@ -210,7 +216,6 @@
         const end = document.getElementById('filter_end').value;
         const url = `{% url 'api_dashboard_data' %}?start_date=${start}&end_date=${end}&group_by=${currentGroupBy}`;
         fetch(url).then(r => r.json()).then(data => {
-            // 🌟 [FIX] เปลี่ยน innerText เป็น innerHTML เพื่อให้แท็ก <small> ทำงานได้ 🌟
             document.getElementById('val-total-sales').innerText = '฿' + data.total_sales.toLocaleString(undefined, {minimumFractionDigits:2});
             document.getElementById('val-total-orders').innerHTML = data.total_orders_today + ' <small class="text-muted" style="font-size: 0.6rem;">บิล</small>';
             document.getElementById('val-pending-approval').innerHTML = data.pending_approval + ' <small class="text-muted" style="font-size: 0.6rem;">ใบ</small>';
@@ -236,7 +241,6 @@
         });
     }
     
-    // ตั้งรีเฟรชข้อมูลทุกๆ 60 วินาที
     setInterval(fetchDashboardData, 60000);
 </script>
 {% endblock %}

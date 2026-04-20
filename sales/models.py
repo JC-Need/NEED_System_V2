@@ -82,7 +82,6 @@ class Quotation(models.Model):
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รวมราคาสินค้า")
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ส่วนลด")
 
-    # 🌟 [NEW] ฟิลด์เก็บข้อมูลการคำนวณค่าขนส่ง 🌟
     shipping_origin = models.CharField(max_length=100, blank=True, null=True, verbose_name="สาขาต้นทาง (ผลิต)")
     shipping_province = models.CharField(max_length=100, blank=True, null=True, verbose_name="จังหวัดปลายทาง")
     shipping_is_island = models.BooleanField(default=False, verbose_name="ส่งข้ามเกาะ")
@@ -113,7 +112,6 @@ class Quotation(models.Model):
     @property
     def customer_code(self): return self.customer.code if self.customer else None
 
-    # 🌟 [เพิ่มใหม่] สอนให้ระบบคำนวณยอดค้างชำระอัตโนมัติ 🌟
     @property
     def balance_due(self):
         gt = self.grand_total if self.grand_total else Decimal(0)
@@ -190,9 +188,7 @@ class Invoice(models.Model):
 class UpsaleCategory(models.Model):
     name = models.CharField(max_length=100, verbose_name="หมวดหมู่รายการเพิ่มเติม")
     is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
-
-    def __str__(self):
-        return self.name
+    def __str__(self): return self.name
 
 class UpsaleCatalog(models.Model):
     category = models.ForeignKey(UpsaleCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่")
@@ -200,9 +196,7 @@ class UpsaleCatalog(models.Model):
     default_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคามาตรฐาน")
     unit = models.CharField(max_length=50, blank=True, null=True, default="รายการ", verbose_name="หน่วยนับ")
     is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
-
-    def __str__(self):
-        return self.name
+    def __str__(self): return self.name
 
 class QuotationUpsale(models.Model):
     quotation = models.ForeignKey(Quotation, related_name='upsales', on_delete=models.CASCADE)
@@ -215,29 +209,22 @@ class QuotationUpsale(models.Model):
         self.total_price = self.quantity * self.unit_price
         super().save(*args, **kwargs)
 
-    def __str__(self):
-        return f"{self.description} ({self.quotation.code})"
+    def __str__(self): return f"{self.description} ({self.quotation.code})"
 
-# ==========================================
-# 🌟 [NEW] ตารางประวัติการชำระเงิน (รองรับการโอนหลายสลิป) 🌟
-# ==========================================
 class InvoicePayment(models.Model):
     invoice = models.ForeignKey(Invoice, related_name='payment_history', on_delete=models.CASCADE, verbose_name="อ้างอิงบิล")
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดชำระ")
     payment_method = models.CharField(max_length=50, choices=Invoice.PAYMENT_CHOICES, verbose_name="วิธีชำระ")
     payment_date = models.DateField(default=timezone.now, verbose_name="วันที่ชำระ")
-
     transfer_slip = models.ImageField(upload_to='invoice_slips/%Y/%m/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
     check_number = models.CharField(max_length=50, blank=True, verbose_name="เลขที่เช็ค")
     check_bank = models.CharField(max_length=100, blank=True, verbose_name="ธนาคารเช็ค")
     check_slip = models.ImageField(upload_to='invoice_checks/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายเช็ค")
-
     status = models.CharField(max_length=20, choices=[('PENDING', 'รอตรวจสอบ'), ('VERIFIED', 'ตรวจสอบแล้ว')], default='PENDING', verbose_name="สถานะการตรวจ")
     created_at = models.DateTimeField(auto_now_add=True)
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # ระบบย่อขนาดรูปสลิปอัตโนมัติ
         if self.transfer_slip:
             try:
                 img = Image.open(self.transfer_slip.path)
@@ -252,3 +239,58 @@ class InvoicePayment(models.Model):
                     img.thumbnail((800, 800))
                     img.save(self.check_slip.path, quality=85, optimize=True)
             except Exception: pass
+
+# ==========================================
+# 🌟 [NEW] ตารางสำหรับระบบ CRM ลูกค้ามุ่งหวัง (Leads) 🌟
+# ==========================================
+class CustomerLead(models.Model):
+    CHANNEL_CHOICES = [
+        ('FACEBOOK', '🔵 Facebook'),
+        ('LINE', '🟢 LINE / LINE OA'),
+        ('PHONE', '📞 โทรศัพท์ติดต่อ'),
+        ('WALKIN', '🚶 หน้าร้าน / เข้ามาดูงาน'),
+        ('OTHER', '🌐 ช่องทางอื่นๆ')
+    ]
+    STATUS_CHOICES = [
+        ('NEW', 'ติดต่อใหม่ (New)'),
+        ('FOLLOW_UP', 'กำลังเจรจา (Follow Up)'),
+        ('QUOTED', 'เสนอราคาแล้ว (Quoted)'),
+        ('WON', 'ปิดการขายสำเร็จ (Won)'),
+        ('LOST', 'ยกเลิก/ไม่สนใจ (Lost)')
+    ]
+
+    code = models.CharField(max_length=20, unique=True, verbose_name="รหัสลูกค้า (Lead ID)")
+    date = models.DateTimeField(default=timezone.now, verbose_name="วันที่ติดต่อล่าสุด")
+    customer_name = models.CharField(max_length=200, verbose_name="ชื่อลูกค้า / โปรไฟล์")
+    phone = models.CharField(max_length=50, blank=True, verbose_name="เบอร์ติดต่อ")
+    channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES, default='LINE', verbose_name="ช่องทางที่ติดต่อเข้ามา")
+    requirements = models.TextField(blank=True, verbose_name="รายละเอียด/ความต้องการของลูกค้า")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='NEW', verbose_name="สถานะลูกค้า")
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขายผู้ดูแล")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.code} - {self.customer_name}"
+
+class Appointment(models.Model):
+    TYPE_CHOICES = [
+        ('PRE_BOOKED', 'นัดหมายล่วงหน้า (Appointment)'),
+        ('WALK_IN', 'เข้ามาหน้าร้าน (Walk-in)')
+    ]
+    STATUS_CHOICES = [
+        ('SCHEDULED', '⏳ รอดำเนินการ'),
+        ('COMPLETED', '🤝 สำเร็จ / เข้ามาแล้ว'),
+        ('CANCELLED', '❌ ยกเลิกนัด'),
+        ('NO_SHOW', '👻 ไม่มาตามนัด')
+    ]
+
+    lead = models.ForeignKey(CustomerLead, on_delete=models.CASCADE, related_name='appointments', verbose_name="ลูกค้ามุ่งหวัง")
+    appointment_date = models.DateTimeField(verbose_name="วัน/เวลาที่นัดหมาย")
+    appointment_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='PRE_BOOKED', verbose_name="ประเภทการติดต่อ")
+    details = models.TextField(blank=True, verbose_name="รายละเอียด/หมายเหตุ")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='SCHEDULED', verbose_name="สถานะ")
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานผู้รับผิดชอบ")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"นัดหมาย {self.lead.customer_name} ({self.appointment_date.strftime('%d/%m/%Y %H:%M')})"

@@ -135,9 +135,12 @@ def production_list(request):
 def planner_board(request):
     today = timezone.now().date()
     default_start = today - datetime.timedelta(days=30)
+    # 🌟 [FIXED] ตั้งค่าเริ่มต้นให้ดึงล่วงหน้า 30 วัน 🌟
+    default_end = today + datetime.timedelta(days=30)
 
     start_date = request.GET.get('start_date', default_start.strftime('%Y-%m-%d'))
-    end_date = request.GET.get('end_date', today.strftime('%Y-%m-%d'))
+    end_date = request.GET.get('end_date', default_end.strftime('%Y-%m-%d'))
+    
     search_q = request.GET.get('q', '')
     search_branch = request.GET.get('branch', '')
     search_team = request.GET.get('team', '')
@@ -769,6 +772,8 @@ def ajax_search_raw_material(request):
 def production_head_board(request):
     today = timezone.now().date()
     default_start = today - datetime.timedelta(days=30)
+    # 🌟 [FIXED] ขยายเวลาสิ้นสุดให้ล่วงหน้าไปอีก 30 วัน เหมือนหน้า Planner 🌟
+    default_end = today + datetime.timedelta(days=30)
 
     # 🌟 1. คำนวณวันที่ สัปดาห์ปัจจุบัน และ สัปดาห์หน้า 🌟
     current_monday = today - datetime.timedelta(days=today.weekday())
@@ -792,7 +797,7 @@ def production_head_board(request):
 
     # 2. รับค่าตัวกรองจากหน้าเว็บ
     start_date = request.GET.get('start_date', default_start.strftime('%Y-%m-%d'))
-    end_date = request.GET.get('end_date', today.strftime('%Y-%m-%d'))
+    end_date = request.GET.get('end_date', default_end.strftime('%Y-%m-%d'))
     search_q = request.GET.get('q', '')
     search_branch = request.GET.get('branch', '')
     search_team = request.GET.get('team', '')
@@ -904,6 +909,8 @@ def submit_to_qc(request, pk):
 def qc_board(request):
     today = timezone.now().date()
     default_start = today - datetime.timedelta(days=30)
+    # 🌟 [FIXED] ขยายเวลาสิ้นสุดให้ล่วงหน้าไปอีก 30 วัน เหมือนหน้า Planner 🌟
+    default_end = today + datetime.timedelta(days=30)
 
     # 🌟 1. คำนวณวันที่ สัปดาห์ปัจจุบัน 🌟
     current_monday = today - datetime.timedelta(days=today.weekday())
@@ -917,7 +924,7 @@ def qc_board(request):
 
     # 2. รับค่าตัวกรองจากหน้าเว็บ
     start_date = request.GET.get('start_date', default_start.strftime('%Y-%m-%d'))
-    end_date = request.GET.get('end_date', today.strftime('%Y-%m-%d'))
+    end_date = request.GET.get('end_date', default_end.strftime('%Y-%m-%d'))
     search_q = request.GET.get('q', '')
     search_branch = request.GET.get('branch', '')
     search_team = request.GET.get('team', '')

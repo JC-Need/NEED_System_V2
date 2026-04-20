@@ -16,7 +16,8 @@ from django.utils.dateparse import parse_date
 from django.utils import timezone
 from datetime import timedelta
 
-from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment
+# 🌟 นำเข้า CustomerLead ที่ถูกต้อง 🌟
+from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment
 from inventory.models import Product, Category
 from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
@@ -343,7 +344,7 @@ def record_deposit(request, qt_id):
             else: qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
 
-            if 'deposit_slip' in request.FILES: 
+            if 'deposit_slip' in request.FILES:
                 qt.deposit_slip = request.FILES['deposit_slip']
             qt.save()
             messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว")
@@ -449,7 +450,7 @@ def create_job_order(request, qt_id):
     if requested_date_obj and requested_date_obj != final_delivery_date:
         approval_status = 'PENDING'
         req_date = requested_date_obj
-        deadline = final_delivery_date 
+        deadline = final_delivery_date
     else:
         approval_status = 'NOT_REQUIRED'
         req_date = None
@@ -521,12 +522,12 @@ def sales_timeline(request):
     while True:
         iso_year, iso_week, _ = current_check_date.isocalendar()
         check_cohort = f"{iso_year}-W{iso_week:02d}"
-        
+
         total_qty_in_week = ProductionOrder.objects.filter(cohort_week=check_cohort, is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
-        
+
         if total_qty_in_week < max_quota:
             break
-            
+
         weeks_pushed += 1
         current_check_date += datetime.timedelta(days=7)
 
@@ -553,20 +554,20 @@ def sales_timeline(request):
     chart_labels_display = []
     chart_week_starts = []
     chart_week_ends = []
-    
+
     chart1_ordered = []
     chart1_pending = []
     chart1_delivered = []
-    
+
     start_date = today - datetime.timedelta(weeks=4)
     for i in range(8):
         w_date = start_date + datetime.timedelta(weeks=i)
         iso_year, iso_week, _ = w_date.isocalendar()
         cohort = f"{iso_year}-W{iso_week:02d}"
-        
+
         monday = datetime.date.fromisocalendar(iso_year, iso_week, 1)
         sunday = monday + datetime.timedelta(days=6)
-        
+
         chart_labels.append(cohort)
         chart_labels_display.append(format_week_range(w_date))
         chart_week_starts.append(monday.strftime('%Y-%m-%d'))
@@ -576,7 +577,7 @@ def sales_timeline(request):
         ordered = ProductionOrder.objects.filter(cohort_week=cohort).exclude(status='CANCELLED').aggregate(Sum('quantity'))['quantity__sum'] or 0
         pending = ProductionOrder.objects.filter(cohort_week=cohort, status='COMPLETED', is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
         deli = ProductionOrder.objects.filter(cohort_week=cohort, is_closed=True).aggregate(Sum('quantity'))['quantity__sum'] or 0
-        
+
         chart1_ordered.append(int(ordered))
         chart1_pending.append(int(pending))
         chart1_delivered.append(int(deli))
@@ -599,7 +600,7 @@ def sales_timeline(request):
     chart2_labels = []
     chart2_data = []
     chart2_bg_colors = ['#0d6efd', '#ffc107', '#198754', '#dc3545', '#6f42c1', '#0dcaf0', '#fd7e14']
-    
+
     for b in branches:
         chart2_labels.append(b.name) # แกน X เป็นชื่อโรงงาน
         qty = ProductionOrder.objects.filter(cohort_week=target_cohort, branch=b).aggregate(Sum('quantity'))['quantity__sum'] or 0
@@ -769,7 +770,7 @@ def quotation_list(request):
     status_filter = request.GET.get('status')
     if status_filter:
         if status_filter == 'PENDING_PRODUCTION':
-            queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True).distinct()
+             queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True).distinct()
         elif status_filter == 'PENDING_CLOSING':
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
         elif status_filter == 'IN_PRODUCTION':
@@ -1340,3 +1341,192 @@ def deposit_print(request, qt_id):
     return render(request, 'sales/deposit_print.html', {
         'qt': qt, 'company': company, 'item_total': item_total, 'balance_due': balance_due
     })
+
+# ==========================================
+# 🌟 [NEW] ระบบ CRM ติดตามลูกค้ามุ่งหวัง (Leads) 🌟
+# ==========================================
+@login_required
+def crm_board(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบ CRM")
+        return redirect('dashboard')
+
+    target_employees, scope_title = get_target_employees(request.user)
+
+    leads = get_sales_queryset(CustomerLead, request.user, target_employees)\
+        .select_related('employee', 'employee__department')\
+        .order_by('-created_at')
+
+    # 🌟 [FIXED] กรองรายชื่อให้โชว์เฉพาะพนักงานแผนก "ขาย" หรือ "Sales" เท่านั้น 🌟
+    all_emps_in_scope = target_employees.filter(
+        Q(department__name__icontains='ขาย') |
+        Q(department__name__icontains='Sales') |
+        Q(department__name__icontains='Marketing')
+    ).order_by('first_name')
+
+    # ระบบค้นหาและกรองข้อมูล
+    search_q = request.GET.get('q', '')
+    status_f = request.GET.get('status', '')
+    channel_f = request.GET.get('channel', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    emp_f = request.GET.get('employee', '')
+
+    if search_q:
+        leads = leads.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(phone__icontains=search_q))
+    if status_f:
+        leads = leads.filter(status=status_f)
+    if channel_f:
+        leads = leads.filter(channel=channel_f)
+    if start_date:
+        leads = leads.filter(date__date__gte=start_date)
+    if end_date:
+        leads = leads.filter(date__date__lte=end_date)
+    if emp_f:
+        leads = leads.filter(employee_id=emp_f)
+
+    paginator = Paginator(leads, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'sales/crm_board.html', {
+        'leads': page_obj,
+        'search_q': search_q,
+        'status_f': status_f,
+        'channel_f': channel_f,
+        'start_date': start_date,
+        'end_date': end_date,
+        'emp_f': emp_f,
+        'scope_title': scope_title,
+        'status_choices': CustomerLead.STATUS_CHOICES,
+        'channel_choices': CustomerLead.CHANNEL_CHOICES,
+        'employees': all_emps_in_scope # ส่งรายชื่อเฉพาะเซลส์ไปทำ Dropdown
+    })
+
+@login_required
+def crm_lead_create(request):
+    if request.method == 'POST':
+        name = request.POST.get('customer_name')
+        phone = request.POST.get('phone', '')
+        channel = request.POST.get('channel', 'LINE')
+        requirements = request.POST.get('requirements', '')
+
+        # รันรหัสลูกค้ามุ่งหวัง (Auto ID)
+        now = datetime.datetime.now()
+        thai_year = (now.year + 543) % 100
+        prefix = f"LD-{thai_year:02d}{now.strftime('%m')}"
+        last = CustomerLead.objects.filter(code__startswith=prefix).order_by('code').last()
+        seq = int(last.code.split('-')[-1]) + 1 if last else 1
+        new_code = f"{prefix}-{seq:04d}"
+
+        current_emp = getattr(request.user, 'employee', None)
+
+        CustomerLead.objects.create(
+            code=new_code,
+            customer_name=name,
+            phone=phone,
+            channel=channel,
+            requirements=requirements,
+            employee=current_emp
+        )
+        messages.success(request, f"✅ สร้างข้อมูลลูกค้ามุ่งหวัง {new_code} เรียบร้อยแล้ว!")
+    return redirect('crm_board')
+
+@login_required
+def crm_lead_update(request, lead_id):
+    lead = get_object_or_404(CustomerLead, pk=lead_id)
+    if request.method == 'POST':
+        lead.customer_name = request.POST.get('customer_name', lead.customer_name)
+        lead.phone = request.POST.get('phone', lead.phone)
+        lead.channel = request.POST.get('channel', lead.channel)
+        lead.requirements = request.POST.get('requirements', lead.requirements)
+        lead.status = request.POST.get('status', lead.status)
+        lead.date = timezone.now() # อัปเดตเวลาล่าสุดทุกครั้งที่มีการเคลื่อนไหว
+        lead.save()
+        messages.success(request, f"✅ อัปเดตสถานะข้อมูลลูกค้า {lead.code} เรียบร้อยแล้ว!")
+    return redirect('crm_board')
+
+# ==========================================
+# 🌟 [NEW] ระบบจัดการนัดหมาย (Appointments) 🌟
+# ==========================================
+@login_required
+def appointment_board(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงระบบนัดหมาย")
+        return redirect('dashboard')
+
+    target_employees, _ = get_target_employees(request.user)
+
+    # โหลดข้อมูลนัดหมายทั้งหมดมาโชว์ในตาราง (พ่วงข้อมูลพนักงานมาด้วย)
+    appointments = get_sales_queryset(Appointment, request.user, target_employees)\
+        .select_related('employee', 'employee__department', 'lead')\
+        .order_by('-appointment_date')
+
+    # ระบบตัวกรองและค้นหาในตาราง
+    search_q = request.GET.get('q', '')
+    type_f = request.GET.get('type', '')
+    status_f = request.GET.get('status', '')
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+
+    if search_q:
+        appointments = appointments.filter(
+            Q(lead__customer_name__icontains=search_q) |
+            Q(lead__code__icontains=search_q) |
+            Q(details__icontains=search_q) |
+            Q(employee__first_name__icontains=search_q)
+        )
+    if type_f:
+        appointments = appointments.filter(appointment_type=type_f)
+    if status_f:
+        appointments = appointments.filter(status=status_f)
+    if start_date:
+        appointments = appointments.filter(appointment_date__date__gte=start_date)
+    if end_date:
+        appointments = appointments.filter(appointment_date__date__lte=end_date)
+
+    paginator = Paginator(appointments, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'sales/appointment_board.html', {
+        'appointments': page_obj,
+        'search_q': search_q,
+        'type_f': type_f,
+        'status_f': status_f,
+        'start_date': start_date,
+        'end_date': end_date,
+        'type_choices': Appointment.TYPE_CHOICES,
+        'status_choices': Appointment.STATUS_CHOICES,
+    })
+
+@login_required
+def appointment_create_modal(request):
+    if request.method == 'POST':
+        lead_id = request.POST.get('lead_id')
+        lead_to_book = get_object_or_404(CustomerLead, pk=lead_id)
+        apt_date_str = request.POST.get('appointment_date')
+        apt_type = request.POST.get('appointment_type')
+        details = request.POST.get('details')
+
+        if apt_date_str:
+            Appointment.objects.create(
+                lead=lead_to_book,
+                appointment_date=apt_date_str,
+                appointment_type=apt_type,
+                details=details,
+                employee=getattr(request.user, 'employee', None)
+            )
+            messages.success(request, f"📅 สร้างรายการนัดหมายสำหรับ {lead_to_book.customer_name} เรียบร้อยแล้ว!")
+    return redirect('crm_board')
+
+@login_required
+def appointment_update(request, apt_id):
+    apt = get_object_or_404(Appointment, pk=apt_id)
+    if request.method == 'POST':
+        apt.status = request.POST.get('status', apt.status)
+        apt.details = request.POST.get('details', apt.details)
+        apt_date_str = request.POST.get('appointment_date')
+        if apt_date_str:
+            apt.appointment_date = apt_date_str
+        apt.save()
+        messages.success(request, "✅ อัปเดตข้อมูลการนัดหมายเรียบร้อยแล้ว!")
+    return redirect('appointment_board_global')
