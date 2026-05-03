@@ -56,10 +56,89 @@ class DeliveryStatus(models.Model):
 
 class Transporter(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ทีมขนส่ง / บริษัทขนส่ง")
+    driver_name = models.CharField(max_length=100, blank=True, verbose_name="ชื่อคนขับหลัก")
+    vehicle_plate = models.CharField(max_length=50, blank=True, verbose_name="ทะเบียนรถ")
+
+    # 🌟 ข้อมูลสำหรับการโอนเงินและเอกสาร 🌟
+    address = models.TextField(blank=True, verbose_name="ที่อยู่บริษัท / คนขับ")
+    bank_account = models.CharField(max_length=200, blank=True, verbose_name="เลขที่บัญชีธนาคาร (ระบุชื่อธนาคารด้วย)")
+    id_card_image = models.ImageField(upload_to='transporter_docs/', null=True, blank=True, verbose_name="เอกสารใบขับขี่ / บัตรประชาชน")
+
+    # 🚨 บรรทัดนี้สำคัญมากค่ะ! ถ้าไม่มีบรรทัดนี้หน้า Admin จะพังทันที 🚨
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าตอบแทนพื้นฐาน")
+
     class Meta:
         verbose_name = "ทีมขนส่ง"
         verbose_name_plural = "ทีมขนส่ง"
+
     def __str__(self): return self.name
+
+# ==========================================
+# 🌟 [NEW] ตาราง: ระบบตั้งเบิกค่ารถขนส่ง 🌟
+# ==========================================
+class LogisticsClaim(models.Model):
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเบิก")
+    transporter = models.ForeignKey(Transporter, on_delete=models.CASCADE, verbose_name="ทีมขนส่ง")
+    total_jobs = models.IntegerField(default=0, verbose_name="จำนวนงานที่เบิก")
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดเงินรวม")
+    status = models.CharField(max_length=20, choices=[('PENDING', 'รออนุมัติจ่าย'), ('PAID', 'จ่ายเงินแล้ว'), ('REJECTED', 'ไม่อนุมัติ')], default='PENDING', verbose_name="สถานะ")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบตั้งเบิกค่าขนส่ง"
+        verbose_name_plural = "ใบตั้งเบิกค่าขนส่ง"
+
+    def __str__(self): return self.code
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"LC-{thai_year:02d}{now.strftime('%m')}"
+            last = LogisticsClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+# ==========================================
+# 🌟 [NEW] ตาราง: ระบบตั้งเบิกผลงานตรวจแบบแปลน 🌟
+# ==========================================
+class BlueprintClaim(models.Model):
+    code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบตั้งเบิก")
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, verbose_name="พนักงานผู้ขอเบิก")
+    total_jobs = models.IntegerField(default=0, verbose_name="จำนวนงานที่เบิก")
+    total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดเงินรวม")
+    status = models.CharField(max_length=20, choices=[('PENDING', 'รออนุมัติจ่าย'), ('PAID', 'จ่ายเงินแล้ว'), ('REJECTED', 'ไม่อนุมัติ')], default='PENDING', verbose_name="สถานะ")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="วันที่ตั้งเบิก")
+    paid_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่จ่ายเงิน")
+
+    class Meta:
+        verbose_name = "ใบตั้งเบิกผลงานตรวจแบบ"
+        verbose_name_plural = "ใบตั้งเบิกผลงานตรวจแบบ"
+
+    def __str__(self): return self.code
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            now = timezone.now()
+            thai_year = (now.year + 543) % 100
+            prefix = f"BC-{thai_year:02d}{now.strftime('%m')}"
+            last = BlueprintClaim.objects.filter(code__startswith=prefix).order_by('code').last()
+            seq = int(last.code.split('-')[-1]) + 1 if last else 1
+            self.code = f"{prefix}-{seq:04d}"
+        super().save(*args, **kwargs)
+
+class BlueprintClaimSplit(models.Model):
+    claim = models.ForeignKey(BlueprintClaim, on_delete=models.CASCADE, related_name='splits')
+    employee = models.ForeignKey(Employee, on_delete=models.CASCADE, verbose_name="ผู้รับเงินส่วนแบ่ง")
+    role_name = models.CharField(max_length=50, verbose_name="ตำแหน่งในทีม (ตอนเบิก)")
+    percentage = models.DecimalField(max_digits=5, decimal_places=2, verbose_name="เปอร์เซ็นต์ที่ได้")
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ยอดเงินสุทธิ")
+
+    class Meta:
+        verbose_name = "ส่วนแบ่งใบเบิก"
+        verbose_name_plural = "ส่วนแบ่งใบเบิก"
 
 # ==========================================
 # 1. สูตรการผลิต (Bill of Materials - BOM)
@@ -86,12 +165,13 @@ class BOMItem(models.Model):
 class ProductionOrder(models.Model):
     STATUS_CHOICES = [
         ('NEW_JOB', '1. รอจ่ายงาน (New JOB)'),
+        ('WAITING_BLUEPRINT', 'รอตรวจสอบแบบแปลน'), # 🌟 [NEW] สถานะใหม่
         ('PLANNED', '2. ตรวจแบบแปลน / ดึงสูตร'),
         ('WAITING_MATERIALS', '3. รอสั่งซื้อวัตถุดิบ'),
         ('WAITING_INVENTORY', '4. รอเบิกวัตถุดิบ'),
         ('IN_PROGRESS', '5. กำลังผลิต'),
-        ('WAITING_QC', 'รอตรวจสอบคุณภาพ (QC)'),  # 🌟 [NEW] สถานะใหม่
-        ('REWORK', 'รอแก้ไขงาน (Rework)'),     # 🌟 [NEW] สถานะใหม่
+        ('WAITING_QC', 'รอตรวจสอบคุณภาพ (QC)'),
+        ('REWORK', 'รอแก้ไขงาน (Rework)'),
         ('COMPLETED', '6. พร้อมจัดส่ง / เสร็จแล้ว (เข้าสต็อก)'),
         ('CANCELLED', 'ยกเลิก')
     ]
@@ -121,7 +201,6 @@ class ProductionOrder(models.Model):
     date_approval_status = models.CharField(max_length=20, choices=DATE_APPROVAL_CHOICES, default='NOT_REQUIRED', verbose_name="สถานะการอนุมัติวัน")
 
     branch = models.ForeignKey(MfgBranch, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="สถานที่ผลิต / โรงงาน")
-    # 🌟 [FIXED] เอาคำว่า 'sales.' ออก เพื่อให้ดึงตาราง Salesperson ในแอปตัวเองได้ถูกต้อง 🌟
     salesperson = models.ForeignKey(Salesperson, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="พนักงานขาย")
 
     customer_name = models.CharField(max_length=200, blank=True, verbose_name="ชื่อลูกค้า / สถานที่ส่ง")
@@ -135,7 +214,11 @@ class ProductionOrder(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='NEW_JOB', verbose_name="สถานะระบบ")
     is_materials_ordered = models.BooleanField(default=False, verbose_name="สั่งซื้อวัตถุดิบแล้ว")
 
-    # 🌟 เพิ่มตัวนับจำนวนครั้งที่โดน QC ตีกลับ 🌟
+    # 🌟 [NEW] ข้อมูลสำหรับการตรวจสอบแบบแปลน 🌟
+    blueprint_approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_blueprints', verbose_name="ผู้อนุมัติแบบแปลน")
+    blueprint_approved_at = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่อนุมัติแบบแปลน")
+    blueprint_claim = models.ForeignKey(BlueprintClaim, on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="ใบตั้งเบิกผลงาน")
+
     rework_count = models.IntegerField(default=0, verbose_name="จำนวนครั้งที่ถูกตีกลับ (Rework)")
 
     qc_paint = models.BooleanField(default=False, verbose_name="1. งานเก็บสี")
@@ -148,6 +231,11 @@ class ProductionOrder(models.Model):
     is_qc_passed = models.BooleanField(default=False, verbose_name="ผ่าน QC แล้ว")
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     is_closed = models.BooleanField(default=False, verbose_name="ปิดจ๊อบแล้ว (งานเสร็จสมบูรณ์)")
+    is_onsite = models.BooleanField(default=False, verbose_name="งานประกอบหน้างาน (On-site)")
+    # 🌟 [NEW] ช่องค่าจ้างรถเฉพาะงานนี้ 🌟
+    delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าจ้างขนส่ง (สำหรับงานนี้)")
+    proof_of_delivery = models.ImageField(upload_to='delivery_proofs/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายใบส่งมอบสินค้า")
+    logistics_claim = models.ForeignKey('LogisticsClaim', on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="ใบตั้งเบิกค่ารถขนส่ง")
 
     class Meta:
         verbose_name = "2. ใบสั่งผลิต"
@@ -188,6 +276,18 @@ class ProductionOrder(models.Model):
         return "primary"
 
 # ==========================================
+# 🌟 [NEW] ตารางประวัติการตรวจสอบแบบ (Blueprint Log) 🌟
+# ==========================================
+class BlueprintLog(models.Model):
+    production_order = models.ForeignKey(ProductionOrder, on_delete=models.CASCADE, related_name='blueprint_logs')
+    action = models.CharField(max_length=255, verbose_name="รายละเอียดการอัปเดต")
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="ผู้ดำเนินการ")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="เวลาที่ดำเนินการ")
+
+    class Meta:
+        ordering = ['-created_at']
+
+# ==========================================
 # 🌟 ตารางประวัติการตรวจ QC (QC Inspection Log) 🌟
 # ==========================================
 class QCInspectionLog(models.Model):
@@ -197,7 +297,7 @@ class QCInspectionLog(models.Model):
     inspected_at = models.DateTimeField(auto_now_add=True, verbose_name="เวลาที่ตรวจ")
     status = models.CharField(max_length=20, choices=[('PASSED', 'ผ่าน'), ('FAILED', 'ไม่ผ่าน/ตีกลับ')], default='FAILED', verbose_name="ผลการตรวจ")
     comments = models.TextField(blank=True, verbose_name="คอมเมนต์/จุดที่ต้องแก้ไข")
-    
+
     defect_image_1 = models.ImageField(upload_to='qc_defects/%Y/%m/', null=True, blank=True, verbose_name="รูปภาพประกอบ 1")
     defect_image_2 = models.ImageField(upload_to='qc_defects/%Y/%m/', null=True, blank=True, verbose_name="รูปภาพประกอบ 2")
 

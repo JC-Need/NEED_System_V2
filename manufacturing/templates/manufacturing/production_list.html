@@ -161,12 +161,12 @@
                                 <span class="info-label mb-1">พนักงานขาย</span>
                                 <div class="small text-dark mb-1"><i class="fas fa-user-tie text-primary me-1"></i> <span class="fw-bold">{{ order.salesperson.name|default:"ไม่ระบุ" }}</span></div>
                                 <div class="small text-secondary" style="font-size: 0.75rem;"><i class="fas fa-building me-1"></i> สาขา/ทีม: <span class="fw-bold text-dark">{{ order.salesperson.branch.name|default:"ไม่ระบุ" }}</span></div>
-                            </div>
+                             </div>
                         </td>
 
                         <td>
                              <span class="info-label">แบบบ้านที่สั่งทำ</span>
-                            <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;"><span class="text-primary me-1">[{{ order.product.code }}]</span>{{ order.product.name }}</div>
+                             <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;"><span class="text-primary me-1">[{{ order.product.code }}]</span>{{ order.product.name }}</div>
                             <div class="mt-3">
                                 <span class="info-label">ไฟล์แบบแปลน</span>
                                 {% if order.blueprint_file %}
@@ -202,21 +202,21 @@
                         <td>
                             <div class="d-flex justify-content-between align-items-start">
                                 <div class="mini-timeline text-start mt-1">
-                                    <div class="timeline-step {% if order.status == 'PLANNED' %}active{% elif order.status in 'WAITING_MATERIALS,WAITING_INVENTORY,IN_PROGRESS,COMPLETED' %}completed{% endif %}">
+                                    <div class="timeline-step {% if order.status == 'PLANNED' %}active{% elif order.status in 'WAITING_MATERIALS,WAITING_INVENTORY,IN_PROGRESS,WAITING_QC,REWORK,COMPLETED' %}completed{% endif %}">
                                         1. ตรวจสอบแปลน
                                     </div>
-                                     <div class="timeline-step {% if order.status == 'WAITING_MATERIALS' %}active{% elif order.status in 'WAITING_INVENTORY,IN_PROGRESS,COMPLETED' %}completed{% endif %}">
-                                        2. จัดซื้อสั่งของ
+                                     <div class="timeline-step {% if order.status == 'WAITING_MATERIALS' %}active{% elif order.status in 'WAITING_INVENTORY,IN_PROGRESS,WAITING_QC,REWORK,COMPLETED' %}completed{% endif %}">
+                                         2. จัดซื้อสั่งของ
                                     </div>
-                                    <div class="timeline-step {% if order.status == 'WAITING_INVENTORY' %}active{% elif order.status in 'IN_PROGRESS,COMPLETED' %}completed{% endif %}">
-                                        3. เตรียมวัตถุดิบ
+                                    <div class="timeline-step {% if order.status == 'WAITING_INVENTORY' %}active{% elif order.status in 'IN_PROGRESS,WAITING_QC,REWORK,COMPLETED' %}completed{% endif %}">
+                                         3. เตรียมวัตถุดิบ
                                      </div>
-                                    <div class="timeline-step {% if order.status == 'IN_PROGRESS' %}active{% elif order.status == 'COMPLETED' %}completed{% endif %}">
+                                    <div class="timeline-step {% if order.status in 'IN_PROGRESS,WAITING_QC,REWORK' %}active{% elif order.status == 'COMPLETED' %}completed{% endif %}">
                                          4. ลงมือผลิต
                                     </div>
                                 </div>
 
-                                {% if order.status == 'IN_PROGRESS' or order.status == 'COMPLETED' %}
+                                {% if order.status in 'IN_PROGRESS,WAITING_QC,REWORK,COMPLETED' %}
                                     {% if is_sales and not request.user.is_superuser %}
                                         <button class="btn btn-sm btn-light border rounded-circle shadow-sm" type="button" style="width: 35px; height: 35px; opacity: 0.8; cursor: not-allowed;" title="สงวนสิทธิ์เฉพาะฝ่ายผลิต" disabled>
                                             <i class="fas fa-lock text-danger"></i>
@@ -232,7 +232,7 @@
                                                     <button type="button" class="dropdown-item py-2 text-dark rounded-3 fw-bold"
                                                             onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{% for d in order.completed_departments.all %}{{ d.id }}{% if not forloop.last %},{% endif %}{% endfor %}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}', '{{ order.qc_paint }}', '{{ order.qc_internal }}', '{{ order.qc_external }}', '{{ order.qc_electrical }}', '{{ order.qc_plumbing }}', '{{ order.qc_aircon }}', '{{ order.status }}')">
                                                         <i class="fas fa-edit text-info me-2" style="width: 20px;"></i> อัปเดตสถานะ / จัดส่ง / QC
-                                                    </button>
+                                                     </button>
                                                 </li>
                                                 <li>
                                                     <a href="{% url 'production_print' order.id %}" target="_blank" class="dropdown-item py-2 text-dark rounded-3 fw-bold">
@@ -309,7 +309,7 @@
                         <td>
                             <span class="info-label">เลขที่ JOB</span>
                             <a href="{% url 'production_detail' order.id %}" class="text-decoration-none fw-bold text-secondary font-monospace mb-2 d-inline-block" style="font-size: 1.1rem;">
-                                 <i class="fas fa-external-link-alt small opacity-50 me-1"></i>{{ order.code }}
+                                <i class="fas fa-external-link-alt small opacity-50 me-1"></i>{{ order.code }}
                             </a>
                             <span class="info-label">วันที่ผลิตเสร็จ</span>
                             <div class="small text-dark mb-2 fw-bold"><i class="fas fa-flag-checkered text-success me-1"></i> {{ order.finish_date|date:"d/m/Y"|default:"-" }}</div>
@@ -319,7 +319,7 @@
                             <div class="fw-bold text-dark mb-3" style="font-size: 0.95rem;">{{ order.customer_name|default:"-"|truncatechars:30 }}</div>
                         </td>
                         <td>
-                             <span class="info-label">แบบบ้านที่สั่งทำ</span>
+                            <span class="info-label">แบบบ้านที่สั่งทำ</span>
                             <div class="fw-bold text-dark mb-1" style="font-size: 0.95rem;"><span class="text-secondary me-1">[{{ order.product.code }}]</span>{{ order.product.name }}</div>
                         </td>
 
@@ -356,12 +356,12 @@
                                 {% endif %}
                             </div>
                         </td>
-                     </tr>
+                    </tr>
                     {% empty %}
                     <tr><td colspan="5" class="text-center py-5 text-secondary bg-white rounded-4 shadow-sm"><i class="fas fa-box-open fa-3x mb-3 opacity-25"></i><br>ไม่มีประวัติงานในช่วงเวลานี้</td></tr>
                     {% endfor %}
                 </tbody>
-             </table>
+            </table>
         </div>
       </div>
     </div>
@@ -372,7 +372,7 @@
         <div class="modal-content border-0 shadow-lg rounded-4">
             <div class="modal-header bg-light border-bottom-0 pb-0">
                 <h5 class="modal-title fw-bold text-primary"><i class="fas fa-clipboard-check me-2"></i>อัปเดตข้อมูล: <span id="displayJobCode" class="text-dark"></span></h5>
-                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
 
             <form id="updateForm" method="POST">
@@ -404,14 +404,14 @@
                             </div>
 
                             <div class="mb-3 mt-4">
-                                 <label class="small fw-bold text-secondary">ทีมช่างที่รับผิดชอบ</label>
+                                <label class="small fw-bold text-secondary">ทีมช่างที่รับผิดชอบ</label>
                                 <div class="input-group">
                                     <select name="production_team" id="modalProdTeam" class="form-select shadow-sm text-dark">
                                         <option value="">-- ไม่ระบุ --</option>
                                         {% for pt in prod_teams %}
                                             <option value="{{ pt.id }}">{{ pt.name }}</option>
                                         {% endfor %}
-                                     </select>
+                                    </select>
                                     {% if can_add_master_data %}
                                     <button type="button" class="btn btn-outline-info" onclick="quickAdd('prod_team')"><i class="fas fa-plus"></i></button>
                                     {% endif %}
@@ -471,13 +471,13 @@
                                             <option value="{{ ds.id }}">{{ ds.name }}</option>
                                         {% endfor %}
                                      </select>
-                                    {% if can_add_master_data %}
+                                     {% if can_add_master_data %}
                                       <button type="button" class="btn btn-outline-warning" onclick="quickAdd('deliv_status')"><i class="fas fa-plus"></i></button>
                                     {% endif %}
                                 </div>
                              </div>
 
-                            <div class="mb-3">
+                             <div class="mb-3">
                                 <label class="small fw-bold text-secondary">ทีมขนส่ง</label>
                                 <div class="input-group">
                                     <select name="transporter" id="modalTransporter" class="form-select shadow-sm text-dark">
@@ -493,14 +493,17 @@
                             </div>
 
                             <hr class="my-4">
-                            <div class="form-check form-switch form-control-lg d-flex align-items-center bg-danger bg-opacity-10 p-3 rounded-3 border border-danger border-opacity-25">
-                                <input class="form-check-input mt-0 me-3" type="checkbox" role="switch" id="modalIsClosed" name="is_closed" style="transform: scale(1.5);">
-                                <label class="form-check-label fw-bold text-danger ms-2" for="modalIsClosed">
-                                    ปิดจ๊อบ (Close JOB) <small class="text-secondary fw-normal d-block" style="font-size: 0.75rem;">หากเปิดสวิตช์นี้ งานจะถูกย้ายไปที่แท็บประวัติทันที</small>
-                                </label>
+                            <div class="alert alert-danger bg-danger bg-opacity-10 border-danger border-opacity-25 rounded-3 p-3 mt-4 mb-0">
+                               <div class="form-check form-switch d-flex justify-content-between align-items-center p-0 m-0">
+                                    <div>
+                                        <h6 class="fw-bold text-danger mb-0" style="cursor: pointer;" onclick="document.getElementById('modalIsClosed').click()">ปิดจ๊อบ (Close JOB)</h6>
+                                        <small class="text-danger opacity-75" style="font-size: 0.75rem;">หากเปิดสวิตช์นี้ งานจะถูกย้ายไปแท็บประวัติทันที</small>
+                                    </div>
+                                     <input class="form-check-input fs-3 m-0 flex-shrink-0" type="checkbox" role="switch" id="modalIsClosed" name="is_closed" style="cursor: pointer; box-shadow: none;">
+                                </div>
                             </div>
                         </div>
-                    </div>
+                     </div>
                 </div>
 
                 <div class="modal-footer bg-light border-top-0 py-3">
@@ -532,7 +535,7 @@
         });
     });
 
-    // 🌟 [FIXED] เพิ่ม JavaScript จัดการ Layout โชว์/ซ่อน ส่วนจัดส่ง 🌟
+    // 🌟 [FIXED] เพิ่ม JavaScript จัดการ Layout โชว์/ซ่อน ส่วนจัดส่ง & ดักสถานะ WAITING_QC และ REWORK ให้สมบูรณ์ 🌟
     function openUpdateModal(jobId, jobCode, completedDeptsStr, pTeam, dStatus, transp, isClosed, qc1, qc2, qc3, qc4, qc5, qc6, status) {
         document.getElementById('updateJobId').value = jobId;
         document.getElementById('displayJobCode').innerText = jobCode;
@@ -559,8 +562,13 @@
         document.getElementById('modalQcPlumbing').checked = (qc5 === 'True');
         document.getElementById('modalQcAircon').checked = (qc6 === 'True');
 
-        // 🌟 ยืด-หด Layout คอลัมน์ ตามสถานะงาน 🌟
-        if (status === 'IN_PROGRESS') {
+        // 🌟 ป้องกัน error กรณีสถานะถูกส่งมาเป็น undefined (เช่น ในแท็บประวัติปิดจ๊อบ) 🌟
+        if (!status || isClosed === 'True') {
+            status = 'COMPLETED';
+        }
+
+        // 🌟 ยืด-หด Layout คอลัมน์ ตามสถานะงาน (ดักสถานะ QC และ REWORK ไว้ตรงนี้แล้ว!) 🌟
+        if (status === 'IN_PROGRESS' || status === 'WAITING_QC' || status === 'REWORK') {
             document.getElementById('colProduction').className = 'col-md-6 border-end';
             document.getElementById('colQC').className = 'col-md-6';
             document.getElementById('colDelivery').style.display = 'none'; // ซ่อนจัดส่ง

@@ -417,10 +417,16 @@ def employee_access_profile(request, emp_id):
     if employee.user:
         user_groups = list(employee.user.groups.values_list('id', flat=True))
 
+    # 🌟 [NEW] ดึงข้อมูลทีม และ ตัวเลือกตำแหน่ง ส่งไปให้หน้า HTML 🌟
+    sales_groups = SalesGroup.objects.all().order_by('name')
+    roles = Employee.ROLE_CHOICES
+
     context = {
         'employee': employee,
         'all_groups': all_groups,
         'user_groups': user_groups,
+        'sales_groups': sales_groups, # 🌟 เพิ่มตรงนี้
+        'roles': roles,               # 🌟 เพิ่มตรงนี้
     }
     return render(request, 'hr/employee_access_profile.html', context)
 
@@ -503,36 +509,24 @@ def sales_group_settings(request):
             name = request.POST.get('name')
             group_type = request.POST.get('group_type')
             commission_rate = request.POST.get('commission_rate') or 0
+            flat_rate_amount = request.POST.get('flat_rate_amount') or 0 # 🌟 รับค่าเหมาจ่าย
 
-            # ค่าของกลุ่มทำงาน
             share_leader = request.POST.get('share_leader') or 0
             share_level1 = request.POST.get('share_level1') or 0
             share_level2 = request.POST.get('share_level2') or 0
 
-            # ค่าของกลุ่มผู้บริหาร
             share_exec1 = request.POST.get('share_exec1') or 0
             share_exec2 = request.POST.get('share_exec2') or 0
             share_exec3 = request.POST.get('share_exec3') or 0
             share_exec4 = request.POST.get('share_exec4') or 0
             share_exec5 = request.POST.get('share_exec5') or 0
 
-            # ค่ากองทุนกลาง
             share_fund = request.POST.get('share_fund') or 0
-
-            # 🌟 ตรวจสอบผลรวมเปอร์เซ็นต์ ให้เหมาะกับประเภท 🌟
-            if group_type == 'TEAM':
-                total_share = float(share_leader) + float(share_level1) + float(share_level2) + float(share_fund)
-            elif group_type == 'EXECUTIVE':
-                total_share = float(share_exec1) + float(share_exec2) + float(share_exec3) + float(share_exec4) + float(share_exec5) + float(share_fund)
-            else:
-                total_share = 100.0 # อิสระ ไม่ต้องซอยย่อย
-
-            if group_type in ['TEAM', 'EXECUTIVE'] and total_share != 100.0:
-                messages.warning(request, f"⚠️ คำเตือน: สัดส่วนการแบ่งเงินของกลุ่ม '{name}' รวมกันได้ {total_share}% (ระบบแนะนำให้ตั้งพอดี 100%)")
 
             if action == 'add':
                 SalesGroup.objects.create(
                     name=name, group_type=group_type, commission_rate=commission_rate,
+                    flat_rate_amount=flat_rate_amount, # 🌟 บันทึก
                     share_leader=share_leader, share_level1=share_level1, share_level2=share_level2,
                     share_exec1=share_exec1, share_exec2=share_exec2, share_exec3=share_exec3,
                     share_exec4=share_exec4, share_exec5=share_exec5, share_fund=share_fund
@@ -544,6 +538,7 @@ def sales_group_settings(request):
                 group.name = name
                 group.group_type = group_type
                 group.commission_rate = commission_rate
+                group.flat_rate_amount = flat_rate_amount # 🌟 บันทึก
                 group.share_leader = share_leader
                 group.share_level1 = share_level1
                 group.share_level2 = share_level2
@@ -567,7 +562,6 @@ def sales_group_settings(request):
                 messages.success(request, f"🗑️ ลบกลุ่ม {group_name} เรียบร้อยแล้ว")
 
         return redirect('sales_group_settings')
-
     return render(request, 'hr/sales_group_settings.html', {'groups': groups})
 
 # ==========================================

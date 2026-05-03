@@ -17,6 +17,8 @@ from master_data.models import CompanyInfo
 from inventory.models import Product, InventoryDoc, StockMovement
 from purchasing.models import PurchaseOrder, PurchaseOrderItem, PurchasePreparation
 from .forms import BOMForm, BOMItemFormSet
+from .models import BlueprintClaimSplit # 🌟 นำเข้าตารางใหม่
+from .models import LogisticsClaim # 🌟 นำเข้าตาราง Logistics
 
 # ==========================================
 # 🌟 ระบบใบสั่งผลิต (Production Order) 🌟
@@ -79,7 +81,7 @@ def production_list(request):
     system_status_choices = ProductionOrder.STATUS_CHOICES
 
     can_add_master_data = False
-    is_sales = False 
+    is_sales = False
 
     if request.user.is_superuser:
         can_add_master_data = True
@@ -140,7 +142,7 @@ def planner_board(request):
 
     start_date = request.GET.get('start_date', default_start.strftime('%Y-%m-%d'))
     end_date = request.GET.get('end_date', default_end.strftime('%Y-%m-%d'))
-    
+
     search_q = request.GET.get('q', '')
     search_branch = request.GET.get('branch', '')
     search_team = request.GET.get('team', '')
@@ -153,7 +155,7 @@ def planner_board(request):
     if start_date: orders = orders.filter(start_date__gte=start_date)
     if end_date: orders = orders.filter(start_date__lte=end_date)
     if search_q:
-        orders = orders.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(product__name__icontains=search_q))
+         orders = orders.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(product__name__icontains=search_q))
     if search_branch: orders = orders.filter(branch_id=search_branch)
     if search_team: orders = orders.filter(production_team_id=search_team)
     if search_salesperson: orders = orders.filter(salesperson_id=search_salesperson)
@@ -226,12 +228,14 @@ def production_create(request):
 
         if product_id:
             product = get_object_or_404(Product, id=product_id)
+            is_onsite = request.POST.get('is_onsite') == 'on'
             order = ProductionOrder(
                 product=product,
                 quantity=1,
                 status='NEW_JOB',
                 note=note,
                 customer_name=customer_name,
+                is_onsite=is_onsite,
                 responsible_person=getattr(request.user, 'employee', None)
             )
 
@@ -279,7 +283,7 @@ def ppo_prepare(request):
             for job in jobs:
                 bom = BOM.objects.filter(product=job.product).first()
                 if bom:
-                     for item in bom.items.all():
+                    for item in bom.items.all():
                         total_needed = Decimal(str(item.quantity))
                         supplier = item.raw_material.supplier
                         sup_id = supplier.id if supplier else "none"
@@ -357,35 +361,25 @@ def production_process(request, pk):
         messages.warning(request, "⚠️ รายการนี้ผลิตเสร็จและรับเข้าคลังไปแล้ว!")
         return redirect('production_list')
 
-    alloc_code = f"{order.product.code}-{order.code}"
-    alloc_name = f"{order.product.name} [{order.code}]"
-    if order.customer_name: alloc_name += f" (ลค. {order.customer_name})"
+    # 🌟 [FIXED] ใช้ Product รหัสเดิมเลย ไม่มีการสร้างรหัสใหม่ต่อท้าย JOB 🌟
+    main_product = order.product
 
-    allocated_product, created = Product.objects.get_or_create(
-        code=alloc_code,
-        defaults={
-            'name': alloc_name[:255],
-            'category': order.product.category,
-            'product_type': 'FG',
-            'sell_price': order.product.sell_price,
-            'cost_price': order.product.cost_price,
-            'min_level': 0,
-            'stock_qty': 0,
-            'is_active': True,
-        }
-    )
+    # บันทึกประวัติว่าสินค้านี้มาจาก JOB ไหน และลูกค้าชื่ออะไร
+    desc_text = f"รับสินค้า {main_product.name} จากการผลิต {order.code}"
+    if order.customer_name:
+        desc_text += f" (ลค. {order.customer_name})"
 
-    doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code}", created_by=request.user)
-    StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
+    doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=desc_text, created_by=request.user)
+    StockMovement.objects.create(doc=doc_in, product=main_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
 
-    allocated_product.stock_qty = (allocated_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
-    allocated_product.save()
+    main_product.stock_qty = (main_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
+    main_product.save()
 
     order.status = 'COMPLETED'
     order.finish_date = timezone.now().date()
     order.save()
 
-    messages.success(request, f"🎉 สำเร็จ! รับ {allocated_product.name} ({order.quantity} หลัง) เข้าคลังเรียบร้อยแล้ว!")
+    messages.success(request, f"🎉 สำเร็จ! รับ {main_product.name} ({order.quantity} หลัง) เข้าคลังเรียบร้อยแล้ว!")
     return redirect('production_list')
 
 @login_required
@@ -421,15 +415,16 @@ def upload_blueprint(request, pk):
 @login_required
 def load_standard_bom(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
+    referer = request.META.get('HTTP_REFERER') # 🌟 คำสั่งให้ระบบจำทางกลับบ้านหน้าเดิม
 
     if order.materials.exists():
         messages.warning(request, "⚠️ มีการดึงรายการสูตรผลิตในใบสั่งผลิตนี้ไปแล้ว")
-        return redirect('production_detail', pk=order.pk)
+        return redirect(referer) if referer else redirect('production_detail', pk=order.pk)
 
     bom = BOM.objects.filter(product=order.product).first()
     if not bom:
         messages.error(request, "❌ ไม่พบสูตรผลิตมาตรฐาน (BOM) สำหรับสินค้ารุ่นนี้")
-        return redirect('production_detail', pk=order.pk)
+        return redirect(referer) if referer else redirect('production_detail', pk=order.pk)
 
     for item in bom.items.all():
         ProductionOrderMaterial.objects.create(
@@ -439,11 +434,13 @@ def load_standard_bom(request, pk):
             is_additional=False
         )
     messages.success(request, "📋 ดึงรายการวัตถุดิบจากสูตรมาตรฐานเรียบร้อยแล้ว!")
-    return redirect('production_detail', pk=order.pk)
+    return redirect(referer) if referer else redirect('production_detail', pk=order.pk)
 
 @login_required
 def add_additional_material(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
+    referer = request.META.get('HTTP_REFERER') # 🌟 คำสั่งให้ระบบจำทางกลับบ้านหน้าเดิม
+
     if request.method == 'POST':
         product_id = request.POST.get('raw_material')
         try:
@@ -461,19 +458,21 @@ def add_additional_material(request, pk):
             )
             messages.success(request, f"➕ เพิ่มวัตถุดิบส่วนเพิ่ม: {rm.name} จำนวน {qty} ลงในบิลเรียบร้อยแล้ว")
         else:
-             messages.error(request, "❌ กรุณาเลือกวัตถุดิบและใส่จำนวนให้ถูกต้อง")
-    return redirect('production_detail', pk=order.pk)
+            messages.error(request, "❌ กรุณาเลือกวัตถุดิบและใส่จำนวนให้ถูกต้อง")
+    return redirect(referer) if referer else redirect('production_detail', pk=order.pk)
 
 @login_required
 def delete_production_material(request, pk):
     mat = get_object_or_404(ProductionOrderMaterial, pk=pk)
     order_id = mat.production_order.id
+    referer = request.META.get('HTTP_REFERER') # 🌟 คำสั่งให้ระบบจำทางกลับบ้านหน้าเดิม
+
     if mat.production_order.status != 'COMPLETED':
         mat.delete()
         messages.success(request, "🗑️ ลบรายการวัตถุดิบออกจากบิลผลิตเรียบร้อยแล้ว")
     else:
         messages.error(request, "❌ ไม่สามารถลบได้เนื่องจากใบสั่งผลิตนี้ดำเนินการเสร็จสิ้นแล้ว")
-    return redirect('production_detail', pk=order_id)
+    return redirect(referer) if referer else redirect('production_detail', pk=order_id)
 
 @login_required
 def blueprint_viewer(request, pk):
@@ -577,7 +576,7 @@ def update_production_board(request, pk):
             selected_depts = request.POST.getlist('completed_departments')
             order.completed_departments.set(selected_depts)
         elif action in ['update_progress', 'qc_complete_and_receive']:
-            order.completed_departments.clear()
+             order.completed_departments.clear()
 
         if 'production_team' in request.POST:
             order.production_team_id = request.POST.get('production_team') or None
@@ -589,7 +588,7 @@ def update_production_board(request, pk):
             order.branch_id = request.POST.get('branch') or None
 
         if action == 'dispatch' and order.status == 'NEW_JOB':
-            order.status = 'PLANNED'
+            order.status = 'WAITING_BLUEPRINT'
             messages.success(request, f"✅ จ่ายงาน {order.code} ไปยัง {order.branch.name if order.branch else 'ไม่ระบุโรงงาน'} เรียบร้อยแล้ว! (สถานะ: ตรวจแบบแปลน)")
 
         elif action in ['update_progress', 'qc_complete_and_receive']:
@@ -604,34 +603,23 @@ def update_production_board(request, pk):
             # 🌟 ย้ายลอจิกการรับเข้าคลังมาไว้ที่ปุ่มนี้
             if action == 'qc_complete_and_receive':
                 if order.status != 'COMPLETED':
-                    alloc_code = f"{order.product.code}-{order.code}"
-                    alloc_name = f"{order.product.name} [{order.code}]"
-                    if order.customer_name: alloc_name += f" (ลค. {order.customer_name})"
+                    # 🌟 [FIXED] ใช้ Product รหัสเดิมเลย ไม่มีการสร้างรหัสใหม่ต่อท้าย JOB 🌟
+                    main_product = order.product
 
-                    allocated_product, created = Product.objects.get_or_create(
-                        code=alloc_code,
-                        defaults={
-                            'name': alloc_name[:255],
-                            'category': order.product.category,
-                            'product_type': 'FG',
-                            'sell_price': order.product.sell_price,
-                            'cost_price': order.product.cost_price,
-                            'min_level': 0,
-                            'stock_qty': 0,
-                            'is_active': True,
-                        }
-                    )
+                    desc_text = f"รับสินค้า {main_product.name} จาก {order.code} (QC Pass)"
+                    if order.customer_name:
+                        desc_text += f" (ลค. {order.customer_name})"
 
-                    doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าสำเร็จรูปจากการผลิต {order.code} (QC Pass)", created_by=request.user)
-                    StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
+                    doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=desc_text, created_by=request.user)
+                    StockMovement.objects.create(doc=doc_in, product=main_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
 
-                    allocated_product.stock_qty = (allocated_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
-                    allocated_product.save()
+                    main_product.stock_qty = (main_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
+                    main_product.save()
 
                     order.status = 'COMPLETED'
                     order.finish_date = timezone.now().date()
                     order.is_qc_passed = True
-                    messages.success(request, f"🎉 ผ่าน QC และรับ {allocated_product.name} เข้าคลังแล้ว! งานย้ายไปช่อง W4")
+                    messages.success(request, f"🎉 ผ่าน QC และรับ {main_product.name} เข้าคลังแล้ว! งานย้ายไปช่อง W4 พร้อมส่ง")
             else:
                 messages.success(request, f"✅ อัปเดตความคืบหน้า {order.code} เรียบร้อยแล้ว!")
 
@@ -727,12 +715,12 @@ def import_bom_excel(request):
                 messages.error(request, "❌ รูปแบบไฟล์ไม่ถูกต้อง กรุณาใช้คอลัมน์: FG SKU, RM SKU, Quantity")
                 return redirect('import_bom_excel')
             with transaction.atomic():
-                import_count = 0
-                for _, row in df.iterrows():
+                 import_count = 0
+                 for _, row in df.iterrows():
                     fg_sku = str(row['FG SKU']).strip()
                     rm_sku = str(row['RM SKU']).strip()
                     try:
-                        qty = Decimal(str(row['Quantity']))
+                         qty = Decimal(str(row['Quantity']))
                     except (ValueError, TypeError, InvalidOperation):
                         continue
                     fg_product = Product.objects.filter(code=fg_sku, product_type='FG').first()
@@ -748,7 +736,7 @@ def import_bom_excel(request):
                             bom=bom_obj,
                             raw_material=rm_product,
                             defaults={'quantity': qty}
-                        )
+                         )
                         import_count += 1
             messages.success(request, f"✅ นำเข้าข้อมูลสูตรผลิตสำเร็จทั้งหมด {import_count} รายการ")
             return redirect('import_bom_excel')
@@ -854,7 +842,7 @@ def production_head_board(request):
 
     for order in orders:
         order.display_cohort = format_week_range(order.start_date)
-        
+
         if order.status == 'PLANNED':
             col1_upcoming.append(order)
         elif order.status == 'REWORK':
@@ -964,7 +952,7 @@ def qc_board(request):
 
     for order in orders:
         order.display_cohort = format_week_range(order.start_date)
-        
+
         if order.status == 'REWORK':
             col3_rework.append(order)
         elif order.status == 'WAITING_QC':
@@ -1074,3 +1062,390 @@ def process_qc(request, pk):
             messages.warning(request, f"🚨 ตีกลับงาน {order.code} ให้ช่างแก้ไขเรียบร้อยแล้ว (การตีกลับรอบที่ {order.rework_count})")
 
     return redirect('qc_board')
+
+# ==========================================
+# 🌟 [NEW] ศูนย์ตรวจสอบแบบแปลนและตั้งเบิก (Blueprint Hub) 🌟
+# ==========================================
+from .models import BlueprintClaim, BlueprintLog
+
+@login_required
+def blueprint_hub(request):
+    current_emp = getattr(request.user, 'employee', None)
+
+    # 🌟 1. รับค่าตัวกรองการค้นหา (Filters) 🌟
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    q_job = request.GET.get('q_job', '')
+    q_customer = request.GET.get('q_customer', '')
+    search_sp = request.GET.get('salesperson', '')
+    claim_status = request.GET.get('claim_status', '')
+
+    # 2. ตะกร้างานเข้า (รอดำเนินการตรวจ)
+    pending_jobs = ProductionOrder.objects.select_related('product', 'salesperson', 'salesperson__branch').filter(
+        status__in=['WAITING_BLUEPRINT', 'PLANNED'],
+        is_closed=False
+    ).order_by('start_date')
+
+    # 3. ประวัติการทำงาน (และระบบกรองข้อมูล)
+    history_jobs = ProductionOrder.objects.select_related(
+        'product', 'salesperson', 'salesperson__branch', 'blueprint_approved_by', 'blueprint_claim'
+    ).filter(blueprint_approved_by__isnull=False)
+
+    # นำค่าที่ค้นหามากรองข้อมูล (Filter Logic)
+    if start_date:
+        history_jobs = history_jobs.filter(blueprint_approved_at__date__gte=start_date)
+    if end_date:
+        history_jobs = history_jobs.filter(blueprint_approved_at__date__lte=end_date)
+    if q_job:
+        history_jobs = history_jobs.filter(code__icontains=q_job)
+    if q_customer:
+        history_jobs = history_jobs.filter(customer_name__icontains=q_customer)
+    if search_sp:
+        history_jobs = history_jobs.filter(salesperson_id=search_sp)
+
+    if claim_status == 'UNCLAIMED':
+        history_jobs = history_jobs.filter(blueprint_claim__isnull=True)
+    elif claim_status in ['PENDING', 'PAID', 'REJECTED']:
+        history_jobs = history_jobs.filter(blueprint_claim__status=claim_status)
+
+    history_jobs = history_jobs.order_by('-blueprint_approved_at')[:100] # โชว์ 100 รายการล่าสุดเพื่อความเร็ว
+
+    # 4. ระบบตั้งเบิก
+    # 🌟 4.1 งานที่พร้อมตั้งเบิก (เงื่อนไข: ตรวจเสร็จแล้ว + ยังไม่ได้เบิก + เซลส์เปิด Invoice แล้ว) 🌟
+    claimable_jobs = ProductionOrder.objects.filter(
+        blueprint_approved_by=current_emp,
+        blueprint_claim__isnull=True,
+        quotation_ref__invoice__isnull=False # 🔒 ล็อกเป้า: ต้องมี Invoice
+    ).order_by('blueprint_approved_at')
+
+    # 🌟 4.2 งานที่รอเซลส์เปิดบิล (เงื่อนไข: ตรวจเสร็จแล้ว + แต่ยังไม่มี Invoice) 🌟
+    waiting_invoice_jobs = ProductionOrder.objects.filter(
+        blueprint_approved_by=current_emp,
+        blueprint_claim__isnull=True,
+        quotation_ref__invoice__isnull=True # ⏳ รอ Invoice
+    ).order_by('blueprint_approved_at')
+
+    claims = BlueprintClaim.objects.filter(employee=current_emp).order_by('-created_at')
+
+    # ดึงข้อมูลพนักงานขายมาทำตัวเลือก Dropdown
+    salespersons = Salesperson.objects.select_related('branch').all().order_by('name')
+
+    return render(request, 'manufacturing/blueprint_hub.html', {
+        'pending_jobs': pending_jobs,
+        'history_jobs': history_jobs,
+        'claimable_jobs': claimable_jobs,
+        'waiting_invoice_jobs': waiting_invoice_jobs, # 🌟 ส่งตัวแปรนี้ไปแสดงผลให้ช่างดูด้วย
+        'claims': claims,
+        'salespersons': salespersons,
+        'start_date': start_date,
+        'end_date': end_date,
+        'q_job': q_job,
+        'q_customer': q_customer,
+        'search_sp': search_sp,
+        'claim_status': claim_status,
+    })
+
+@login_required
+def blueprint_workspace(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    materials = order.materials.all()
+    has_bom = BOM.objects.filter(product=order.product).exists()
+    raw_materials = Product.objects.filter(product_type='RM', is_active=True).order_by('code')
+    logs = order.blueprint_logs.all()
+
+    return render(request, 'manufacturing/blueprint_workspace.html', {
+        'order': order,
+        'materials': materials,
+        'has_bom': has_bom,
+        'raw_materials': raw_materials,
+        'logs': logs
+    })
+
+@login_required
+def blueprint_approve(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    current_emp = getattr(request.user, 'employee', None)
+
+    if request.method == 'POST':
+        # เปลี่ยนสถานะส่งให้จัดซื้อ (W2)
+        order.status = 'WAITING_MATERIALS'
+        order.blueprint_approved_by = current_emp
+        order.blueprint_approved_at = timezone.now()
+        order.save()
+
+        BlueprintLog.objects.create(
+            production_order=order,
+            action="ตรวจสอบความถูกต้องของแบบแปลนและโครงสร้างวัตถุดิบ (Approve)",
+            employee=current_emp
+        )
+
+        messages.success(request, f"✅ ยืนยันความถูกต้องของ JOB {order.code} เรียบร้อย! งานถูกส่งต่อไปยังแผนกสั่งวัตถุดิบแล้วค่ะ")
+        return redirect('blueprint_hub')
+    return redirect('blueprint_workspace', pk=pk)
+
+@login_required
+def blueprint_create_claim(request):
+    if request.method == 'POST':
+        job_ids = request.POST.getlist('job_ids')
+        current_emp = getattr(request.user, 'employee', None)
+
+        if job_ids and current_emp:
+            # 🌟 1. ดึงกลุ่มและเรทราคา
+            group = current_emp.sales_group
+            if not group or group.flat_rate_amount <= 0:
+                messages.error(request, "❌ ไม่สามารถตั้งเบิกได้: คุณยังไม่มีสังกัดทีม หรือ ทีมยังไม่ได้ตั้งค่า 'ค่าตอบแทนเหมาจ่าย'")
+                return redirect('blueprint_hub')
+
+            jobs = ProductionOrder.objects.filter(id__in=job_ids, blueprint_approved_by=current_emp, blueprint_claim__isnull=True)
+            if jobs.exists():
+                rate_per_job = Decimal(str(group.flat_rate_amount))
+                total_jobs = jobs.count()
+                total_amount = Decimal(str(total_jobs)) * rate_per_job
+
+                # 🌟 2. สร้างบิลแม่
+                claim = BlueprintClaim.objects.create(employee=current_emp, total_jobs=total_jobs, total_amount=total_amount)
+                jobs.update(blueprint_claim=claim)
+
+                # 🌟 3. กระจายส่วนแบ่ง (Splits)
+                members = group.members.all()
+                l1_count = members.filter(group_role='LEVEL1').count() or 1
+                l2_count = members.filter(group_role='LEVEL2').count() or 1
+
+                for member in members:
+                    share_pct = Decimal('0')
+                    if member.group_role == 'LEADER':
+                        share_pct = Decimal(str(group.share_leader))
+                    elif member.group_role == 'LEVEL1':
+                        share_pct = Decimal(str(group.share_level1)) / Decimal(str(l1_count))
+                    elif member.group_role == 'LEVEL2':
+                        share_pct = Decimal(str(group.share_level2)) / Decimal(str(l2_count))
+
+                    if share_pct > 0:
+                        split_amount = (total_amount * share_pct) / Decimal('100')
+                        BlueprintClaimSplit.objects.create(
+                            claim=claim, employee=member, role_name=member.get_group_role_display(),
+                            percentage=share_pct, amount=split_amount
+                        )
+
+                messages.success(request, f"💰 สร้างใบตั้งเบิก {claim.code} สำเร็จ! และระบบกระจายยอดเงินให้ลูกทีมอัตโนมัติเรียบร้อยค่ะ")
+            else:
+                messages.error(request, "❌ ไม่พบงานที่สามารถตั้งเบิกได้ หรือมีการเบิกไปแล้ว")
+        else:
+            messages.warning(request, "⚠️ กรุณาเลือกงานอย่างน้อย 1 รายการ")
+    return redirect('blueprint_hub')
+
+# ==========================================
+# 🌟 ระบบสร้างเอกสารตั้งเบิกบัญชี และแปลงค่าเงินเป็นตัวอักษร 🌟
+# ==========================================
+def get_thai_baht_text(number):
+    if number == 0: return "ศูนย์บาทถ้วน"
+    import math
+    number = round(number, 2)
+    baht = math.floor(number)
+    satang = int((number - baht) * 100)
+
+    def read_num(n):
+        if n == 0: return ""
+        numbers = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
+        positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
+        s = str(n)
+        length = len(s)
+        res = ""
+        for i, digit in enumerate(s):
+            val = int(digit)
+            pos = length - i - 1
+            if val == 0:
+                continue
+            if pos == 0 and val == 1 and length > 1:
+                res += "เอ็ด"
+            elif pos == 1 and val == 1:
+                res += "สิบ"
+            elif pos == 1 and val == 2:
+                res += "ยี่สิบ"
+            else:
+                res += numbers[val] + positions[pos]
+        return res
+
+    res = ""
+    if baht > 0:
+        res += read_num(baht) + "บาท"
+    if satang > 0:
+        res += read_num(satang) + "สตางค์"
+    else:
+        res += "ถ้วน"
+    return res
+
+@login_required
+def print_blueprint_claim(request, pk):
+    claim = get_object_or_404(BlueprintClaim, pk=pk)
+    company = CompanyInfo.objects.first()
+    jobs = claim.production_orders.all()
+    amount_text = get_thai_baht_text(claim.total_amount)
+
+    # 🌟 [NEW] คำนวณยอดเงินส่วนที่ถูกหักเข้ากองทุน
+    splits = claim.splits.all()
+
+    # รวมเงินที่จ่ายให้คน
+    total_split_amount = sum([s.amount for s in splits]) if splits else Decimal('0')
+    fund_amount = claim.total_amount - total_split_amount # ส่วนต่างคือเงินกองทุน
+
+    # รวมเปอร์เซ็นต์ที่จ่ายให้คน
+    total_split_percent = sum([s.percentage for s in splits]) if splits else Decimal('0')
+    fund_percentage = Decimal('100') - total_split_percent # ส่วนต่างคือ % กองทุน
+
+    return render(request, 'manufacturing/print_blueprint_claim.html', {
+        'claim': claim,
+        'jobs': jobs,
+        'company': company,
+        'amount_text': amount_text,
+        'fund_amount': fund_amount,
+        'fund_percentage': fund_percentage, # 🌟 ส่งค่าไปแสดงผล
+    })
+
+# ==========================================
+# 🌟 [NEW] กระดานสำหรับแผนกจัดส่งสินค้า (Logistics Board) 🌟
+# ==========================================
+@login_required
+def logistics_board(request):
+    # 🌟 ดึงงานที่เสร็จแล้ว (COMPLETED), รอ QC (WAITING_QC) หรือเป็นงานหน้างาน (is_onsite)
+    orders = ProductionOrder.objects.select_related(
+        'product', 'branch', 'transporter', 'delivery_status', 'quotation_ref', 'logistics_claim'
+    ).filter(
+        Q(status='COMPLETED') | Q(status='WAITING_QC') | Q(is_onsite=True),
+        is_closed=False
+    ).order_by('delivery_date', '-id')
+
+    col1_pending, col2_delivering, col3_delivered = [], [], []
+
+    for order in orders:
+        if order.transporter is None:
+            col1_pending.append(order)
+        elif order.delivery_status and order.delivery_status.name in ['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']:
+            col3_delivered.append(order)
+        else:
+            col2_delivering.append(order) # 🌟 เติมคำสั่งที่หายไปตรงนี้แล้วค่ะ! 🌟
+
+    transporters = Transporter.objects.all().order_by('name')
+    delivery_statuses = DeliveryStatus.objects.all().order_by('name')
+    claims = LogisticsClaim.objects.all().order_by('-created_at')[:20]
+
+    return render(request, 'manufacturing/logistics_board.html', {
+        'orders': orders, 'col1_pending': col1_pending, 'col2_delivering': col2_delivering,
+        'col3_delivered': col3_delivered, 'transporters': transporters,
+        'delivery_statuses': delivery_statuses, 'claims': claims
+    })
+
+@login_required
+@transaction.atomic
+def process_logistics(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    if request.method == 'POST':
+        action = request.POST.get('action')
+
+        # 🌟 อัปเดตให้รับค่า 'delivery_fee' 🌟
+        if action == 'assign_truck':
+            transporter_id = request.POST.get('transporter')
+            delivery_fee = request.POST.get('delivery_fee', 0)
+            if transporter_id:
+                order.transporter_id = transporter_id
+                try:
+                    order.delivery_fee = Decimal(str(delivery_fee).replace(',', ''))
+                except:
+                    order.delivery_fee = Decimal('0.00')
+                messages.success(request, f"🚛 จ่ายงาน {order.code} ให้ทีมขนส่งและระบุค่าจ้างเรียบร้อยแล้ว!")
+
+        elif action == 'update_status':
+            delivery_status_id = request.POST.get('delivery_status')
+            if delivery_status_id:
+                status_obj = DeliveryStatus.objects.get(id=delivery_status_id)
+                if status_obj.name in ['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']:
+                    if 'proof_of_delivery' in request.FILES:
+                        order.proof_of_delivery = request.FILES['proof_of_delivery']
+                        order.delivery_status_id = delivery_status_id
+                        messages.success(request, "📸 อัปโหลดรูปลายเซ็นและปิดงานส่งสำเร็จ!")
+                    elif order.proof_of_delivery:
+                        order.delivery_status_id = delivery_status_id
+                        messages.success(request, "📦 อัปเดตสถานะการส่งมอบสำเร็จ")
+                    else:
+                        messages.error(request, "❌ กรุณาแนบรูปภาพใบส่งมอบสินค้า (ที่มีลายเซ็นลูกค้า) ก่อนปิดงาน!")
+                        return redirect('logistics_board')
+                else:
+                    order.delivery_status_id = delivery_status_id
+                    messages.success(request, f"📦 อัปเดตสถานะการจัดส่ง {order.code} เรียบร้อยแล้ว!")
+        order.save()
+    return redirect('logistics_board')
+
+@login_required
+def create_logistics_claim(request):
+    if request.method == 'POST':
+        job_ids = request.POST.getlist('job_ids')
+        if job_ids:
+            jobs = ProductionOrder.objects.filter(id__in=job_ids, logistics_claim__isnull=True)
+            if jobs.exists():
+                transporter = jobs.first().transporter
+                # 🌟 ดึงยอดรวมจาก delivery_fee ของแต่ละงาน 🌟
+                total_amt = sum([j.delivery_fee for j in jobs])
+                claim = LogisticsClaim.objects.create(transporter=transporter, total_jobs=jobs.count(), total_amount=total_amt)
+                jobs.update(logistics_claim=claim)
+                messages.success(request, f"💰 สร้างใบตั้งเบิกค่ารถ {claim.code} สำเร็จ!")
+            else: messages.error(request, "❌ ไม่พบงาน หรือมีการตั้งเบิกไปแล้ว")
+        else: messages.warning(request, "⚠️ กรุณาติ๊กเลือกอย่างน้อย 1 งาน")
+    return redirect('logistics_claim_history') # เด้งไปหน้าประวัติใหม่
+
+@login_required
+def print_delivery_note(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    company = CompanyInfo.objects.first()
+    return render(request, 'manufacturing/print_delivery_note.html', {'order': order, 'company': company})
+
+@login_required
+def print_logistics_claim(request, pk):
+    claim = get_object_or_404(LogisticsClaim, pk=pk)
+    company = CompanyInfo.objects.first()
+    jobs = claim.production_orders.all()
+    amount_text = get_thai_baht_text(claim.total_amount)
+    return render(request, 'manufacturing/print_logistics_claim.html', {'claim': claim, 'jobs': jobs, 'company': company, 'amount_text': amount_text})
+
+# 🌟 [NEW] ฟังก์ชันสำหรับหน้าประวัติเบิกค่าขนส่ง 🌟
+@login_required
+def logistics_claim_history(request):
+    claims = LogisticsClaim.objects.select_related('transporter').prefetch_related('production_orders', 'production_orders__quotation_ref').all().order_by('-created_at')
+
+    start_date = request.GET.get('start_date', '')
+    end_date = request.GET.get('end_date', '')
+    q_transporter = request.GET.get('q_transporter', '')
+    q_job = request.GET.get('q_job', '')
+    q_customer = request.GET.get('q_customer', '')
+
+    if start_date: claims = claims.filter(created_at__date__gte=start_date)
+    if end_date: claims = claims.filter(created_at__date__lte=end_date)
+    if q_transporter: claims = claims.filter(Q(transporter__name__icontains=q_transporter) | Q(transporter__driver_name__icontains=q_transporter))
+    if q_job: claims = claims.filter(production_orders__code__icontains=q_job).distinct()
+    if q_customer: claims = claims.filter(production_orders__customer_name__icontains=q_customer).distinct()
+
+    paginator = Paginator(claims, 20)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'manufacturing/logistics_claim_history.html', {
+        'page_obj': page_obj, 'start_date': start_date, 'end_date': end_date,
+        'q_transporter': q_transporter, 'q_job': q_job, 'q_customer': q_customer
+    })
+
+# 🌟 [NEW] ฟังก์ชันสำหรับอัปโหลดข้อมูลรถด่วน (พร้อมรูปภาพ) 🌟
+@login_required
+def ajax_add_transporter_full(request):
+    if request.method == 'POST':
+        name = request.POST.get('name')
+        driver_name = request.POST.get('driver_name', '')
+        vehicle_plate = request.POST.get('vehicle_plate', '')
+        address = request.POST.get('address', '')
+        bank_account = request.POST.get('bank_account', '')
+        id_card_image = request.FILES.get('id_card_image')
+
+        if name:
+            obj, created = Transporter.objects.get_or_create(name=name, defaults={
+                'driver_name': driver_name, 'vehicle_plate': vehicle_plate,
+                'address': address, 'bank_account': bank_account, 'id_card_image': id_card_image
+            })
+            return JsonResponse({'success': True, 'id': obj.id, 'name': obj.name})
+    return JsonResponse({'success': False})

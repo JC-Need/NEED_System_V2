@@ -9,12 +9,12 @@ class Department(models.Model):
     # 🌟 [NEW] เพิ่มฟิลด์ parent เพื่อทำระบบ แผนกหลัก-แผนกย่อย 🌟
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='sub_departments', verbose_name="สังกัดแผนกหลัก (ถ้ามี)")
 
-    def __str__(self): 
+    def __str__(self):
         # ถ้ามีแผนกแม่ ให้โชว์แบบ "แผนกแม่ > แผนกลูก"
         if self.parent:
             return f"{self.parent.name} > {self.name}"
         return self.name
-        
+
     class Meta: verbose_name_plural = "ข้อมูลแผนก"
 
 class Position(models.Model):
@@ -40,6 +40,8 @@ class SalesGroup(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อกลุ่ม/ทีม")
     group_type = models.CharField(max_length=20, choices=GROUP_TYPES, verbose_name="ประเภทกลุ่ม")
     commission_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ค่าคอมฯจากยอดขาย (%)")
+    # 🌟 [NEW] เพิ่มช่องค่าตอบแทนเหมาจ่าย สำหรับงานตรวจแบบแปลน/ผลิต
+    flat_rate_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าตอบแทนเหมาจ่าย (บาท/งาน)")
 
     # สัดส่วนการแบ่งเงิน กลุ่มทำงาน
     share_leader = models.DecimalField(max_digits=5, decimal_places=2, default=0.00, verbose_name="ส่วนแบ่งหัวหน้า (%)")

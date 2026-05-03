@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import POSOrder, POSOrderItem, Quotation, QuotationItem, UpsaleCategory, UpsaleCatalog, QuotationUpsale
+from .models import POSOrder, POSOrderItem, Quotation, QuotationItem, UpsaleCategory, UpsaleCatalog, QuotationUpsale, CustomerLead, Appointment
 
 class POSItemInline(admin.TabularInline):
     model = POSOrderItem
@@ -41,3 +41,22 @@ class UpsaleCatalogAdmin(admin.ModelAdmin):
     search_fields = ('name',)
     list_filter = ('category', 'is_active')
     list_editable = ('default_price', 'is_active')
+
+# ==========================================
+# 🌟 ระบบ CRM และ นัดหมาย (แสดงผลใน Admin)
+# ==========================================
+@admin.register(CustomerLead)
+class CustomerLeadAdmin(admin.ModelAdmin):
+    list_display = ('code', 'customer_name', 'phone', 'channel', 'status', 'employee', 'created_at')
+    list_filter = ('status', 'channel', 'employee')
+    search_fields = ('code', 'customer_name', 'phone', 'requirements')
+    ordering = ('-created_at',)
+    list_per_page = 20
+
+@admin.register(Appointment)
+class AppointmentAdmin(admin.ModelAdmin):
+    list_display = ('appointment_date', 'lead', 'appointment_type', 'status', 'employee')
+    list_filter = ('status', 'appointment_type', 'employee')
+    search_fields = ('lead__customer_name', 'lead__code', 'details')
+    ordering = ('-appointment_date',)
+    list_per_page = 20

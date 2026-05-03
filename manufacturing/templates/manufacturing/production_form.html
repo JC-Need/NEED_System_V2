@@ -14,11 +14,11 @@
                     <h5 class="mb-0 fw-bold"><i class="fas fa-plus-circle me-2"></i>เปิดใบสั่งผลิตใหม่ (Work Order)</h5>
                 </div>
                 <div class="card-body p-4 p-md-5">
-                    
+
                     {% if fg_with_bom %}
                         <form method="POST">
                             {% csrf_token %}
-                            
+
                             <div class="row g-4 mb-4">
                                 <div class="col-md-8">
                                     <label class="form-label text-muted small fw-bold">เลือกแบบบ้านที่ต้องการผลิต <span class="text-danger">*</span></label>
@@ -81,6 +81,16 @@
                                 <div class="col-md-12">
                                     <label class="form-label text-muted small fw-bold">ชื่อลูกค้า / สถานที่ส่ง (พิมพ์อิสระ)</label>
                                     <input type="text" name="customer_name" class="form-control shadow-sm" placeholder="เช่น คุณสมชาย จ.เชียงใหม่">
+                                </div>
+                            </div>
+
+                            <div class="col-md-12 mb-3">
+                                <div class="form-check form-switch p-3 bg-danger bg-opacity-10 border border-danger rounded-3">
+                                    <input class="form-check-input ms-1" type="checkbox" name="is_onsite" id="is_onsite" style="transform: scale(1.5);">
+                                    <label class="form-check-label fw-bold text-danger ms-3" for="is_onsite">
+                                        <i class="fas fa-hard-hat me-1"></i> เป็นงานประกอบหน้างาน (On-site)
+                                        <small class="d-block text-muted fw-normal mt-1">ระบบจะส่งสัญญาณให้แผนกจัดส่งทราบล่วงหน้า เพื่อเตรียมจองรถรับจ้างทันที</small>
+                                    </label>
                                 </div>
                             </div>
 
@@ -155,12 +165,12 @@
         // 1. ตั้งค่าปฏิทิน
         flatpickr(".datepicker", {
             altInput: true,
-            altFormat: "d/m/Y",   
-            dateFormat: "Y-m-d",  
+            altFormat: "d/m/Y",
+            dateFormat: "Y-m-d",
             locale: "th",
-            defaultDate: "today"  
+            defaultDate: "today"
         });
-        
+
         // 2. ระบบกรองพนักงานขาย (Cascading Dropdown)
         const branchSelect = document.getElementById('branchSelect');
         const salesSelect = document.getElementById('salespersonSelect');
@@ -170,7 +180,7 @@
         branchSelect.addEventListener('change', function() {
             const selectedBranch = this.value;
             salesSelect.innerHTML = '<option value="">-- เลือกพนักงานขาย --</option>';
-            
+
             if (selectedBranch) {
                 salesSelect.disabled = false;
                 btnAddSales.disabled = false;
@@ -191,7 +201,7 @@
     function saveBranch() {
         const name = document.getElementById('newBranchName').value;
         if (!name) return alert('กรุณาระบุชื่อสาขา');
-        
+
         fetch("{% url 'ajax_add_branch' %}", {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
@@ -204,15 +214,15 @@
                 const select = document.getElementById('branchSelect');
                 const newOption = new Option(data.name, data.id, true, true);
                 select.add(newOption);
-                
+
                 // สั่งให้ Trigger ว่ามีการเปลี่ยนสาขาแล้วนะ (เพื่อให้ปุ่มเพิ่มเซลส์ปลดล็อก)
-                select.dispatchEvent(new Event('change')); 
-                
+                select.dispatchEvent(new Event('change'));
+
                 // ปิด Modal แบบเนียนๆ ด้วย Bootstrap
                 var branchModalEl = document.getElementById('branchModal');
                 var modal = bootstrap.Modal.getInstance(branchModalEl);
                 modal.hide();
-                
+
                 // ล้างค่าในช่องกรอก
                 document.getElementById('newBranchName').value = '';
             } else {
@@ -225,18 +235,18 @@
     function openSalesModal() {
         const branchSelect = document.getElementById('branchSelect');
         document.getElementById('displayBranchName').innerText = branchSelect.options[branchSelect.selectedIndex].text;
-        
+
         // เปิด Modal แบบ Manual
         var salesModal = new bootstrap.Modal(document.getElementById('salesModal'));
         salesModal.show();
     }
-    
+
     function saveSalesperson() {
         const name = document.getElementById('newSalesName').value;
         const branchId = document.getElementById('branchSelect').value;
-        
+
         if (!name) return alert('กรุณาระบุชื่อพนักงานขาย');
-        
+
         fetch("{% url 'ajax_add_salesperson' %}", {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token }}'},
@@ -246,7 +256,7 @@
         .then(data => {
             if(data.success) {
                 // ทางลัด: โหลดหน้าจอใหม่เพื่อให้ข้อมูลมาครบถ้วนและสะอาดที่สุด
-                location.reload(); 
+                location.reload();
             } else {
                 alert('เกิดข้อผิดพลาดในการบันทึกพนักงานขาย');
             }
