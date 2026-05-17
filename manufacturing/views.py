@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
+from django.utils.dateparse import parse_date # 🌟 [FIXED] นำเข้าเครื่องมือจัดการวันที่ 🌟
 from django.db.models import Max, Count, Q, Sum, F, FloatField
 from django.db import transaction
 from django.http import JsonResponse
@@ -344,9 +345,18 @@ def materials_ready(request, pk):
         item.raw_material.stock_qty = (item.raw_material.stock_qty or Decimal('0')) - Decimal(str(item.quantity))
         item.raw_material.save()
 
-    order.status = 'IN_PROGRESS'
-    order.save()
-    messages.success(request, f"✅ ตัดสต็อกสำเร็จ! สถานะเปลี่ยนเป็น 'งานอยู่ระหว่างผลิต' แล้ว")
+    # 🌟 [CRITICAL UPDATE] ดักจับ "ประกอบหน้างาน" เพื่อข้ามด่านโรงงาน 🌟
+    if order.is_onsite:
+        order.status = 'COMPLETED'
+        order.finish_date = timezone.now().date()
+        order.is_qc_passed = True # ถือว่าผ่าน QC (เพราะไม่ได้ทำในโรงงาน)
+        order.save()
+        messages.success(request, f"🚀 ตัดสต็อกสำเร็จ! (ประกอบหน้างาน) สถานะกระโดดไป 'รอจัดส่ง' ให้ขนส่งเรียบร้อยแล้ว!")
+    else:
+        order.status = 'IN_PROGRESS'
+        order.save()
+        messages.success(request, f"✅ ตัดสต็อกสำเร็จ! สถานะเปลี่ยนเป็น 'งานอยู่ระหว่างผลิต' แล้ว")
+
     return redirect('inventory_board')
 
 @login_required
@@ -571,6 +581,15 @@ def update_production_board(request, pk):
     if request.method == 'POST':
         order = get_object_or_404(ProductionOrder, pk=pk)
         action = request.POST.get('action')
+        redirect_to = request.POST.get('redirect_to') # 🌟 ดักรับค่าทางกลับบ้าน
+
+        # 🌟 [NEW] เพิ่มเงื่อนไขเพื่อดักเซฟข้อมูล "หมายเหตุ" จากกระดานคลังสินค้า 🌟
+        if action == 'update_note':
+            order.note = request.POST.get('note', '')
+            order.save()
+            messages.success(request, f"💾 บันทึกหมายเหตุสำหรับ {order.code} เรียบร้อยแล้ว")
+            if redirect_to == 'inventory_board':
+                return redirect('inventory_board')
 
         if 'completed_departments' in request.POST:
             selected_depts = request.POST.getlist('completed_departments')
@@ -1342,16 +1361,25 @@ def process_logistics(request, pk):
     if request.method == 'POST':
         action = request.POST.get('action')
 
-        # 🌟 อัปเดตให้รับค่า 'delivery_fee' 🌟
+        # 🌟 อัปเดตให้รับค่า 'delivery_fee' และ 'delivery_date' 🌟
         if action == 'assign_truck':
             transporter_id = request.POST.get('transporter')
             delivery_fee = request.POST.get('delivery_fee', 0)
+            delivery_date_str = request.POST.get('delivery_date') # 🌟 [NEW] ดึงค่าวันที่ 🌟
+
             if transporter_id:
                 order.transporter_id = transporter_id
+
+                # บันทึกวันที่จัดส่ง
+                if delivery_date_str:
+                    order.delivery_date = parse_date(delivery_date_str)
+
+                # บันทึกค่าจ้าง
                 try:
                     order.delivery_fee = Decimal(str(delivery_fee).replace(',', ''))
                 except:
                     order.delivery_fee = Decimal('0.00')
+
                 messages.success(request, f"🚛 จ่ายงาน {order.code} ให้ทีมขนส่งและระบุค่าจ้างเรียบร้อยแล้ว!")
 
         elif action == 'update_status':
@@ -1396,7 +1424,17 @@ def create_logistics_claim(request):
 def print_delivery_note(request, pk):
     order = get_object_or_404(ProductionOrder, pk=pk)
     company = CompanyInfo.objects.first()
-    return render(request, 'manufacturing/print_delivery_note.html', {'order': order, 'company': company})
+
+    # 🌟 [NEW] เพิ่มคำสั่งดึงยอดเงินจากใบเสนอราคา และแปลงเป็นภาษาไทย 🌟
+    amount_text = ""
+    if order.quotation_ref and order.quotation_ref.grand_total:
+        amount_text = get_thai_baht_text(order.quotation_ref.grand_total)
+
+    return render(request, 'manufacturing/print_delivery_note.html', {
+        'order': order,
+        'company': company,
+        'amount_text': amount_text # 👈 ส่งคำอ่านภาษาไทยไปโชว์ในหน้าเอกสาร
+    })
 
 @login_required
 def print_logistics_claim(request, pk):

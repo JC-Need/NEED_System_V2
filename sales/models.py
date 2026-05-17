@@ -29,7 +29,9 @@ class POSOrder(models.Model):
     is_commission_calculated = models.BooleanField(default=False, verbose_name="คำนวณคอมฯแล้ว")
     created_at = models.DateTimeField(default=timezone.now, verbose_name="เวลาที่ขาย")
 
-    def __str__(self): return self.code
+    # 🌟 แก้ไขป้องกัน Error NoneType
+    def __str__(self): 
+        return str(self.code) if self.code else "ไม่มีเลขที่"
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -57,6 +59,7 @@ class POSOrderItem(models.Model):
     quantity = models.IntegerField(default=1, verbose_name="จำนวน")
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคาต่อชิ้น")
     total_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคารวม")
+    
     def save(self, *args, **kwargs):
         self.total_price = self.quantity * self.price
         if not self.product_name and self.product: self.product_name = self.product.name
@@ -107,7 +110,9 @@ class Quotation(models.Model):
     approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_quotations', verbose_name="ผู้อนุมัติ")
     approved_at = models.DateTimeField(null=True, blank=True, verbose_name="วันที่อนุมัติ")
 
-    def __str__(self): return self.code
+    # 🌟 แก้ไขป้องกัน Error NoneType
+    def __str__(self): 
+        return str(self.code) if self.code else "ไม่มีเลขที่ใบเสนอราคา"
 
     @property
     def customer_code(self): return self.customer.code if self.customer else None
@@ -137,6 +142,7 @@ class QuotationItem(models.Model):
     quantity = models.IntegerField(default=1, verbose_name="จำนวน")
     unit_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคาต่อหน่วย")
     amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="รวมเงิน")
+    
     def save(self, *args, **kwargs):
         self.amount = self.quantity * self.unit_price
         super().save(*args, **kwargs)
@@ -164,7 +170,9 @@ class Invoice(models.Model):
     status = models.CharField(max_length=20, choices=[('UNPAID', 'ยังไม่ชำระ'), ('PAID', 'ชำระแล้ว'), ('PENDING', 'รอตรวจสอบ')], default='UNPAID', verbose_name="สถานะ")
     created_at = models.DateTimeField(auto_now_add=True)
 
-    def __str__(self): return self.code
+    # 🌟 [CRITICAL FIX] ป้องกัน Error TypeError: __str__ returned non-string (type NoneType) 🌟
+    def __str__(self): 
+        return str(self.code) if self.code else "ไม่มีเลขที่บิล"
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -188,7 +196,7 @@ class Invoice(models.Model):
 class UpsaleCategory(models.Model):
     name = models.CharField(max_length=100, verbose_name="หมวดหมู่รายการเพิ่มเติม")
     is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
-    def __str__(self): return self.name
+    def __str__(self): return str(self.name) if self.name else "-"
 
 class UpsaleCatalog(models.Model):
     category = models.ForeignKey(UpsaleCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่")
@@ -196,7 +204,7 @@ class UpsaleCatalog(models.Model):
     default_price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="ราคามาตรฐาน")
     unit = models.CharField(max_length=50, blank=True, null=True, default="รายการ", verbose_name="หน่วยนับ")
     is_active = models.BooleanField(default=True, verbose_name="เปิดใช้งาน")
-    def __str__(self): return self.name
+    def __str__(self): return str(self.name) if self.name else "-"
 
 class QuotationUpsale(models.Model):
     quotation = models.ForeignKey(Quotation, related_name='upsales', on_delete=models.CASCADE)
@@ -209,7 +217,7 @@ class QuotationUpsale(models.Model):
         self.total_price = self.quantity * self.unit_price
         super().save(*args, **kwargs)
 
-    def __str__(self): return f"{self.description} ({self.quotation.code})"
+    def __str__(self): return f"{self.description} ({self.quotation.code if self.quotation else ''})"
 
 class InvoicePayment(models.Model):
     invoice = models.ForeignKey(Invoice, related_name='payment_history', on_delete=models.CASCADE, verbose_name="อ้างอิงบิล")
@@ -270,7 +278,7 @@ class CustomerLead(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.code} - {self.customer_name}"
+        return f"{self.code or 'No-Code'} - {self.customer_name or 'No-Name'}"
 
 class Appointment(models.Model):
     TYPE_CHOICES = [
@@ -293,4 +301,5 @@ class Appointment(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"นัดหมาย {self.lead.customer_name} ({self.appointment_date.strftime('%d/%m/%Y %H:%M')})"
+        lead_name = self.lead.customer_name if self.lead else "ไม่ระบุลูกค้า"
+        return f"นัดหมาย {lead_name} ({self.appointment_date.strftime('%d/%m/%Y %H:%M')})"

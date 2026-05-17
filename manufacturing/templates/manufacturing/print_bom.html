@@ -76,18 +76,24 @@
                 <p><strong>พนักงานขาย:</strong> {{ order.salesperson.name|default:"-" }}</p>
             </div>
             
-            <div class="col-5 border-end border-dark">
+            <div class="col-4 border-end border-dark">
                 <p class="text-muted small mb-0">ข้อมูลสินค้าที่ต้องผลิต (Finished Goods)</p>
                 <p><strong>รหัส:</strong> {{ order.product.code }}</p>
                 <p><strong>ชื่อสินค้า:</strong> <span class="fw-bold">{{ order.product.name|truncatechars:35 }}</span></p>
                 <p><strong>จำนวนผลิต:</strong> <span class="fw-bold fs-6">{{ order.quantity }}</span> หลัง</p>
             </div>
             
-            <div class="col-3 text-end">
-                <p><strong>วันที่สร้างแผน:</strong></p>
-                <p>{{ order.start_date|date:"d/m/Y" }}</p>
-                <p class="mt-2"><strong>กำหนดส่งมอบ:</strong></p>
-                <p class="text-danger fw-bold">{{ order.delivery_date|date:"d/m/Y"|default:"-" }}</p>
+            <div class="col-4 ps-3">
+                <p><strong>สถานที่ผลิต:</strong> 
+                    {% if order.is_onsite %}
+                        <span class="text-danger fw-bold">ประกอบหน้างาน</span>
+                    {% else %}
+                        {{ order.branch.name|default:"กองกลาง" }}
+                    {% endif %}
+                </p>
+                <p><strong>ทีมช่าง:</strong> {{ order.production_team.name|default:"ไม่ระบุ" }}</p>
+                <p><strong>วันที่สร้างแผน:</strong> {{ order.start_date|date:"d/m/Y" }}</p>
+                <p><strong>กำหนดส่งมอบ:</strong> <span class="text-danger fw-bold">{{ order.delivery_date|date:"d/m/Y"|default:"-" }}</span></p>
             </div>
         </div>
 
@@ -120,7 +126,14 @@
         </table>
         
         <div class="mt-2 text-dark small signature-section">
-            <p class="mb-1 border p-2 rounded"><strong>หมายเหตุงาน:</strong> {{ order.note|default:"-" }}</p>
+            <p class="mb-1 border p-2 rounded">
+                <strong>หมายเหตุจัดของ:</strong> 
+                {% if "อ้างอิงใบเสนอราคา:" in order.note %}
+                    -ไม่มี-
+                {% else %}
+                    {{ order.note|default:"-ไม่มี-" }}
+                {% endif %}
+            </p>
         </div>
 
         <div class="row mt-4 pt-2 text-center signature-section">

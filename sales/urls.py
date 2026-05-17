@@ -45,4 +45,5 @@ urlpatterns = [
     path('crm/appointments/', views.appointment_board, name='appointment_board_global'),
     path('crm/appointments/create-modal/', views.appointment_create_modal, name='appointment_create_modal'),
     path('crm/appointments/update/<int:apt_id>/', views.appointment_update, name='appointment_update'),
+    path('quotation/<int:qt_id>/print-deposit/', views.print_deposit_contract, name='print_deposit_contract'),
 ]

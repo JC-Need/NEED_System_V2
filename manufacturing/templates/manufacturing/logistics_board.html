@@ -2,6 +2,9 @@
 {% load humanize %}
 
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -23,7 +26,7 @@
                             <div class="d-flex justify-content-between align-items-start mb-2">
                                 <span class="badge bg-dark">{{ order.code }}</span>
                                 {% if order.is_onsite %}
-                                <span class="badge bg-danger pulse-animation">ประกอบหน้างาน</span>
+                                <span class="badge bg-danger pulse-animation"><i class="fas fa-hard-hat me-1"></i>ประกอบหน้างาน</span>
                                 {% elif order.status == 'WAITING_QC' %}
                                 <span class="badge bg-warning text-dark">กำลังตรวจ QC</span>
                                 {% else %}
@@ -34,7 +37,21 @@
                             <p class="text-muted small mb-1"><i class="fas fa-map-marker-alt text-danger"></i> ลูกค้า: {{ order.customer_name|default:"-" }}</p>
                             
                             <p class="text-muted small mb-1"><i class="fas fa-user-tie text-info"></i> เซลส์: {{ order.salesperson.name|default:"ไม่ระบุ" }} ({{ order.branch.name|default:"สำนักงานใหญ่" }})</p>
-                            <p class="text-muted small mb-3"><i class="fas fa-calendar-alt text-secondary"></i> เปิด JOB: {{ order.start_date|date:"d/m/Y" }}</p>
+                            <p class="text-muted small mb-1"><i class="fas fa-calendar-alt text-secondary"></i> เปิด JOB: {{ order.start_date|date:"d/m/Y" }}</p>
+                            
+                            <div class="bg-light rounded p-2 mt-2 mb-3 border border-secondary border-opacity-10">
+                                <div class="small text-dark mb-1">
+                                    <i class="fas fa-building text-primary opacity-75"></i> รับตู้ที่: 
+                                    {% if order.is_onsite %}
+                                        <span class="text-danger fw-bold">พื้นที่หน้างาน</span>
+                                    {% else %}
+                                        {{ order.branch.name|default:"กองกลาง" }}
+                                    {% endif %}
+                                </div>
+                                <div class="small text-dark">
+                                    <i class="fas fa-users text-warning text-darken opacity-75"></i> ช่างประกอบ: {{ order.production_team.name|default:"ไม่ระบุ" }}
+                                </div>
+                            </div>
                             
                             <button class="btn btn-sm btn-primary w-100 rounded-pill fw-bold" data-bs-toggle="modal" data-bs-target="#assignModal{{ order.id }}">
                                 <i class="fas fa-truck-loading me-1"></i> จ่ายงาน / จองรถ
@@ -64,6 +81,9 @@
                                             {% endfor %}
                                         </select>
                                         
+                                        <label class="form-label fw-bold">วันที่รถเข้าจัดส่งสินค้า <span class="text-danger">*</span></label>
+                                        <input type="text" name="delivery_date" class="form-control mb-3 datepicker bg-white" placeholder="คลิกเพื่อเลือกวันที่" value="{{ order.delivery_date|date:'Y-m-d' }}" required>
+
                                         <label class="form-label fw-bold">ระบุค่าจ้างขนส่งสำหรับงานนี้ (บาท) <span class="text-danger">*</span></label>
                                         <input type="number" step="0.01" name="delivery_fee" class="form-control form-control-lg text-primary fw-bold" placeholder="เช่น 1500" required>
                                     </div>
@@ -88,15 +108,38 @@
                 </div>
                 <div class="card-body p-2" style="min-height: 600px;">
                     {% for order in col2_delivering %}
-                    <div class="card border-0 shadow-sm rounded-3 mb-2 border-start border-4 border-warning">
+                    <div class="card border-0 shadow-sm rounded-3 mb-2 border-start border-4 {% if order.is_onsite %}border-danger{% else %}border-warning{% endif %}">
                         <div class="card-body p-3">
-                            <div class="d-flex justify-content-between mb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="badge bg-dark">{{ order.code }}</span>
+                                {% if order.is_onsite %}
+                                <span class="badge bg-danger pulse-animation"><i class="fas fa-hard-hat me-1"></i>ประกอบหน้างาน</span>
+                                {% else %}
                                 <span class="badge bg-warning text-dark">{{ order.transporter.vehicle_plate }}</span>
+                                {% endif %}
                             </div>
                             <h6 class="fw-bold text-dark mb-1">{{ order.product.name }}</h6>
-                            <p class="text-muted small mb-2"><i class="fas fa-user-check"></i> คนขับ: {{ order.transporter.driver_name|default:"-" }}</p>
                             
+                            <p class="text-muted small mb-1"><i class="fas fa-map-marker-alt text-danger"></i> ลูกค้า: {{ order.customer_name|default:"-" }}</p>
+                            <p class="text-muted small mb-1"><i class="fas fa-user-tie text-info"></i> เซลส์: {{ order.salesperson.name|default:"ไม่ระบุ" }} ({{ order.branch.name|default:"สำนักงานใหญ่" }})</p>
+                            
+                            <div class="bg-light rounded p-2 mt-2 mb-2 border border-secondary border-opacity-10">
+                                <div class="small text-dark mb-1">
+                                    <i class="fas fa-building text-primary opacity-75"></i> รับตู้ที่: 
+                                    {% if order.is_onsite %}
+                                        <span class="text-danger fw-bold">พื้นที่หน้างาน</span>
+                                    {% else %}
+                                        {{ order.branch.name|default:"กองกลาง" }}
+                                    {% endif %}
+                                </div>
+                                <div class="small text-dark">
+                                    <i class="fas fa-users text-warning text-darken opacity-75"></i> ช่างประกอบ: {{ order.production_team.name|default:"ไม่ระบุ" }}
+                                </div>
+                            </div>
+
+                            <p class="text-muted small mb-1 mt-2"><i class="fas fa-user-check"></i> คนขับรถ: <span class="fw-bold">{{ order.transporter.driver_name|default:"-" }}</span></p>
+                            <p class="text-danger small mb-2 fw-bold"><i class="fas fa-calendar-check"></i> ส่งวันที่: {{ order.delivery_date|date:"d/m/Y"|default:"ยังไม่ระบุ" }}</p>
+
                             <div class="d-flex gap-2 mb-3">
                                 <a href="{% url 'print_delivery_note' order.id %}" target="_blank" class="btn btn-sm btn-outline-secondary w-100">
                                     <i class="fas fa-print"></i> พิมพ์ใบส่งมอบ
@@ -135,17 +178,37 @@
                         {% csrf_token %}
                         {% for order in col3_delivered %}
                             {% if not order.logistics_claim %}
-                            <div class="card border-0 shadow-sm rounded-3 mb-2 border-start border-4 border-success">
+                            <div class="card border-0 shadow-sm rounded-3 mb-2 border-start border-4 {% if order.is_onsite %}border-danger{% else %}border-success{% endif %}">
                                 <div class="card-body p-3">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="job_ids" value="{{ order.id }}" id="job{{ order.id }}" style="transform: scale(1.3); margin-right: 10px;">
                                         <label class="form-check-label w-100" for="job{{ order.id }}">
-                                            <div class="d-flex justify-content-between">
+                                            <div class="d-flex justify-content-between align-items-center">
                                                 <span class="fw-bold text-success">{{ order.code }}</span>
+                                                {% if order.is_onsite %}
+                                                <span class="badge bg-danger text-white border" style="font-size: 0.65rem;">ประกอบหน้างาน</span>
+                                                {% else %}
                                                 <span class="badge bg-light text-dark border">{{ order.transporter.vehicle_plate }}</span>
+                                                {% endif %}
                                             </div>
-                                            <p class="text-muted small mb-0 mt-1">ทีม: {{ order.transporter.name }}</p>
-                                            <p class="text-dark small fw-bold mb-0">ค่าจ้างงานนี้: <span class="text-danger fs-6">฿{{ order.delivery_fee|floatformat:2|intcomma }}</span></p>
+                                            
+                                            <p class="text-muted small mb-0 mt-1"><i class="fas fa-map-marker-alt"></i> ลค: {{ order.customer_name|default:"-" }}</p>
+                                            <p class="text-muted small mb-0"><i class="fas fa-truck"></i> ทีมขนส่ง: {{ order.transporter.name }}</p>
+                                            
+                                            <div class="bg-white rounded p-2 mt-2 mb-1 border border-secondary border-opacity-10">
+                                                <div class="small text-dark mb-1">
+                                                    <i class="fas fa-building text-primary opacity-75"></i> รับตู้ที่: 
+                                                    {% if order.is_onsite %}
+                                                        <span class="text-danger fw-bold">พื้นที่หน้างาน</span>
+                                                    {% else %}
+                                                        {{ order.branch.name|default:"กองกลาง" }}
+                                                    {% endif %}
+                                                </div>
+                                                <div class="small text-dark">
+                                                    <i class="fas fa-users text-warning text-darken opacity-75"></i> ช่างประกอบ: {{ order.production_team.name|default:"ไม่ระบุ" }}
+                                                </div>
+                                            </div>
+                                            <p class="text-dark small fw-bold mb-0 mt-1">ค่าจ้างงานนี้: <span class="text-danger fs-6">฿{{ order.delivery_fee|floatformat:2|intcomma }}</span></p>
                                         </label>
                                     </div>
                                     {% if order.proof_of_delivery %}
@@ -220,6 +283,10 @@
 </div>
 
 <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        flatpickr(".datepicker", { dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true });
+    });
+
     function openAddTransporterModal() {
         var myModal = new bootstrap.Modal(document.getElementById('addTransporterModal'));
         myModal.show();
@@ -255,4 +322,15 @@
         }).catch(err => console.log(err));
     }
 </script>
+
+<style>
+    .pulse-animation {
+        animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+        70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(220, 53, 69, 0); }
+        100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+    }
+</style>
 {% endblock %}

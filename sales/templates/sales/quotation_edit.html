@@ -6,7 +6,7 @@
 
     {% if qt.status != 'DRAFT' %}
     <div class="alert {% if qt.status == 'CANCELLED' %}alert-secondary{% elif qt.status == 'REJECTED' %}alert-warning{% else %}alert-danger{% endif %} shadow-sm border-0 rounded-4 mb-4 d-flex align-items-center p-3">
-        <i class="fas {% if qt.status == 'CANCELLED' %}fa-ban text-secondary{% elif qt.status == 'REJECTED' %}fa-times-circle text-warning{% else %}fa-lock text-danger{% endif %} fa-2x me-3"></i>
+        <i class="fas {% if qt.status == 'CANCELLED' %}fa-ban text-secondary{% elif qt.status == 'REJECTED' %}text-warning{% else %}text-danger{% endif %} fa-2x me-3"></i>
         <div>
             <h6 class="mb-1 fw-bold {% if qt.status == 'CANCELLED' %}text-secondary{% elif qt.status == 'REJECTED' %}text-warning{% else %}text-danger{% endif %}">
                 เอกสารถูกล็อก ({% if qt.status == 'CANCELLED' %}ยกเลิกแล้ว{% elif qt.status == 'APPROVED' %}อนุมัติแล้ว{% elif qt.status == 'REJECTED' %}ไม่อนุมัติ{% else %}เปิดบิลแล้ว{% endif %})
@@ -37,6 +37,18 @@
             <a href="{% url 'quotation_cancel' qt.id %}" class="btn btn-outline-danger shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="return confirm('⚠️ คุณแน่ใจหรือไม่ว่าต้องการยกเลิกใบเสนอราคาใบนี้?\n(หากยกเลิกแล้วจะถือเป็นโมฆะทันที)');">
                 <i class="fas fa-times-circle me-1"></i> ยกเลิกใบนี้
             </a>
+            {% endif %}
+
+            {% if qt.status == 'APPROVED' %}
+            <button type="button" class="btn btn-success shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="$('#productionModal').modal('show');">
+                <i class="fas fa-industry me-1"></i> สั่งผลิต
+            </button>
+            {% endif %}
+            
+            {% if qt.status == 'PRODUCTION' or qt.status == 'COMPLETED' %}
+            <span class="badge bg-success fs-6 px-3 py-2 ms-2 rounded-pill shadow-sm">
+                <i class="fas fa-industry me-1"></i> ส่งเข้าผลิตแล้ว
+            </span>
             {% endif %}
         </div>
     </div>
@@ -343,6 +355,43 @@
                     </form>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="productionModal" tabindex="-1" role="dialog" aria-labelledby="productionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content rounded-4 border-0 shadow">
+            <div class="modal-header bg-success text-white border-0 rounded-top-4">
+                <h5 class="modal-title fw-bold" id="productionModalLabel"><i class="fas fa-industry me-2"></i>ยืนยันส่งออเดอร์สั่งผลิต</h5>
+                <button type="button" class="close text-white" onclick="$('#productionModal').modal('hide');" aria-label="Close">
+                    <span aria-hidden="true">&times;</span>
+                </button>
+            </div>
+            <form method="POST" action="{% url 'create_job_order' qt.id %}">
+                {% csrf_token %}
+                <div class="modal-body p-4">
+                    <p class="mb-3 text-muted">กำลังจะส่งใบเสนอราคาเลขที่ <strong>{{ qt.code }}</strong> ไปยังแผนกผลิต กรุณาตรวจสอบความถูกต้องก่อนกดยืนยัน:</p>
+                    
+                    <div class="card bg-danger bg-opacity-10 border border-danger rounded-3 mb-3">
+                        <div class="card-body p-3">
+                            <div class="form-check form-switch d-flex align-items-center">
+                                <input class="form-check-input" type="checkbox" name="is_onsite" id="is_onsite" style="transform: scale(1.5); margin-right: 15px;">
+                                <label class="form-check-label fw-bold text-danger ms-2" for="is_onsite" style="cursor: pointer;">
+                                    <i class="fas fa-hard-hat me-1"></i> ช่างต้องไปประกอบหน้างาน (On-site)
+                                </label>
+                            </div>
+                            <small class="d-block text-muted mt-2 ms-4 ps-2">
+                                * หากติ๊กเลือก ระบบจะแจ้งเตือนให้แผนกจัดส่งเริ่มจองรถทันที และจะข้ามขั้นตอนการผลิต/QC ในโรงงาน
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer bg-light border-0 rounded-bottom-4">
+                    <button type="button" class="btn btn-secondary rounded-pill px-4" onclick="$('#productionModal').modal('hide');">ยกเลิก</button>
+                    <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold">ยืนยันและส่งสั่งผลิต</button>
+                </div>
+            </form>
         </div>
     </div>
 </div>

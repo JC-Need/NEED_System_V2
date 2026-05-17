@@ -1,5 +1,10 @@
 from django.contrib import admin
-from .models import POSOrder, POSOrderItem, Quotation, QuotationItem, UpsaleCategory, UpsaleCatalog, QuotationUpsale, CustomerLead, Appointment
+from .models import (
+    POSOrder, POSOrderItem, Quotation, QuotationItem, 
+    UpsaleCategory, UpsaleCatalog, QuotationUpsale, 
+    CustomerLead, Appointment, 
+    Invoice, InvoicePayment # 🌟 นำเข้าตาราง Invoice
+)
 
 class POSItemInline(admin.TabularInline):
     model = POSOrderItem
@@ -60,3 +65,21 @@ class AppointmentAdmin(admin.ModelAdmin):
     search_fields = ('lead__customer_name', 'lead__code', 'details')
     ordering = ('-appointment_date',)
     list_per_page = 20
+
+# ==========================================
+# 🌟 [NEW] ระบบจัดการใบเสร็จ / บิลขาย (DLN-...) 🌟
+# ==========================================
+class InvoicePaymentInline(admin.TabularInline):
+    model = InvoicePayment
+    extra = 0
+
+@admin.register(Invoice)
+class InvoiceAdmin(admin.ModelAdmin):
+    # 🌟 แก้ไข: เปลี่ยน customer_name เป็น customer 🌟
+    list_display = ('code', 'customer', 'date', 'grand_total', 'balance_amount', 'status')
+    
+    # 🌟 แก้ไข: เปลี่ยน customer_name เป็น customer__name เพื่อค้นหาจากชื่อลูกค้า 🌟
+    search_fields = ('code', 'customer__name')
+    
+    list_filter = ('status', 'date')
+    inlines = [InvoicePaymentInline] # โชว์ประวัติการชำระเงินย่อยๆ ซ้อนอยู่ข้างในให้ด้วยค่ะ

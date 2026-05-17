@@ -2,21 +2,21 @@ import math
 import json
 import datetime
 import openpyxl
-from django.db.models import Sum
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, InvalidOperation
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q, Sum, Count, Max
+from django.db.models import Q, Sum, Count, Max, F, FloatField
 from django.db.models.functions import TruncDate, TruncMonth
 from django.core.paginator import Paginator
 from django.utils.dateparse import parse_date
 from django.utils import timezone
 from datetime import timedelta
+from django.db import transaction
 
-# 🌟 นำเข้า CustomerLead ที่ถูกต้อง 🌟
 from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment
 from inventory.models import Product, Category
 from master_data.models import Customer, CompanyInfo, ShippingRate
@@ -463,6 +463,8 @@ def create_job_order(request, qt_id):
         sales_branch_obj, _ = Branch.objects.get_or_create(name=branch_name)
         sales_obj, _ = MfgSalesperson.objects.get_or_create(name=emp_name, branch=sales_branch_obj)
 
+    is_onsite_val = request.POST.get('is_onsite') == 'on'
+
     job = ProductionOrder.objects.create(
         product=first_item.product,
         quantity=total_qty,
@@ -477,7 +479,8 @@ def create_job_order(request, qt_id):
         auto_calculated_date=final_delivery_date,
         requested_date=req_date,
         date_approval_status=approval_status,
-        cohort_week=assigned_cohort
+        cohort_week=assigned_cohort,
+        is_onsite=is_onsite_val
     )
 
     if first_item.product and first_item.product.standard_blueprint:
@@ -489,7 +492,8 @@ def create_job_order(request, qt_id):
     elif weeks_pushed > 0:
         messages.warning(request, f"⚠️ คิวผลิตสัปดาห์แรกล้น! ระบบปัดคิวงาน {job.code} ไปสัปดาห์ถัดไป (กำหนดส่ง: {final_delivery_date.strftime('%d/%m/%Y')})")
     else:
-        messages.success(request, f"🏭 ส่งข้อมูลเข้ากองกลางผลิตสำเร็จ (Job Order: {job.code})! (กำหนดส่ง: {final_delivery_date.strftime('%d/%m/%Y')})")
+        onsite_txt = " 👷‍♂️(ประกอบหน้างาน)" if is_onsite_val else ""
+        messages.success(request, f"🏭 ส่งข้อมูลเข้ากองกลางผลิตสำเร็จ (Job Order: {job.code}){onsite_txt}! (กำหนดส่ง: {final_delivery_date.strftime('%d/%m/%Y')})")
 
     return redirect('quotation_list')
 
@@ -507,9 +511,6 @@ def sales_timeline(request):
     company_info = CompanyInfo.objects.first()
     max_quota = company_info.weekly_job_quota if company_info and company_info.weekly_job_quota else 25
 
-    # ====================================================
-    # 1. ระบบคำนวณวันส่งมอบอัตโนมัติ (รับค่าจากช่อง Input ได้)
-    # ====================================================
     deposit_date_str = request.GET.get('deposit_date')
     if deposit_date_str:
         try: calc_deposit_date = parse_date(deposit_date_str) or today
@@ -531,12 +532,8 @@ def sales_timeline(request):
         weeks_pushed += 1
         current_check_date += datetime.timedelta(days=7)
 
-    # Lead time มาตรฐาน = 22 วัน
     smart_eta_date = calc_deposit_date + datetime.timedelta(days=22 + (weeks_pushed * 7))
 
-    # ====================================================
-    # 🌟 ฟังก์ชันแปลงวันที่แบบย่อ (เช่น จ.13-อา.19/4/69) 🌟
-    # ====================================================
     def format_week_range(d):
         iso_y, iso_w, _ = d.isocalendar()
         monday = datetime.date.fromisocalendar(iso_y, iso_w, 1)
@@ -547,9 +544,6 @@ def sales_timeline(request):
         else:
             return f"จ.{monday.day}/{monday.month}-อา.{sunday.day}/{sunday.month}/{y_str}"
 
-    # ====================================================
-    # 2. ข้อมูลกราฟที่ 1: สั่งผลิต vs ค้างส่ง vs จัดส่ง (ย้อนหลัง 4 สัปดาห์ - ล่วงหน้า 3 สัปดาห์)
-    # ====================================================
     chart_labels = []
     chart_labels_display = []
     chart_week_starts = []
@@ -573,7 +567,6 @@ def sales_timeline(request):
         chart_week_starts.append(monday.strftime('%Y-%m-%d'))
         chart_week_ends.append(sunday.strftime('%Y-%m-%d'))
 
-        # 🌟 [FIXED] ดึงข้อมูล 3 แท่ง (ยอดรวมสั่งผลิต, ผลิตเสร็จค้างส่ง, จัดส่งแล้ว) 🌟
         ordered = ProductionOrder.objects.filter(cohort_week=cohort).exclude(status='CANCELLED').aggregate(Sum('quantity'))['quantity__sum'] or 0
         pending = ProductionOrder.objects.filter(cohort_week=cohort, status='COMPLETED', is_closed=False).aggregate(Sum('quantity'))['quantity__sum'] or 0
         deli = ProductionOrder.objects.filter(cohort_week=cohort, is_closed=True).aggregate(Sum('quantity'))['quantity__sum'] or 0
@@ -582,9 +575,6 @@ def sales_timeline(request):
         chart1_pending.append(int(pending))
         chart1_delivered.append(int(deli))
 
-    # ====================================================
-    # 3. ข้อมูลกราฟที่ 2: ยอดสั่งผลิตแยกตามโรงงาน (ฟิลเตอร์ 1 สัปดาห์)
-    # ====================================================
     filter_date_str = request.GET.get('filter_date')
     if filter_date_str:
         try: filter_date = parse_date(filter_date_str) or today
@@ -602,7 +592,7 @@ def sales_timeline(request):
     chart2_bg_colors = ['#0d6efd', '#ffc107', '#198754', '#dc3545', '#6f42c1', '#0dcaf0', '#fd7e14']
 
     for b in branches:
-        chart2_labels.append(b.name) # แกน X เป็นชื่อโรงงาน
+        chart2_labels.append(b.name)
         qty = ProductionOrder.objects.filter(cohort_week=target_cohort, branch=b).aggregate(Sum('quantity'))['quantity__sum'] or 0
         chart2_data.append(int(qty))
 
@@ -1073,6 +1063,74 @@ def quotation_print(request, qt_id):
     upsale_total = sum(u.quantity * u.unit_price for u in qt.upsales.all())
     item_total = main_total + upsale_total
     return render(request, 'sales/quotation_print.html', {'qt': qt, 'company': company, 'item_total': item_total})
+
+# ==========================================
+# 🌟 [NEW] ฟังก์ชันแปลงตัวเลขเป็นภาษาไทย และพิมพ์สัญญามัดจำ 🌟
+# ==========================================
+def get_thai_baht_text(number):
+    if number == 0: return "ศูนย์บาทถ้วน"
+    import math
+    number = round(float(number), 2)
+    baht = math.floor(number)
+    satang = int(round((number - baht) * 100))
+
+    def read_num(n):
+        if n == 0: return ""
+        numbers = ["", "หนึ่ง", "สอง", "สาม", "สี่", "ห้า", "หก", "เจ็ด", "แปด", "เก้า"]
+        positions = ["", "สิบ", "ร้อย", "พัน", "หมื่น", "แสน", "ล้าน"]
+        s = str(n)
+        length = len(s)
+        res = ""
+        for i, digit in enumerate(s):
+            val = int(digit)
+            pos = length - i - 1
+            if val == 0:
+                continue
+            if pos == 0 and val == 1 and length > 1:
+                res += "เอ็ด"
+            elif pos == 1 and val == 1:
+                res += "สิบ"
+            elif pos == 1 and val == 2:
+                res += "ยี่สิบ"
+            else:
+                res += numbers[val] + positions[pos]
+        return res
+
+    res = ""
+    if baht > 0:
+        res += read_num(baht) + "บาท"
+    if satang > 0:
+        res += read_num(satang) + "สตางค์"
+    else:
+        res += "ถ้วน"
+    return res
+
+@login_required
+def print_deposit_contract(request, qt_id):
+    qt = get_object_or_404(Quotation, pk=qt_id)
+    company = CompanyInfo.objects.first()
+
+    grand_total = qt.grand_total if qt.grand_total else Decimal('0.00')
+    deposit_amount = qt.deposit_amount if qt.deposit_amount else Decimal('0.00')
+    balance_due = grand_total - deposit_amount
+
+    grand_total_text = get_thai_baht_text(grand_total)
+    deposit_amount_text = get_thai_baht_text(deposit_amount)
+    balance_due_text = get_thai_baht_text(balance_due)
+
+    # 🌟 [NEW] ดึงวันที่จัดส่งจากใบสั่งผลิตที่เชื่อมโยงอยู่ (ถ้ามี)
+    job = qt.production_orders.first()
+    delivery_date = job.delivery_date if job else None
+
+    return render(request, 'sales/print_deposit_contract.html', {
+        'qt': qt,
+        'company': company,
+        'grand_total_text': grand_total_text,
+        'deposit_amount_text': deposit_amount_text,
+        'balance_due': balance_due,
+        'balance_due_text': balance_due_text,
+        'delivery_date': delivery_date, # 🌟 ส่งวันที่ไปให้หน้ากระดาษ
+    })
 
 @login_required
 def export_sales_excel(request):
