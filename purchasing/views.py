@@ -15,14 +15,14 @@ from django.forms.models import inlineformset_factory
 
 # จัดบรรทัดใหม่ป้องกัน AI แทรกป้ายกำกับ
 from .models import (
-    PurchaseOrder, PurchaseOrderItem, PurchaseOrderPayment, 
-    PurchasePreparation, OverseasPO, OverseasSupplier, 
+    PurchaseOrder, PurchaseOrderItem, PurchaseOrderPayment,
+    PurchasePreparation, OverseasPO, OverseasSupplier,
     OverseasDocument, OverseasPOItem
 )
 from .forms import PurchaseOrderForm, PurchaseOrderItemFormSet, PurchaseOrderItemForm
 from master_data.models import CompanyInfo, Supplier
 from inventory.models import (
-    Product, ProductSupplier, SupplierPriceHistory, 
+    Product, ProductSupplier, SupplierPriceHistory,
     Category, RawMaterialCategory
 )
 from manufacturing.models import BOM
@@ -93,20 +93,38 @@ def po_list(request):
     if not can_view_and_pay(request.user): return redirect('dashboard')
 
     search_query = request.GET.get('q', '')
-    start_date = request.GET.get('start_date', '')
-    end_date = request.GET.get('end_date', '')
     status_filter = request.GET.get('status', '')
     payment_filter = request.GET.get('payment_status', '')
 
     pos = PurchaseOrder.objects.all().order_by('-created_at')
 
-    if search_query: pos = pos.filter(Q(code__icontains=search_query) | Q(supplier__name__icontains=search_query))
-    if status_filter: pos = pos.filter(status=status_filter)
-    if payment_filter: pos = pos.filter(payment_status=payment_filter)
-    if start_date: pos = pos.filter(date__gte=start_date)
-    if end_date: pos = pos.filter(date__lte=end_date)
+    if search_query:
+        pos = pos.filter(Q(code__icontains=search_query) | Q(supplier__name__icontains=search_query))
+    if status_filter:
+        pos = pos.filter(status=status_filter)
+    if payment_filter:
+        pos = pos.filter(payment_status=payment_filter)
 
-    context = { 'pos': pos, 'search_query': search_query, 'start_date': start_date, 'end_date': end_date, 'status_filter': status_filter, 'payment_filter': payment_filter }
+    # 🌟 [NEW] ปรับการรับค่าว้นที่ ให้ Default เป็น "ช่วง 7 วันก่อนหน้า" 🌟
+    start_date = request.GET.get('start_date')
+    end_date = request.GET.get('end_date')
+
+    # ถ้าย้งไม่มีการเลือกวันที่ (โหลดหน้าเว็บครั้งแรก) ให้ตั้งค่าเป็นย้อนหลัง 6 วัน (รวมวันนี้ = 7 วัน)
+    if not start_date or start_date == 'None':
+        start_date = (timezone.now().date() - datetime.timedelta(days=6)).strftime('%Y-%m-%d')
+    if not end_date or end_date == 'None':
+        end_date = timezone.now().date().strftime('%Y-%m-%d')
+
+    pos = pos.filter(date__gte=start_date, date__lte=end_date)
+
+    context = {
+        'pos': pos,
+        'search_query': search_query,
+        'start_date': start_date,
+        'end_date': end_date,
+        'status_filter': status_filter,
+        'payment_filter': payment_filter
+    }
     return render(request, 'purchasing/po_list.html', context)
 
 @login_required
@@ -405,7 +423,7 @@ def po_cancel(request, po_id):
 @login_required
 def overseas_po_list(request):
     if not can_view_and_pay(request.user): return redirect('purchasing_dashboard')
-    
+
     query = request.GET.get('q', '')
     status_filter = request.GET.get('status', '')
     start_date = request.GET.get('start_date', '')
@@ -414,11 +432,11 @@ def overseas_po_list(request):
 
     if query:
         overseas_pos = overseas_pos.filter(
-            Q(po_number__icontains=query) | Q(supplier__name__icontains=query) | Q(supplier_name__icontains=query) | 
+            Q(po_number__icontains=query) | Q(supplier__name__icontains=query) | Q(supplier_name__icontains=query) |
             Q(pi_number__icontains=query) |
             Q(overseas_items__description__icontains=query)
         ).distinct()
-        
+
     if status_filter:
         overseas_pos = overseas_pos.filter(status=status_filter)
     if start_date:
@@ -441,7 +459,7 @@ def overseas_po_list(request):
     prod_list = []
     for p in products:
         cat_name = p.category.name if p.category else (p.rm_category.name if p.rm_category else "อื่นๆ")
-        
+
         prod_list.append({
             'id': p.id,
             'name': f"[{p.code}] {p.name}",
@@ -452,7 +470,7 @@ def overseas_po_list(request):
     products_json = json.dumps(prod_list)
 
     return render(request, 'purchasing/overseas_po_list.html', {
-        'overseas_pos': overseas_pos, 
+        'overseas_pos': overseas_pos,
         'query': query,
         'status_filter': status_filter,
         'start_date': start_date,
@@ -465,7 +483,7 @@ def overseas_po_save(request):
     if not can_create_po(request.user): return redirect('overseas_po_list')
     if request.method == 'POST':
         po_id = request.POST.get('po_id')
-        
+
         supplier_id = request.POST.get('supplier_id')
         new_supplier_name = request.POST.get('new_supplier_name')
         supplier_obj = None
@@ -478,10 +496,10 @@ def overseas_po_save(request):
         po = get_object_or_404(OverseasPO, id=po_id) if po_id else OverseasPO()
 
         po.supplier = supplier_obj
-        
+
         po.pi_number = request.POST.get('pi_number', '')
         po.ship_to_port = request.POST.get('ship_to_port', '')
-        
+
         po.po_date = request.POST.get('po_date') or timezone.now().date()
         po.eta_date = request.POST.get('eta_date') or None
         po.item_description = request.POST.get('item_description', '')
@@ -497,14 +515,14 @@ def overseas_po_save(request):
         po.balance_date = request.POST.get('balance_date') or None
         b_amt = request.POST.get('balance_amount', '').replace(',', '').strip()
         po.balance_amount = Decimal(b_amt) if b_amt else Decimal('0')
-        
+
         po.save()
 
         item_ids = request.POST.getlist('item_id[]')
         item_descs = request.POST.getlist('item_desc[]')
         item_qtys = request.POST.getlist('item_qty[]')
         item_prices = request.POST.getlist('item_price[]')
-        item_product_ids = request.POST.getlist('item_product_id[]') 
+        item_product_ids = request.POST.getlist('item_product_id[]')
 
         kept_item_ids = []
         for i in range(len(item_descs)):
@@ -513,14 +531,14 @@ def overseas_po_save(request):
 
             qty_str = str(item_qtys[i]).replace(',', '').strip() if i < len(item_qtys) else ''
             qty = Decimal(qty_str) if qty_str else Decimal('1')
-            
+
             price_str = str(item_prices[i]).replace(',', '').strip() if i < len(item_prices) else ''
             price = Decimal(price_str) if price_str else Decimal('0')
-            
+
             total = qty * price
-            
+
             i_id = item_ids[i] if i < len(item_ids) else ""
-            
+
             prod_id_val = item_product_ids[i] if i < len(item_product_ids) else ""
             linked_product = None
             if prod_id_val:
@@ -533,7 +551,7 @@ def overseas_po_save(request):
                     item.quantity = qty
                     item.unit_price = price
                     item.total_price = total
-                    item.product = linked_product 
+                    item.product = linked_product
                     if f'item_image_{i}' in request.FILES:
                         item.image = request.FILES[f'item_image_{i}']
                     item.save()
@@ -542,7 +560,7 @@ def overseas_po_save(request):
                 item = OverseasPOItem.objects.create(
                     po=po, description=desc, quantity=qty, unit_price=price, total_price=total
                 )
-                item.product = linked_product 
+                item.product = linked_product
                 if f'item_image_{i}' in request.FILES:
                     item.image = request.FILES[f'item_image_{i}']
                 item.save()
@@ -555,27 +573,27 @@ def overseas_po_save(request):
             files = request.FILES.getlist(f'doc_{dtype}')
             for f in files:
                 OverseasDocument.objects.create(
-                    po=po, 
-                    doc_type=dtype.upper(), 
+                    po=po,
+                    doc_type=dtype.upper(),
                     file=f
                 )
 
         messages.success(request, f"✅ บันทึกรายการเอกสาร PQ สำเร็จแล้ว")
-        
+
     return redirect('overseas_po_list')
 
 @login_required
 def request_overseas_payment(request, po_id, payment_type):
     if not can_create_po(request.user): return redirect('overseas_po_list')
     po = get_object_or_404(OverseasPO, id=po_id)
-    
+
     if payment_type == 'deposit':
         po.is_deposit_requested = True
         messages.success(request, f"📤 ส่งเรื่องขอเบิก 'มัดจำ' สำหรับเอกสาร: {po.po_number or po.pi_number} เรียบร้อยแล้ว")
     elif payment_type == 'balance':
         po.is_balance_requested = True
         messages.success(request, f"📤 ส่งเรื่องขอเบิก 'ส่วนที่เหลือ' สำหรับเอกสาร: {po.po_number or po.pi_number} เรียบร้อยแล้ว")
-        
+
     po.save()
     return redirect('overseas_po_list')
 
@@ -592,9 +610,9 @@ def overseas_po_print(request, po_id):
     if not can_view_and_pay(request.user): return redirect('overseas_po_list')
     po = get_object_or_404(OverseasPO, id=po_id)
     company = CompanyInfo.objects.first()
-    
+
     return render(request, 'purchasing/overseas_po_print.html', {
-        'po': po, 
+        'po': po,
         'company': company
     })
 
@@ -638,22 +656,22 @@ def overseas_supplier_delete(request, pk):
 @login_required
 def supplier_list(request):
     if not can_view_and_pay(request.user): return redirect('dashboard')
-    
+
     query = request.GET.get('q', '')
     category_id = request.GET.get('category', '')
     rm_category_id = request.GET.get('rm_category', '')
 
     suppliers = Supplier.objects.all().order_by('-id')
-    
+
     if query:
         suppliers = suppliers.filter(
             Q(code__icontains=query) | Q(name__icontains=query) |
             Q(contact_name__icontains=query) | Q(phone__icontains=query)
         )
-        
+
     if category_id:
         suppliers = suppliers.filter(supplied_products__product__category_id=category_id).distinct()
-        
+
     if rm_category_id:
         suppliers = suppliers.filter(supplied_products__product__rm_category_id=rm_category_id).distinct()
 
@@ -665,7 +683,7 @@ def supplier_list(request):
         'categories': categories, 'rm_categories': rm_categories,
         'selected_cat': category_id, 'selected_rm_cat': rm_category_id
     }
-        
+
     return render(request, 'purchasing/supplier_list.html', context)
 
 @login_required

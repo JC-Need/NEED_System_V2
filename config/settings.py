@@ -26,11 +26,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'mathfilters',
+    'solar_purchasing',
+    'solar_jobs',
+    'solar_sales',
 
     # --- 3rd Party Tools ---
     'import_export',           # สำหรับนำเข้า/ส่งออก Excel
     'django.contrib.humanize', # สำหรับจัดรูปแบบตัวเลข (ใส่ลูกน้ำ)
-    
+
     # ✅ เพิ่ม Crispy Forms (ตัวตกแต่งฟอร์ม) ที่ขาดหายไป
     'crispy_forms',
     'crispy_bootstrap5',

@@ -11,17 +11,18 @@ urlpatterns = [
     path('production/blueprint-hub/<int:pk>/approve/', views.blueprint_approve, name='blueprint_approve'),
     path('production/blueprint-hub/claim/', views.blueprint_create_claim, name='blueprint_create_claim'),
     path('production/blueprint-hub/claim/<int:pk>/print/', views.print_blueprint_claim, name='print_blueprint_claim'),
+    path('production/blueprint-claim/<int:claim_id>/pay/', views.pay_blueprint_claim, name='pay_blueprint_claim'),
     path('production/head-board/', views.production_head_board, name='production_head_board'),
     path('production/qc-board/', views.qc_board, name='qc_board'),
-    
+
     # 🌟 เส้นทางจัดส่งสินค้า 🌟
     path('production/logistics-board/', views.logistics_board, name='logistics_board'),
     path('production/<int:pk>/process-logistics/', views.process_logistics, name='process_logistics'),
     path('production/logistics-claim/', views.create_logistics_claim, name='create_logistics_claim'),
     path('production/<int:pk>/print-delivery/', views.print_delivery_note, name='print_delivery_note'),
     path('production/logistics-claim/<int:pk>/print/', views.print_logistics_claim, name='print_logistics_claim'),
-    path('production/logistics-claim/history/', views.logistics_claim_history, name='logistics_claim_history'), # 🌟 NEW
-    
+    path('production/logistics-claim/history/', views.logistics_claim_history, name='logistics_claim_history'),
+
     path('production/<int:pk>/submit-qc/', views.submit_to_qc, name='submit_to_qc'),
     path('production/<int:pk>/process-qc/', views.process_qc, name='process_qc'),
     path('production/<int:po_id>/print/', views.production_print, name='production_print'),
@@ -38,11 +39,15 @@ urlpatterns = [
     path('production/<int:pk>/add-material/', views.add_additional_material, name='add_additional_material'),
     path('production/material/<int:pk>/delete/', views.delete_production_material, name='delete_production_material'),
     path('production/<int:pk>/blueprint-viewer/', views.blueprint_viewer, name='blueprint_viewer'),
+    
+    # 🧱 สูตรการผลิต (BOM)
     path('bom/', views.bom_list, name='bom_list'),
     path('bom/create/', views.bom_create, name='bom_create'),
     path('bom/<int:pk>/', views.bom_detail, name='bom_detail'),
     path('bom/<int:pk>/edit/', views.bom_edit, name='bom_edit'),
+    path('bom/<int:pk>/update-labor-cost/', views.update_bom_labor_cost, name='update_bom_labor_cost'), # 🌟 [NEW] เพิ่มเส้นทางอัปเดตค่าแรงประกอบ
     path('bom/<int:pk>/print/', views.print_master_bom, name='print_master_bom'),
+    
     path('production/<int:pk>/update-board/', views.update_production_board, name='update_production_board'),
     path('ajax/add-branch/', views.ajax_add_branch, name='ajax_add_branch'),
     path('ajax/add-salesperson/', views.ajax_add_salesperson, name='ajax_add_salesperson'),
@@ -50,8 +55,9 @@ urlpatterns = [
     path('ajax/add-prod-team/', views.ajax_add_prod_team, name='ajax_add_prod_team'),
     path('ajax/add-delivery-status/', views.ajax_add_delivery_status, name='ajax_add_delivery_status'),
     path('ajax/add-transporter/', views.ajax_add_transporter, name='ajax_add_transporter'),
-    path('ajax/add-transporter-full/', views.ajax_add_transporter_full, name='ajax_add_transporter_full'), # 🌟 NEW
+    path('ajax/add-transporter-full/', views.ajax_add_transporter_full, name='ajax_add_transporter_full'),
     path('ajax/get-fg-by-category/', views.ajax_get_fg_by_category, name='ajax_get_fg_by_category'),
     path('bom/import/', views.import_bom_excel, name='import_bom_excel'),
     path('ajax/search-raw-material/', views.ajax_search_raw_material, name='ajax_search_raw_material'),
+    path('production/logistics-claim/<int:claim_id>/pay/', views.pay_logistics_claim, name='pay_logistics_claim'),
 ]

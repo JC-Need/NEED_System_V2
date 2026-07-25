@@ -28,6 +28,7 @@ urlpatterns = [
     path('invoice/', views.invoice_list, name='invoice_list'),
     path('invoice/print/<int:inv_id>/', views.invoice_print, name='invoice_print'),
     path('invoice/record-payment/<int:inv_id>/', views.record_invoice_payment, name='record_invoice_payment'),
+    path('invoice/delete-payment/<int:pay_id>/', views.delete_invoice_payment, name='delete_invoice_payment'),
     path('confirm-payment/<str:doc_type>/<int:doc_id>/', views.confirm_payment, name='confirm_payment'),
 
     path('api/customer-search/', views.api_search_customer, name='api_search_customer'),

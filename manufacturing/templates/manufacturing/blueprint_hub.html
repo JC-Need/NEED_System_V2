@@ -15,9 +15,15 @@
             <p class="text-muted small mb-0">ตรวจสอบแบบแปลน ถอดโครงสร้างวัตถุดิบ (BOM) และระบบตั้งเบิกผลงาน</p>
         </div>
         <div>
-            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold">
-                <i class="fas fa-arrow-left me-1"></i> กลับ Dashboard
-            </a>
+            {% if request.user.is_superuser or 'บัญชี' in request.user.employee.department.name|default:'' or 'Account' in request.user.employee.department.name|default:'' %}
+                <a href="{% url 'accounting_dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold">
+                    <i class="fas fa-arrow-left me-1"></i> กลับหน้าบัญชี
+                </a>
+            {% else %}
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary rounded-pill px-4 shadow-sm fw-bold">
+                    <i class="fas fa-arrow-left me-1"></i> กลับ Dashboard
+                </a>
+            {% endif %}
         </div>
     </div>
 
@@ -319,6 +325,17 @@
                                                 </div>
                                             </div>
                                             <div class="modal-footer border-0 bg-white">
+                                                {% if claim.status == 'PENDING' %}
+                                                    {% if request.user.is_superuser or 'บัญชี' in request.user.employee.department.name|default:'' or 'Account' in request.user.employee.department.name|default:'' %}
+                                                    <form method="POST" action="{% url 'pay_blueprint_claim' claim.id %}" class="d-inline mb-0">
+                                                        {% csrf_token %}
+                                                        <button type="submit" class="btn btn-success rounded-pill px-4 shadow-sm fw-bold me-1" onclick="return confirm('ยืนยันทำจ่ายยอด ฿{{ claim.total_amount|floatformat:2|intcomma }} และบันทึกลงบัญชีรายจ่ายใช่หรือไม่?');">
+                                                            <i class="fas fa-money-check-alt me-1"></i> ทำจ่ายเงิน
+                                                        </button>
+                                                    </form>
+                                                    {% endif %}
+                                                {% endif %}
+
                                                 <a href="{% url 'print_blueprint_claim' claim.id %}" target="_blank" class="btn btn-info rounded-pill px-4 shadow-sm text-dark fw-bold">
                                                     <i class="fas fa-print me-1"></i> พิมพ์เอกสารเบิกจ่าย
                                                 </a>

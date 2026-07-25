@@ -2,25 +2,42 @@
 {% load humanize %}
 
 {% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+
+<style>
+    .flatpickr-input { background-color: #fff !important; cursor: pointer; }
+</style>
+
 <div class="container-fluid py-4 px-4">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3 class="fw-bold mb-0 text-dark"><i class="fas fa-history text-secondary me-2"></i>ประวัติใบเบิกค่าขนส่ง</h3>
             <p class="text-muted small">ค้นหาและพิมพ์ย้อนหลัง ใบตั้งเบิกค่ารถรับจ้าง / ค่าขนส่ง</p>
         </div>
-        <a href="{% url 'logistics_board' %}" class="btn btn-outline-secondary rounded-pill shadow-sm"><i class="fas fa-arrow-left me-2"></i> กลับกระดานขนส่ง</a>
+        
+        {% if request.user.is_superuser or 'บัญชี' in request.user.employee.department.name|default:'' or 'Account' in request.user.employee.department.name|default:'' %}
+            <a href="{% url 'accounting_dashboard' %}" class="btn btn-outline-secondary rounded-pill shadow-sm"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ</a>
+        {% else %}
+            <a href="{% url 'logistics_board' %}" class="btn btn-outline-secondary rounded-pill shadow-sm"><i class="fas fa-arrow-left me-2"></i> กลับหน้ารายการ</a>
+        {% endif %}
     </div>
 
     <div class="card border-0 shadow-sm rounded-4 mb-4">
         <div class="card-body p-4">
-            <form method="GET" class="row g-3">
+            <form method="GET" class="row g-3 align-items-end">
                 <div class="col-md-2">
                     <label class="form-label small text-muted fw-bold">ตั้งแต่วันที่</label>
-                    <input type="date" name="start_date" class="form-control form-control-sm" value="{{ start_date }}">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light"><i class="far fa-calendar-alt"></i></span>
+                        <input type="text" name="start_date" class="form-control datepicker" placeholder="dd/mm/yyyy" value="{{ start_date }}">
+                    </div>
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small text-muted fw-bold">ถึงวันที่</label>
-                    <input type="date" name="end_date" class="form-control form-control-sm" value="{{ end_date }}">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-light"><i class="far fa-calendar-alt"></i></span>
+                        <input type="text" name="end_date" class="form-control datepicker" placeholder="dd/mm/yyyy" value="{{ end_date }}">
+                    </div>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label small text-muted fw-bold">ชื่อคนขับ / บริษัทรถ</label>
@@ -52,7 +69,7 @@
                         <th class="text-center">จำนวนงาน</th>
                         <th class="text-end">ยอดเบิกสุทธิ</th>
                         <th class="text-center">สถานะ</th>
-                        <th class="text-center pe-4">พิมพ์</th>
+                        <th class="text-center pe-4">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -76,11 +93,53 @@
                             {% endif %}
                         </td>
                         <td class="text-center pe-4">
-                            <a href="{% url 'print_logistics_claim' claim.id %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-circle shadow-sm" title="พิมพ์ใบเบิก">
-                                <i class="fas fa-print"></i>
-                            </a>
+                            <div class="d-flex justify-content-center gap-2">
+                                {% if claim.status == 'PENDING' %}
+                                    {% if request.user.is_superuser or 'บัญชี' in request.user.employee.department.name|default:'' or 'Account' in request.user.employee.department.name|default:'' %}
+                                    <button type="button" class="btn btn-sm btn-success rounded-pill shadow-sm fw-bold px-3" data-bs-toggle="modal" data-bs-target="#payClaimModal{{ claim.id }}">
+                                        <i class="fas fa-money-check-alt me-1"></i> ทำจ่าย
+                                    </button>
+                                    {% endif %}
+                                {% endif %}
+                                
+                                <a href="{% url 'print_logistics_claim' claim.id %}" target="_blank" class="btn btn-sm btn-outline-primary rounded-circle shadow-sm" title="พิมพ์ใบเบิก">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            </div>
                         </td>
                     </tr>
+
+                    {% if claim.status == 'PENDING' %}
+                        {% if request.user.is_superuser or 'บัญชี' in request.user.employee.department.name|default:'' or 'Account' in request.user.employee.department.name|default:'' %}
+                        <div class="modal fade" id="payClaimModal{{ claim.id }}" tabindex="-1">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content border-0 rounded-4 shadow-lg text-start">
+                                    <div class="modal-header bg-success text-white border-0">
+                                        <h5 class="modal-title fw-bold"><i class="fas fa-wallet me-2"></i>ยืนยันทำจ่ายค่าขนส่ง</h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <form method="POST" action="{% url 'pay_logistics_claim' claim.id %}">
+                                        {% csrf_token %}
+                                        <div class="modal-body p-4">
+                                            <div class="alert alert-success py-3 mb-3 text-center border-success">
+                                                <h6 class="mb-1 text-success">ยอดที่ต้องชำระ</h6>
+                                                <h3 class="fw-bold text-dark mb-0">฿{{ claim.total_amount|floatformat:2|intcomma }}</h3>
+                                            </div>
+                                            <p class="text-muted small text-center mb-0">
+                                                เมื่อกดยืนยัน ระบบจะเปลี่ยนสถานะเป็น <b>"จ่ายแล้ว"</b> <br>และนำยอดนี้ไปบันทึกลง <b>รายจ่าย (Expense)</b> ของบริษัทให้อัตโนมัติ
+                                            </p>
+                                        </div>
+                                        <div class="modal-footer bg-light border-0">
+                                            <button type="button" class="btn btn-secondary rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
+                                            <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">ยืนยันการโอนเงิน</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    {% endif %}
+                    
                     {% empty %}
                     <tr>
                         <td colspan="7" class="text-center py-5 text-muted">
@@ -108,4 +167,13 @@
         {% endif %}
     </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        flatpickr(".datepicker", { 
+            dateFormat: "Y-m-d", altInput: true, altFormat: "d/m/Y", allowInput: true 
+        });
+    });
+</script>
 {% endblock %}

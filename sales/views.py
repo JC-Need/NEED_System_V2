@@ -17,12 +17,14 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db import transaction
 
+# Models
 from .models import Quotation, QuotationItem, POSOrder, POSOrderItem, Invoice, UpsaleCategory, UpsaleCatalog, QuotationUpsale, InvoicePayment, CustomerLead, Appointment
-from inventory.models import Product, Category
 from master_data.models import Customer, CompanyInfo, ShippingRate
 from hr.models import Employee, SalesGroup, CompanySalesTarget, CommissionLog, FundTransaction
 from .forms import QuotationForm
 from manufacturing.models import ProductionOrder, Salesperson as MfgSalesperson, Branch, MfgBranch, ProductionStatus
+from inventory.models import Product, InventoryDoc, StockMovement, Category
+from solar_jobs.models import SolarJob
 
 # ==========================================
 # 🧠 ระบบคำนวณคอมมิชชัน
@@ -152,14 +154,59 @@ def is_sales_authorized(user):
         if 'ขาย' in dept or 'Sales' in dept: return True
     return False
 
+# ==========================================
+# หน้า Sales Hub และ Dashboards
+# ==========================================
 @login_required
 def sales_dashboard(request):
     if not is_sales_authorized(request.user): return redirect('dashboard')
-    _, scope_title = get_target_employees(request.user)
+
+    target_employees, scope_title = get_target_employees(request.user)
     today = timezone.now().date()
+
+    # 🌟 [NEW] ระบบดึงข้อมูลสาขา เพื่อใช้เป็น Dropdown ตัวกรอง
+    from hr.models import Department
+    is_manager = False
+    is_supervisor = False
+    current_emp = getattr(request.user, 'employee', None)
+
+    if request.user.is_superuser:
+        is_manager = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
+            is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
+
+    # 🌟 โหลดรายชื่อสาขาตามสิทธิ์ (กรองเฉพาะ "ทีม" และ "สาขา")
+    if is_manager:
+        departments = list(Department.objects.filter(
+            Q(name__icontains='ทีม') | Q(name__icontains='สาขา')
+        ).order_by('name'))
+    elif is_supervisor and current_emp.department:
+        departments = list(Department.objects.filter(id=current_emp.department.id))
+    else:
+        departments = []
+
+    # ลบคำว่า "แผนก" ทิ้งเพื่อความสะอาดตา
+    for d in departments:
+        d.name = d.name.replace('แผนก', '').strip()
+
     return render(request, 'sales/dashboard.html', {
-        'scope_title': scope_title, 'start_date': today.strftime('%Y-%m-%d'), 'end_date': today.strftime('%Y-%m-%d')
+        'scope_title': scope_title,
+        'start_date': today.strftime('%Y-%m-%d'),
+        'end_date': today.strftime('%Y-%m-%d'),
+        'departments': departments,
+        'is_manager': is_manager,
+        'is_supervisor': is_supervisor
     })
+
+@login_required
+def sales_hub(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เปิดบิลขาย")
+        return redirect('dashboard')
 
 @login_required
 def api_dashboard_data(request):
@@ -171,11 +218,16 @@ def api_dashboard_data(request):
 
     start_date_str = request.GET.get('start_date')
     end_date_str = request.GET.get('end_date')
-    group_by = request.GET.get('group_by', 'day')
 
     start_date = parse_date(start_date_str) if start_date_str else today
     end_date = parse_date(end_date_str) if end_date_str else today
     end_date_inclusive = end_date + timedelta(days=1)
+
+    branch_filter = request.GET.get('branch', '')
+    user_rank = emp.business_rank.lower() if (emp and emp.business_rank) else "member"
+
+    if branch_filter and (user_rank in ['manager', 'director', 'supervisor'] or request.user.is_superuser):
+        target_employees = target_employees.filter(department_id=branch_filter)
 
     pos_qs_all = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
     inv_qs_all = get_sales_queryset(Invoice, request.user, target_employees).filter(date__gte=start_date, date__lte=end_date)
@@ -183,84 +235,54 @@ def api_dashboard_data(request):
     total_sales = float((pos_qs_all.filter(status='PAID').aggregate(Sum('total_amount'))['total_amount__sum'] or 0) +
                         (inv_qs_all.filter(status='PAID').aggregate(Sum('grand_total'))['grand_total__sum'] or 0))
 
-    total_orders_today = pos_qs_all.count() + inv_qs_all.count()
+    today_start = datetime.datetime.combine(today, datetime.time.min)
+    tomorrow_start = today_start + timedelta(days=1)
+
+    pos_today_count = get_sales_queryset(POSOrder, request.user, target_employees).filter(created_at__gte=today_start, created_at__lt=tomorrow_start).count()
+    inv_today_count = get_sales_queryset(Invoice, request.user, target_employees).filter(date=today).count()
+    total_orders_today = pos_today_count + inv_today_count
+
     qt_all_qs = get_sales_queryset(Quotation, request.user, target_employees)
     pending_approval = qt_all_qs.filter(status='DRAFT').count()
     pending_closing = qt_all_qs.filter(status='APPROVED', is_deposit_paid=False).count()
     in_production = qt_all_qs.filter(status='APPROVED', is_deposit_paid=True).count()
 
     chart_labels, chart_data, chart_title, chart_type = [], [], "", "bar"
-    user_rank = emp.business_rank.lower() if (emp and emp.business_rank) else "member"
 
-    pos_raw = list(pos_qs_all.filter(status='PAID').values('created_at', 'total_amount', 'employee__department__name', 'employee__first_name'))
-    inv_raw = list(inv_qs_all.filter(status='PAID').values('date', 'grand_total', 'employee__department__name', 'employee__first_name'))
+    pos_raw = list(pos_qs_all.filter(status='PAID').values('total_amount', 'employee__department__name', 'employee__first_name'))
+    inv_raw = list(inv_qs_all.filter(status='PAID').values('grand_total', 'employee__department__name', 'employee__first_name'))
 
+    # 🌟 บังคับกราฟให้เป็นเปรียบเทียบทีม/สาขา หรือ พนักงานเสมอ (ผลรวมจะตรงกับบัตร 100%) 🌟
     if user_rank in ['manager', 'director'] or request.user.is_superuser:
-        if group_by == 'day':
-            chart_title = "แนวโน้มยอดขายรวมทั้งบริษัท (รายวัน)"
-            chart_type = "line"
-            period_dict = {}
-            for p in pos_raw:
-                if p['created_at']:
-                    key = p['created_at'].strftime("%Y-%m-%d")
-                    period_dict[key] = period_dict.get(key, 0) + float(p['total_amount'] or 0)
-            for i in inv_raw:
-                if i['date']:
-                    key = i['date'].strftime("%Y-%m-%d")
-                    period_dict[key] = period_dict.get(key, 0) + float(i['grand_total'] or 0)
+        chart_title = "ยอดขายเปรียบเทียบรายทีม/สาขา"
+        team_dict = {}
+        for p in pos_raw:
+            t = p['employee__department__name'] or 'ไม่ระบุสาขา'
+            team_dict[t] = team_dict.get(t, 0) + float(p['total_amount'] or 0)
+        for i in inv_raw:
+            t = i['employee__department__name'] or 'ไม่ระบุสาขา'
+            team_dict[t] = team_dict.get(t, 0) + float(i['grand_total'] or 0)
 
-            sorted_keys = sorted(period_dict.keys())
-            chart_labels = [datetime.datetime.strptime(k, "%Y-%m-%d").strftime("%d/%m") for k in sorted_keys]
-            chart_data = [period_dict[k] for k in sorted_keys]
-
-        else:
-            chart_title = "ยอดขายเปรียบเทียบรายทีม/สาขา"
-            chart_type = "bar"
-            team_dict = {}
-            for p in pos_raw:
-                t = p['employee__department__name'] or 'ไม่ระบุทีม'
-                team_dict[t] = team_dict.get(t, 0) + float(p['total_amount'] or 0)
-            for i in inv_raw:
-                t = i['employee__department__name'] or 'ไม่ระบุทีม'
-                team_dict[t] = team_dict.get(t, 0) + float(i['grand_total'] or 0)
-
-            sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
-            chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
+        sorted_data = sorted(team_dict.items(), key=lambda x: x[1], reverse=True)
+        chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
 
     elif user_rank == 'supervisor':
-        chart_title = f"เปรียบเทียบผลงานในทีม {emp.department.name if emp.department else ''}"
-        chart_type = "bar"
+        chart_title = f"ยอดขายเปรียบเทียบพนักงานในทีม"
         mem_dict = {}
         for p in pos_raw:
-            m = p['employee__first_name'] or 'ไม่ระบุ'
+            m = p['employee__first_name'] or 'ไม่ระบุชื่อ'
             mem_dict[m] = mem_dict.get(m, 0) + float(p['total_amount'] or 0)
         for i in inv_raw:
-            m = i['employee__first_name'] or 'ไม่ระบุ'
+            m = i['employee__first_name'] or 'ไม่ระบุชื่อ'
             mem_dict[m] = mem_dict.get(m, 0) + float(i['grand_total'] or 0)
 
         sorted_data = sorted(mem_dict.items(), key=lambda x: x[1], reverse=True)
         chart_labels, chart_data = [x[0] for x in sorted_data], [x[1] for x in sorted_data]
 
     else:
-        chart_title = "แนวโน้มยอดขายส่วนตัว"
-        chart_type = "bar"
-
-        period_dict = {}
-        for p in pos_raw:
-            if p['created_at']:
-                key = p['created_at'].strftime("%Y-%m") if group_by == 'month' else p['created_at'].strftime("%Y-%m-%d")
-                period_dict[key] = period_dict.get(key, 0) + float(p['total_amount'] or 0)
-        for i in inv_raw:
-            if i['date']:
-                key = i['date'].strftime("%Y-%m") if group_by == 'month' else i['date'].strftime("%Y-%m-%d")
-                period_dict[key] = period_dict.get(key, 0) + float(i['grand_total'] or 0)
-
-        sorted_keys = sorted(period_dict.keys())
-        if group_by == 'month':
-            chart_labels = [f"{k[5:7]}/{k[:4]}" for k in sorted_keys]
-        else:
-            chart_labels = [f"{k[-2:]}/{k[5:7]}" for k in sorted_keys]
-        chart_data = [period_dict[k] for k in sorted_keys]
+        chart_title = "ยอดขายส่วนตัว"
+        chart_labels = [emp.first_name if emp else 'พนักงาน']
+        chart_data = [total_sales]
 
     recent_pos = list(get_sales_queryset(POSOrder, request.user, target_employees)
                       .filter(created_at__gte=start_date, created_at__lt=end_date_inclusive)
@@ -275,19 +297,22 @@ def api_dashboard_data(request):
 
     combined = sorted(recent_pos + recent_inv, key=lambda x: x.created_at, reverse=True)[:10]
     recent_sales_data = []
+
     for item in combined:
-        is_pos = 'POS' in item.code
+        is_pos = isinstance(item, POSOrder)
         qt, job = "-", "-"
-        if not is_pos and item.quotation_ref:
+
+        if not is_pos and getattr(item, 'quotation_ref', None):
             qt = item.quotation_ref.code
             jobs = item.quotation_ref.production_orders.all()
             if jobs.exists(): job = ", ".join([j.code for j in jobs])
+
         recent_sales_data.append({
             'time': item.created_at.strftime('%H:%M') if item.created_at.date() == today else item.created_at.strftime('%d/%m/%Y'),
             'code': item.code, 'is_pos': is_pos, 'qt_code': qt, 'job_code': job,
             'employee_name': item.employee.first_name if item.employee else '-',
             'employee_branch': item.employee.department.name if item.employee and item.employee.department else '-',
-            'employee_photo': item.employee.photo.url if item.employee and item.employee.photo else None,
+            'employee_photo': item.employee.photo.url if item.employee and getattr(item.employee, 'photo', None) else None,
             'employee_initial': item.employee.first_name[0] if item.employee and item.employee.first_name else '-',
             'amount': float(item.total_amount) if is_pos else float(item.grand_total)
         })
@@ -487,6 +512,23 @@ def create_job_order(request, qt_id):
         job.blueprint_file = first_item.product.standard_blueprint
         job.save()
 
+    if first_item.product:
+        p_name = first_item.product.name.lower()
+        c_name = first_item.product.category.name.lower() if hasattr(first_item.product, 'category') and first_item.product.category else ""
+
+        if 'โซล่า' in p_name or 'solar' in p_name or 'โซล่า' in c_name or 'solar' in c_name:
+            try:
+                SolarJob.objects.create(
+                    customer=qt.customer,
+                    salesperson=qt.employee,
+                    package_sold=first_item.product,
+                    status='DRAFT', # สถานะร่าง เพื่อรอให้ Center กดรับเรื่อง
+                    note=f"📌 สร้างอัตโนมัติจากใบเสนอราคา {qt.code}\nรายละเอียดเพิ่มเติม: {qt.note}"
+                )
+            except Exception as e:
+                print(f"เกิดข้อผิดพลาดในการสร้าง Solar Job: {e}")
+    # 🌟 สิ้นสุดโค้ดชุดใหม่ 🌟
+
     if approval_status == 'PENDING':
         messages.warning(request, f"🏭 ส่งสั่งผลิตสำเร็จ! (ระบบตั้งสถานะ 'รออนุมัติวัน' เนื่องจากขอเปลี่ยนวันจัดส่งเป็น {req_date.strftime('%d/%m/%Y')})")
     elif weeks_pushed > 0:
@@ -685,7 +727,7 @@ def pos_checkout(request):
                 received_amount=received_amount,
                 change_amount=received_amount - total_amount,
                 payment_method=payment_method,
-                status='PAID',
+                status='PENDING',
                 customer=customer_obj,
                 customer_name=cust_name,
                 customer_address=cust_addr,
@@ -754,10 +796,52 @@ def pos_print_slip(request, order_code):
 
 @login_required
 def quotation_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้ารายการใบเสนอราคา")
+        return redirect('dashboard')
+
     target_employees, _ = get_target_employees(request.user)
     queryset = get_sales_queryset(Quotation, request.user, target_employees).order_by('-created_at')
 
+    # 🌟 [NEW] ระบบจำกัดสิทธิ์และดึงข้อมูลสาขา
+    from hr.models import Department
+    is_manager = False
+    is_supervisor = False
+    current_emp = getattr(request.user, 'employee', None)
+
+    if request.user.is_superuser:
+        is_manager = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
+            is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
+
+    # 🌟 โหลดรายชื่อสาขาตามสิทธิ์ (กรองเฉพาะ "ทีม" และ "สาขา")
+    if is_manager:
+        departments = list(Department.objects.filter(
+            Q(name__icontains='ทีม') |
+            Q(name__icontains='สาขา')
+        ).order_by('name'))
+    elif is_supervisor and current_emp.department:
+        departments = list(Department.objects.filter(id=current_emp.department.id))
+    else:
+        departments = []
+
+    # 🌟 ลบคำว่า "แผนก" ทิ้งเพื่อความสะอาดตา
+    for d in departments:
+        d.name = d.name.replace('แผนก', '').strip()
+
+    search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status')
+    prod_status_filter = request.GET.get('prod_status')
+    branch_filter = request.GET.get('branch', '') # 🌟 รับค่าตัวกรองสาขา
+
+    # 🌟 กรองข้อมูลตาม "สาขา"
+    if branch_filter and (is_manager or is_supervisor):
+        queryset = queryset.filter(employee__department_id=branch_filter)
+
     if status_filter:
         if status_filter == 'PENDING_PRODUCTION':
              queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True).distinct()
@@ -770,7 +854,6 @@ def quotation_list(request):
 
     total_departments_count = ProductionStatus.objects.count()
 
-    prod_status_filter = request.GET.get('prod_status')
     if prod_status_filter:
         if prod_status_filter == 'CLOSED':
             valid_jobs = ProductionOrder.objects.filter(is_closed=True)
@@ -781,28 +864,28 @@ def quotation_list(request):
             elif prod_status_filter == 'IN_PROGRESS_6':
                  valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count=total_departments_count)
             else:
-                 valid_jobs = valid_jobs.filter(status=prod_status_filter)
+                  valid_jobs = valid_jobs.filter(status=prod_status_filter)
         valid_job_ids = list(valid_jobs.values_list('id', flat=True))
         queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
 
-    search_query = request.GET.get('q', '')
     if search_query:
         queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query)).distinct()
 
-    date_start = request.GET.get('start_date', '')
-    date_end = request.GET.get('end_date', '')
-    if date_start: queryset = queryset.filter(date__gte=date_start).distinct()
-    if date_end: queryset = queryset.filter(date__lte=date_end).distinct()
+    # 🌟 กรองวันที่ (ตั้งค่าเริ่มต้นเป็น "ช่วง 30 วันก่อนหน้า") 🌟
+    date_start = request.GET.get('start_date')
+    date_end = request.GET.get('end_date')
+
+    if not date_start or date_start == 'None':
+        date_start = (timezone.now().date() - datetime.timedelta(days=29)).strftime('%Y-%m-%d')
+    if not date_end or date_end == 'None':
+        date_end = timezone.now().date().strftime('%Y-%m-%d')
+
+    # 🌟 [NEW] ถ้าเลือก 'สถานะเอกสาร' หรือ 'สถานะผลิต' ให้ข้ามการกรองวันที่ (ดึงข้อมูลมาทั้งหมด) 🌟
+    if not status_filter and not prod_status_filter:
+        queryset = queryset.filter(date__gte=date_start, date__lte=date_end).distinct()
 
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
-
-    is_manager = False
-    current_emp = getattr(request.user, 'employee', None)
-    if request.user.is_superuser: is_manager = True
-    elif current_emp:
-        rank = current_emp.business_rank.lower()
-        if rank in ['manager', 'director'] or 'manager' in current_emp.position.title.lower(): is_manager = True
 
     for qt in page_obj:
         if qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.exists():
@@ -810,12 +893,17 @@ def quotation_list(request):
 
     return render(request, 'sales/quotation_list.html', {
         'page_obj': page_obj, 'search_query': search_query, 'is_manager': is_manager,
+        'is_supervisor': is_supervisor, 'departments': departments, 'branch_filter': branch_filter,
         'status_filter': status_filter, 'prod_status_filter': prod_status_filter,
         'date_start': date_start, 'date_end': date_end, 'total_departments_count': total_departments_count
     })
 
 @login_required
 def quotation_create(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์สร้างใบเสนอราคา")
+        return redirect('dashboard')
+
     if request.method == 'POST':
         form = QuotationForm(request.POST)
         if form.is_valid():
@@ -846,6 +934,11 @@ def quotation_create(request):
 
 @login_required
 def quotation_edit(request, qt_id):
+
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์แก้ไขใบเสนอราคา")
+        return redirect('dashboard')
+
     qt = get_object_or_404(Quotation, pk=qt_id)
 
     main_categories = Category.objects.all()
@@ -1182,16 +1275,59 @@ def api_create_customer(request):
 
 @login_required
 def invoice_list(request):
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์เข้าถึงหน้ารายการใบเสร็จ")
+        return redirect('dashboard')
+
     target_employees, _ = get_target_employees(request.user)
     qs_invoice = get_sales_queryset(Invoice, request.user, target_employees).prefetch_related('payment_history', 'quotation_ref__production_orders')
     qs_pos = get_sales_queryset(POSOrder, request.user, target_employees)
 
+    # 🌟 [NEW] ระบบดึงข้อมูลสาขา เพื่อใช้เป็นตัวกรอง
+    from hr.models import Department
+
+    # 🌟 เช็คสิทธิ์และระดับ (Rank) ของพนักงาน
+    is_manager = request.user.is_superuser
+    is_supervisor = False
+    current_emp = getattr(request.user, 'employee', None)
+
+    if current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'บัญชี' in current_emp.department.name:
+            is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
+
+    # 🌟 โหลดรายชื่อสาขาตามสิทธิ์ (กรองเฉพาะ "ทีม" และ "สาขา" เท่านั้น)
+    if is_manager:
+        departments = list(Department.objects.filter(
+            Q(name__icontains='ทีม') |
+            Q(name__icontains='สาขา')
+        ).order_by('name'))
+    elif is_supervisor and current_emp.department:
+        departments = list(Department.objects.filter(id=current_emp.department.id))
+    else:
+        departments = [] # พนักงานทั่วไป ไม่ต้องเห็นสาขา
+
+    # 🌟 ลบคำว่า "แผนก" ออกจากชื่อ เพื่อความสะอาดตาบนหน้าเว็บ
+    for d in departments:
+        d.name = d.name.replace('แผนก', '').strip()
+
+    # 🌟 รับค่าการค้นหาจากฟอร์ม
     search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+    branch_filter = request.GET.get('branch', '') # 🌟 รับค่าสาขา
+
+    # 🌟 กรองข้อมูลตาม "สาขา"
+    if branch_filter and (is_manager or is_supervisor):
+        qs_invoice = qs_invoice.filter(employee__department_id=branch_filter)
+        qs_pos = qs_pos.filter(employee__department_id=branch_filter)
+
+    # กรองข้อมูลอื่นๆ
     if search_query:
         qs_invoice = qs_invoice.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
         qs_pos = qs_pos.filter(code__icontains=search_query)
 
-    status_filter = request.GET.get('status')
     if status_filter:
         if status_filter == 'PENDING':
             qs_invoice = qs_invoice.filter(Q(status='PENDING') | Q(status='UNPAID'))
@@ -1200,16 +1336,18 @@ def invoice_list(request):
             qs_invoice = qs_invoice.filter(status=status_filter)
             qs_pos = qs_pos.filter(status=status_filter)
 
+    # 🌟 กรองวันที่
     start_date = request.GET.get('start_date')
     end_date = request.GET.get('end_date')
 
-    if start_date and start_date != 'None':
-        qs_invoice = qs_invoice.filter(date__gte=start_date)
-        qs_pos = qs_pos.filter(created_at__date__gte=start_date)
+    # ถ้าไม่มีการเลือกวันที่มา (โหลดหน้าแรก) ให้บังคับดึงข้อมูลของ "วันนี้"
+    if not start_date or start_date == 'None':
+        start_date = timezone.now().date().strftime('%Y-%m-%d')
+    if not end_date or end_date == 'None':
+        end_date = timezone.now().date().strftime('%Y-%m-%d')
 
-    if end_date and end_date != 'None':
-        qs_invoice = qs_invoice.filter(date__lte=end_date)
-        qs_pos = qs_pos.filter(created_at__date__lte=end_date)
+    qs_invoice = qs_invoice.filter(date__gte=start_date, date__lte=end_date)
+    qs_pos = qs_pos.filter(created_at__date__gte=start_date, created_at__date__lte=end_date)
 
     combined_list = sorted(list(qs_invoice) + list(qs_pos), key=lambda x: x.created_at, reverse=True)
     paginator = Paginator(combined_list, 15)
@@ -1217,7 +1355,9 @@ def invoice_list(request):
 
     return render(request, 'sales/invoice_list.html', {
         'page_obj': page_obj, 'search_query': search_query,
-        'start_date': start_date, 'end_date': end_date, 'status_filter': status_filter
+        'start_date': start_date, 'end_date': end_date, 'status_filter': status_filter,
+        'departments': departments, 'branch_filter': branch_filter,
+        'is_manager': is_manager, 'is_supervisor': is_supervisor
     })
 
 @login_required
@@ -1287,6 +1427,42 @@ def record_invoice_payment(request, inv_id):
             inv.save()
             messages.success(request, f"💰 บันทึกรับชำระเงิน {amount:,.2f} บาท สำหรับเอกสาร {inv.code} สำเร็จ! (รอตรวจสอบยอดจากฝ่ายบัญชี)")
 
+    return redirect('invoice_list')
+
+@login_required
+def delete_invoice_payment(request, pay_id):
+    # ป้องกันไม่ให้แผนกอื่นมาลบ
+    if not is_sales_authorized(request.user):
+        messages.error(request, "❌ บัญชีของคุณไม่มีสิทธิ์ดำเนินการนี้")
+        return redirect('invoice_list')
+
+    payment = get_object_or_404(InvoicePayment, pk=pay_id)
+    inv = payment.invoice
+
+    # ดักไว้เผื่อมีคนพยายามลบรายการที่บัญชียืนยัน (VERIFIED) ไปแล้ว
+    if payment.status == 'VERIFIED':
+        messages.error(request, "❌ ไม่สามารถลบได้ เนื่องจากฝ่ายบัญชีได้ทำการตรวจสอบและรับเงินเข้าระบบไปแล้ว")
+        return redirect('invoice_list')
+
+    # ดึงยอดเงินที่กำลังจะลบ
+    amount_to_return = payment.amount
+
+    # ลบข้อมูลในฐานข้อมูล
+    payment.delete()
+
+    # คืนยอดค้างชำระให้บิลนั้นๆ
+    inv.balance_amount += amount_to_return
+
+    # ถ้ายอดค้างชำระกลับมาเท่ากับยอดเต็ม ให้ปรับสถานะเป็นยังไม่ชำระ
+    if inv.balance_amount >= inv.grand_total:
+        inv.status = 'UNPAID'
+    else:
+        # ถ้ายอดค้างยังน้อยกว่ายอดเต็ม แปลว่ายังมีรายการจ่ายอื่นค้างอยู่ ให้สถานะยังคงรอตรวจ
+        inv.status = 'PENDING'
+
+    inv.save()
+
+    messages.success(request, f"🗑️ ลบรายการรับชำระ {amount_to_return:,.2f} บาท สำเร็จ! (ระบบคืนยอดค้างชำระให้บิล {inv.code} แล้ว)")
     return redirect('invoice_list')
 
 @login_required

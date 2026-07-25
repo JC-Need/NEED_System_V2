@@ -3,7 +3,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 from django.utils.dateparse import parse_date # 🌟 [FIXED] นำเข้าเครื่องมือจัดการวันที่ 🌟
-from django.db.models import Max, Count, Q, Sum, F, FloatField
+from django.db.models import Count, Sum, F, ExpressionWrapper, DecimalField, Q
+from django.db.models.functions import Coalesce
 from django.db import transaction
 from django.http import JsonResponse
 from django.core.paginator import Paginator
@@ -20,6 +21,7 @@ from purchasing.models import PurchaseOrder, PurchaseOrderItem, PurchasePreparat
 from .forms import BOMForm, BOMItemFormSet
 from .models import BlueprintClaimSplit # 🌟 นำเข้าตารางใหม่
 from .models import LogisticsClaim # 🌟 นำเข้าตาราง Logistics
+from accounting.models import Expense
 
 # ==========================================
 # 🌟 ระบบใบสั่งผลิต (Production Order) 🌟
@@ -156,7 +158,7 @@ def planner_board(request):
     if start_date: orders = orders.filter(start_date__gte=start_date)
     if end_date: orders = orders.filter(start_date__lte=end_date)
     if search_q:
-         orders = orders.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(product__name__icontains=search_q))
+        orders = orders.filter(Q(code__icontains=search_q) | Q(customer_name__icontains=search_q) | Q(product__name__icontains=search_q))
     if search_branch: orders = orders.filter(branch_id=search_branch)
     if search_team: orders = orders.filter(production_team_id=search_team)
     if search_salesperson: orders = orders.filter(salesperson_id=search_salesperson)
@@ -342,8 +344,6 @@ def materials_ready(request, pk):
     doc_out = InventoryDoc.objects.create(doc_type='GI', reference=f"เบิกผลิต {order.code}", description=f"เบิกวัตถุดิบเตรียมผลิต {order.product.name}", created_by=request.user)
     for item in job_materials:
         StockMovement.objects.create(doc=doc_out, product=item.raw_material, quantity=Decimal(str(item.quantity)), movement_type='OUT', created_by=request.user)
-        item.raw_material.stock_qty = (item.raw_material.stock_qty or Decimal('0')) - Decimal(str(item.quantity))
-        item.raw_material.save()
 
     # 🌟 [CRITICAL UPDATE] ดักจับ "ประกอบหน้างาน" เพื่อข้ามด่านโรงงาน 🌟
     if order.is_onsite:
@@ -381,9 +381,6 @@ def production_process(request, pk):
 
     doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=desc_text, created_by=request.user)
     StockMovement.objects.create(doc=doc_in, product=main_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
-
-    main_product.stock_qty = (main_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
-    main_product.save()
 
     order.status = 'COMPLETED'
     order.finish_date = timezone.now().date()
@@ -500,17 +497,6 @@ def production_print(request, po_id):
     bom = BOM.objects.filter(product=po.product).first()
     company = CompanyInfo.objects.first()
     return render(request, 'manufacturing/production_print.html', {'po': po, 'bom': bom, 'company': company})
-
-@login_required
-def bom_list(request):
-    boms = BOM.objects.select_related('product').annotate(
-        item_count=Count('items', distinct=True),
-        total_rm_cost=Sum(
-            F('items__quantity') * F('items__raw_material__cost_price'),
-            output_field=FloatField()
-        )
-    ).order_by('-id')
-    return render(request, 'manufacturing/bom_list.html', {'boms': boms})
 
 @login_required
 def bom_create(request):
@@ -632,9 +618,6 @@ def update_production_board(request, pk):
                     doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=desc_text, created_by=request.user)
                     StockMovement.objects.create(doc=doc_in, product=main_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
 
-                    main_product.stock_qty = (main_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
-                    main_product.save()
-
                     order.status = 'COMPLETED'
                     order.finish_date = timezone.now().date()
                     order.is_qc_passed = True
@@ -739,7 +722,7 @@ def import_bom_excel(request):
                     fg_sku = str(row['FG SKU']).strip()
                     rm_sku = str(row['RM SKU']).strip()
                     try:
-                         qty = Decimal(str(row['Quantity']))
+                        qty = Decimal(str(row['Quantity']))
                     except (ValueError, TypeError, InvalidOperation):
                         continue
                     fg_product = Product.objects.filter(code=fg_sku, product_type='FG').first()
@@ -755,7 +738,7 @@ def import_bom_excel(request):
                             bom=bom_obj,
                             raw_material=rm_product,
                             defaults={'quantity': qty}
-                         )
+                        )
                         import_count += 1
             messages.success(request, f"✅ นำเข้าข้อมูลสูตรผลิตสำเร็จทั้งหมด {import_count} รายการ")
             return redirect('import_bom_excel')
@@ -1043,9 +1026,6 @@ def process_qc(request, pk):
             # บันทึกรับเข้าคลัง (Stock-In)
             doc_in = InventoryDoc.objects.create(doc_type='GR', reference=f"รับจาก {order.code}", description=f"รับสินค้าจากฝ่ายผลิต {order.code} (ผ่าน QC)", created_by=request.user)
             StockMovement.objects.create(doc=doc_in, product=allocated_product, quantity=Decimal(str(order.quantity)), movement_type='IN', created_by=request.user)
-
-            allocated_product.stock_qty = (allocated_product.stock_qty or Decimal('0')) + Decimal(str(order.quantity))
-            allocated_product.save()
 
             # อัปเดตสถานะงาน
             order.status = 'COMPLETED'
@@ -1342,7 +1322,7 @@ def logistics_board(request):
         elif order.delivery_status and order.delivery_status.name in ['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']:
             col3_delivered.append(order)
         else:
-            col2_delivering.append(order) # 🌟 เติมคำสั่งที่หายไปตรงนี้แล้วค่ะ! 🌟
+             col2_delivering.append(order) # 🌟 เติมคำสั่งที่หายไปตรงนี้แล้วค่ะ! 🌟
 
     transporters = Transporter.objects.all().order_by('name')
     delivery_statuses = DeliveryStatus.objects.all().order_by('name')
@@ -1487,3 +1467,83 @@ def ajax_add_transporter_full(request):
             })
             return JsonResponse({'success': True, 'id': obj.id, 'name': obj.name})
     return JsonResponse({'success': False})
+
+@login_required
+@transaction.atomic
+def pay_logistics_claim(request, claim_id):
+    claim = get_object_or_404(LogisticsClaim, pk=claim_id)
+
+    if request.method == 'POST' and claim.status == 'PENDING':
+        # 1. เปลี่ยนสถานะบิลเป็นจ่ายแล้ว
+        claim.status = 'PAID'
+        claim.save()
+
+        # 2. นำยอดไปบันทึกลงในระบบบัญชี (รายจ่าย) อัตโนมัติ!
+        Expense.objects.create(
+            title=f"จ่ายค่าขนส่ง/ทีมรถ (ใบเบิก: {claim.code}) - {claim.transporter.name}",
+            amount=claim.total_amount,
+            date=timezone.now().date(),
+        )
+
+        messages.success(request, f"✅ ทำจ่ายเงินใบเบิก {claim.code} จำนวน ฿{claim.total_amount:,.2f} สำเร็จ! และระบบบันทึกลงบัญชีรายจ่ายให้อัตโนมัติแล้วค่ะ")
+
+    return redirect('logistics_claim_history')
+
+# ==========================================
+# 🌟 [NEW] สมองกลสำหรับให้บัญชีกด "ทำจ่าย" ค่าแบบแปลน 🌟
+# ==========================================
+@login_required
+@transaction.atomic
+def pay_blueprint_claim(request, claim_id):
+    claim = get_object_or_404(BlueprintClaim, pk=claim_id)
+
+    if request.method == 'POST' and claim.status == 'PENDING':
+        # 1. เปลี่ยนสถานะบิลเป็นจ่ายแล้ว
+        claim.status = 'PAID'
+        claim.save()
+
+        # 2. นำยอดไปบันทึกลงในระบบบัญชี (รายจ่าย) อัตโนมัติ!
+        emp_name = claim.employee.first_name if claim.employee else 'ไม่ระบุ'
+        Expense.objects.create(
+            title=f"จ่ายค่าแบบแปลน/ทีมช่าง (ใบเบิก: {claim.code}) - {emp_name}",
+            amount=claim.total_amount,
+            date=timezone.now().date(),
+        )
+
+        messages.success(request, f"✅ ทำจ่ายเงินใบเบิก {claim.code} จำนวน ฿{claim.total_amount:,.2f} สำเร็จ! และระบบบันทึกลงบัญชีรายจ่ายให้อัตโนมัติแล้วค่ะ")
+
+    # พากลับไปที่หน้า Blueprint Hub (มันจะยังเปิดไว้ที่แท็บประวัติ)
+    return redirect('blueprint_hub')
+
+# 🌟 [NEW VIEW] ฟังก์ชันประมวลผลสำหรับอัปเดตค่าแรงประกอบใน BOM
+@login_required
+def update_bom_labor_cost(request, pk):
+    if request.method == 'POST':
+        bom = get_object_or_404(BOM, pk=pk)
+        try:
+            labor_val = request.POST.get('labor_cost', '0').replace(',', '')
+            bom.labor_cost = Decimal(labor_val)
+            bom.save()
+            messages.success(request, f"✅ บันทึกค่าแรงประกอบสำหรับ {bom.product.code} เรียบร้อยแล้ว")
+        except (ValueError, InvalidOperation):
+            messages.error(request, "❌ เกิดข้อผิดพลาดในการบันทึกตัวเลขค่าแรงประกอบ")
+    return redirect('bom_list')
+
+@login_required
+def bom_list(request):
+    # 🌟 ปรับปรุงการดึงข้อมูลและเพิ่มสูตรคำนวณ: ราคาขาย - (ต้นทุนวัตถุดิบ + ค่าแรงประกอบ)
+    boms = BOM.objects.select_related('product').annotate(
+        item_count=Count('items', distinct=True),
+        total_rm_cost=Coalesce(
+            Sum(F('items__quantity') * F('items__raw_material__cost_price')),
+            0,
+            output_field=DecimalField(max_digits=12, decimal_places=2)
+        )
+    ).annotate(
+        estimated_profit=ExpressionWrapper(
+            F('product__sell_price') - (F('total_rm_cost') + F('labor_cost')),
+            output_field=DecimalField(max_digits=12, decimal_places=2)
+        )
+    ).order_by('-id')
+
+    return render(request, 'manufacturing/bom_list.html', {'boms': boms})

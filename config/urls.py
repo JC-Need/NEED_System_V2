@@ -24,6 +24,9 @@ urlpatterns = [
     path('manufacturing/', include('manufacturing.urls')),
 
     path('accounting/', include('accounting.urls')),
+    path('solar-purchasing/', include('solar_purchasing.urls')),
+    path('solar-jobs/', include('solar_jobs.urls')),
+    path('solar-sales/', include('solar_sales.urls')),
 ]
 
 if settings.DEBUG:

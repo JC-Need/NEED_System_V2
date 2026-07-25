@@ -13,7 +13,7 @@
     .product-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); border-color: #4e73df; }
     .product-img { height: 120px; object-fit: cover; background: #f8f9fa; }
     .btn-qty { width: 30px; height: 30px; padding: 0; line-height: 28px; border-radius: 50%; }
-    
+
     .payment-option-card { cursor: pointer; border: 2px solid #eee; border-radius: 10px; padding: 15px; text-align: center; transition: all 0.2s; }
     .payment-option-card:hover, .payment-option-card.active { border-color: #1cc88a; background-color: #f0fff9; color: #1cc88a; }
     .payment-option-card i { font-size: 24px; margin-bottom: 5px; display: block; }
@@ -84,15 +84,15 @@
                     <div class="row g-4">
                         <div class="col-md-5 border-end">
                             <h6 class="fw-bold text-secondary mb-3"><i class="fas fa-user me-2"></i>ข้อมูลลูกค้า</h6>
-                            
+
                             <div class="input-group mb-3 position-relative">
                                 <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
                                 <input type="text" class="form-control" id="customerSearch" placeholder="ค้นหาลูกค้า (ชื่อ/เบอร์)" onkeyup="searchCustomer(this.value)">
-                                
+
                                 <a href="{% url 'customer_create' %}?next={% url 'pos_home' %}" class="btn btn-primary" title="เพิ่มลูกค้าใหม่">
                                     <i class="fas fa-user-plus"></i>
                                 </a>
-                                
+
                                 <div class="search-results rounded shadow-sm" id="searchResults"></div>
                             </div>
 
@@ -137,13 +137,13 @@
                                 </div>
                                 <div class="mt-2 text-end text-muted small" id="changeText">เงินทอน: 0.00</div>
                             </div>
-                            
+
                             <div id="zone-TRANSFER" class="d-none">
                                 <div class="alert alert-info py-2 small"><i class="fas fa-info-circle me-1"></i> กรุณาแนบสลิปการโอน</div>
                                 <label class="form-label">อัปโหลดสลิป</label>
                                 <input type="file" class="form-control" name="transfer_slip" accept="image/*">
                             </div>
-                            
+
                             <div id="zone-CHECK" class="d-none">
                                 <div class="row g-2 mb-2">
                                     <div class="col-6">
@@ -167,7 +167,7 @@
             </div>
             <div class="modal-footer border-0 pt-0">
                 <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">ยกเลิก</button>
-                <button type="button" class="btn btn-success rounded-pill px-5 fw-bold shadow" onclick="confirmPayment()"><i class="fas fa-check-circle me-2"></i> ยืนยันการชำระเงิน</button>
+                <button type="button" id="btnConfirmPayment" class="btn btn-success rounded-pill px-5 fw-bold shadow" onclick="confirmPayment()"><i class="fas fa-check-circle me-2"></i> ยืนยันการชำระเงิน</button>
             </div>
         </div>
     </div>
@@ -196,7 +196,7 @@
         const totalAmountEl = document.getElementById('totalAmount');
         container.innerHTML = '';
         let totalQ = 0; let totalA = 0;
-        if (cart.length === 0) { container.innerHTML = '<div class="text-center py-5 text-muted"><i class="fas fa-shopping-cart fa-3x mb-3 opacity-25"></i><p>ยังไม่มีสินค้า</p></div>'; } 
+        if (cart.length === 0) { container.innerHTML = '<div class="text-center py-5 text-muted"><i class="fas fa-shopping-cart fa-3x mb-3 opacity-25"></i><p>ยังไม่มีสินค้า</p></div>'; }
         else {
             cart.forEach((item, index) => {
                 totalQ += item.qty; totalA += item.qty * item.price;
@@ -219,11 +219,11 @@
     // --- Payment UI ---
     function openPaymentModal() {
         if (cart.length === 0) { Swal.fire('ตะกร้าว่างเปล่า', 'กรุณาเลือกสินค้าก่อนครับ', 'error'); return; }
-        
+
         document.getElementById('modalTotalAmount').innerText = '฿' + currentTotal.toLocaleString(undefined, {minimumFractionDigits: 2});
         document.getElementById('cashInput').value = currentTotal.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
         updateChangeText(currentTotal);
-        
+
         selectPayment('CASH');
         document.getElementById('customerIdInput').value = '';
         document.getElementById('custName').value = '';
@@ -231,11 +231,11 @@
         document.getElementById('custPhone').value = '';
         document.getElementById('custTax').value = '';
         document.getElementById('customerSearch').value = '';
-        
+
         var myModal = new bootstrap.Modal(document.getElementById('paymentModal'));
         myModal.show();
     }
-    
+
     function selectPayment(method) {
         document.querySelectorAll('.payment-option-card').forEach(el => el.classList.remove('active'));
         document.getElementById('opt-' + method).classList.add('active');
@@ -249,7 +249,7 @@
     // 🌟 ระบบจัดการลูกน้ำ (Comma) สำหรับช่องกรอกเงินสด 🌟
     const cashInput = document.getElementById('cashInput');
     cashInput.addEventListener('input', function() {
-        let val = parseFloat(this.value.replace(/,/g, '')) || 0; 
+        let val = parseFloat(this.value.replace(/,/g, '')) || 0;
         updateChangeText(val);
     });
     cashInput.addEventListener('focus', function() {
@@ -266,8 +266,8 @@
     });
     function updateChangeText(receivedAmount) {
         let change = receivedAmount - currentTotal;
-        let text = change >= 0 
-            ? `เงินทอน: <span class="text-success fw-bold">฿${change.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>` 
+        let text = change >= 0
+            ? `เงินทอน: <span class="text-success fw-bold">฿${change.toLocaleString('en-US', {minimumFractionDigits: 2})}</span>`
             : `ขาดอีก: <span class="text-danger fw-bold">฿${Math.abs(change).toLocaleString('en-US', {minimumFractionDigits: 2})}</span>`;
         document.getElementById('changeText').innerHTML = text;
     }
@@ -277,7 +277,7 @@
     function searchCustomer(query) {
         const resultsDiv = document.getElementById('searchResults');
         if (query.length < 2) { resultsDiv.style.display = 'none'; return; }
-        
+
         fetch(`/sales/api/customer-search/?q=${query}`)
             .then(res => res.json())
             .then(data => {
@@ -294,7 +294,7 @@
                 } else { resultsDiv.style.display = 'none'; }
             });
     }
-    
+
     function selectCustomer(cust) {
         document.getElementById('customerIdInput').value = cust.id;
         document.getElementById('custName').value = cust.name;
@@ -310,10 +310,17 @@
         let method = document.getElementById('paymentMethodInput').value;
         let rawReceived = document.getElementById('cashInput').value.replace(/,/g, '');
         let received = parseFloat(rawReceived) || 0;
-        
-        if (method === 'CASH' && received < currentTotal) { 
+
+        if (method === 'CASH' && received < currentTotal) {
             Swal.fire('ยอดเงินไม่พอ', 'กรุณารับเงินให้ครบครับ', 'warning');
-            return; 
+            return;
+        }
+
+        // 🌟 [NEW] 1. ปิดปุ่มทันทีที่กด เพื่อป้องกันการกดเบิ้ล (Double Click) 🌟
+        let btnConfirm = document.getElementById('btnConfirmPayment');
+        if (btnConfirm) {
+            btnConfirm.disabled = true;
+            btnConfirm.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> กำลังบันทึก...';
         }
 
         let formData = new FormData(document.getElementById('paymentForm'));
@@ -325,7 +332,8 @@
             formData.set('received_amount', currentTotal);
         }
 
-        Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading() });
+        Swal.fire({ title: 'กำลังบันทึก...', didOpen: () => Swal.showLoading(), allowOutsideClick: false });
+
         fetch("{% url 'pos_checkout' %}", {
             method: "POST",
             headers: { "X-CSRFToken": "{{ csrf_token }}" },
@@ -336,12 +344,27 @@
             if (data.success) {
                 Swal.fire({
                     icon: 'success', title: 'บันทึกสำเร็จ!', showDenyButton: true,
-                    confirmButtonText: '🖨️ พิมพ์ใบเสร็จ', denyButtonText: 'ปิด',
+                    confirmButtonText: '🖨️ พิมพ์ใบเสร็จ', denyButtonText: 'ปิด', allowOutsideClick: false
                 }).then((res) => {
                     if (res.isConfirmed) { window.open(`/sales/pos/print/${data.order_code}/`, '_blank'); }
                     location.reload();
                 });
-            } else { Swal.fire('Error', data.error, 'error'); }
+            } else {
+                Swal.fire('Error', data.error, 'error');
+                // 🌟 [NEW] 2. ถ้าบันทึกไม่ผ่าน (Error) ให้เปิดปุ่มคืนมา เพื่อให้กดใหม่ได้ 🌟
+                if (btnConfirm) {
+                    btnConfirm.disabled = false;
+                    btnConfirm.innerHTML = '<i class="fas fa-check-circle me-2"></i> ยืนยันการชำระเงิน';
+                }
+            }
+        })
+        .catch(error => {
+            Swal.fire('Error', 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+            // 🌟 [NEW] 3. กรณีเน็ตหลุด ก็เปิดปุ่มคืนเช่นกัน 🌟
+            if (btnConfirm) {
+                btnConfirm.disabled = false;
+                btnConfirm.innerHTML = '<i class="fas fa-check-circle me-2"></i> ยืนยันการชำระเงิน';
+            }
         });
     }
 </script>

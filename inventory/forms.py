@@ -10,7 +10,6 @@ class StockInForm(forms.ModelForm):
         fields = ['product', 'quantity']
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select select2'}),
-            # 🌟 [UPDATE] ปลดล็อคให้รับทศนิยมได้ 🌟
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01', 'placeholder': 'จำนวนที่รับ'}),
         }
     def __init__(self, *args, **kwargs):
@@ -26,7 +25,6 @@ class StockOutForm(forms.ModelForm):
         fields = ['product', 'quantity']
         widgets = {
             'product': forms.Select(attrs={'class': 'form-select select2'}),
-            # 🌟 [UPDATE] ปลดล็อคให้รับทศนิยมได้ 🌟
             'quantity': forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01', 'step': '0.01', 'placeholder': 'จำนวนที่เบิก'}),
         }
     def __init__(self, *args, **kwargs):
@@ -40,27 +38,28 @@ class ProductForm(forms.ModelForm):
 
     class Meta:
         model = Product
-        # 🌟 [NEW] เพิ่ม 'unit' เข้าไปในหน้าฟอร์ม
-        fields = ['product_type', 'code', 'name', 'unit', 'category', 'rm_category', 'supplier', 'cost_price', 'sell_price', 'min_level', 'image', 'standard_blueprint', 'is_active']
+        # 🌟 เพิ่ม 'sub_category' เข้าไปใน fields แล้วค่ะ
+        fields = ['product_type', 'code', 'name', 'unit', 'category', 'rm_category', 'sub_category', 'supplier', 'cost_price', 'sell_price', 'min_level', 'image', 'standard_blueprint', 'is_active']
         widgets = {
             'product_type': forms.Select(attrs={'class': 'form-select'}),
             'code': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เว้นว่างเพื่อสร้างรหัสอัตโนมัติ'}),
             'name': forms.TextInput(attrs={'class': 'form-control'}),
-            'unit': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น ชิ้น, กล่อง, เมตร...'}), # 🌟 เพิ่ม Widget ให้ช่องกรอกหน่วยนับ
+            'unit': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'เช่น ชิ้น, กล่อง, เมตร...'}),
             'category': forms.Select(attrs={'class': 'form-select select2'}),
             'rm_category': forms.Select(attrs={'class': 'form-select select2'}),
+            'sub_category': forms.Select(attrs={'class': 'form-select select2'}), # 🌟 เพิ่ม Widget สำหรับ Sub-category
             'supplier': forms.Select(attrs={'class': 'form-select select2'}),
             'min_level': forms.NumberInput(attrs={'class': 'form-control', 'value': 5}),
-            'image': forms.FileInput(attrs={'class': 'form-control'}),
-            'standard_blueprint': forms.FileInput(attrs={'class': 'form-control', 'accept': '.pdf,image/*'}), 
+            'image': forms.ClearableFileInput(attrs={'class': 'form-control'}),
+            'standard_blueprint': forms.ClearableFileInput(attrs={'class': 'form-control', 'accept': '.pdf,image/*'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['code'].required = False 
-        
-        # 🌟 เปลี่ยนชื่อ Label ให้อัตโนมัติ 🌟
+        self.fields['code'].required = False
+
+        # เปลี่ยนชื่อ Label ตามประเภทสินค้า
         p_type = self.initial.get('product_type') or (self.instance.product_type if self.instance.pk else 'FG')
         if p_type == 'RM':
             self.fields['category'].label = "วัตถุดิบสำหรับหมวดหมู่สินค้า"
@@ -81,11 +80,10 @@ class ProductSupplierForm(forms.ModelForm):
     cost_price = forms.CharField(
         required=False,
         widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-sm number-input text-end', 
+            'class': 'form-control form-control-sm number-input text-end',
             'placeholder': '0.00'
         })
     )
-
     class Meta:
         model = ProductSupplier
         fields = ['supplier', 'supplier_part_no', 'cost_price', 'is_default']
@@ -94,11 +92,9 @@ class ProductSupplierForm(forms.ModelForm):
             'supplier_part_no': forms.TextInput(attrs={'class': 'form-control form-control-sm', 'placeholder': 'รหัสอ้างอิงร้าน'}),
             'is_default': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
-
     def clean_cost_price(self):
         val = self.cleaned_data.get('cost_price')
         return val.replace(',', '') if val else 0
-        
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.pk and self.instance.cost_price:

@@ -4,9 +4,7 @@ from django.utils import timezone
 from master_data.models import Supplier
 import datetime
 
-# ==========================================
-# 1. หมวดหมู่สินค้า (Category)
-# ==========================================
+# 1. หมวดหมู่สินค้า
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อหมวดหมู่")
     def __str__(self): return self.name
@@ -14,7 +12,7 @@ class Category(models.Model):
         verbose_name = "1. หมวดหมู่สินค้า"
         verbose_name_plural = "1. จัดการหมวดหมู่ (Categories)"
 
-# 🌟 [NEW] 1.1 หมวดหมู่วัตถุดิบ (แผนกต่างๆ) 🌟
+# 1.1 หมวดหมู่วัตถุดิบ
 class RawMaterialCategory(models.Model):
     name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อหมวดหมู่วัตถุดิบ (แผนก)")
     def __str__(self): return self.name
@@ -22,26 +20,29 @@ class RawMaterialCategory(models.Model):
         verbose_name = "1.1 แผนกวัตถุดิบ"
         verbose_name_plural = "1.1 จัดการแผนกวัตถุดิบ"
 
-# ==========================================
-# 2. สินค้า (Product)
-# ==========================================
+# 🌟 [NEW] 1.2 หมวดหมู่ย่อย
+class SubCategory(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name="ชื่อหมวดหมู่ย่อย")
+    def __str__(self): return self.name
+    class Meta:
+        verbose_name = "1.2 หมวดหมู่ย่อย"
+        verbose_name_plural = "1.2 จัดการหมวดหมู่ย่อย"
+
+# 2. สินค้า
 class Product(models.Model):
     PRODUCT_TYPES = [('FG', 'สินค้าสำเร็จรูป (พร้อมขาย)'), ('RM', 'วัตถุดิบ (สำหรับผลิต)')]
     product_type = models.CharField(max_length=2, choices=PRODUCT_TYPES, default='FG', verbose_name="ประเภทสินค้า")
     code = models.CharField(max_length=50, unique=True, blank=True, verbose_name="รหัสสินค้า/SKU")
     barcode = models.CharField(max_length=50, blank=True, null=True, verbose_name="บาร์โค้ด")
     name = models.CharField(max_length=200, verbose_name="ชื่อสินค้า")
-    
-    # 🌟 [NEW] เพิ่มช่องสำหรับเก็บหน่วยนับ
     unit = models.CharField(max_length=50, blank=True, null=True, verbose_name="หน่วยนับ")
     
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, verbose_name="หมวดหมู่สินค้า")
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่สินค้า")
     rm_category = models.ForeignKey(RawMaterialCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่วัตถุดิบ (แผนก)")
+    sub_category = models.ForeignKey(SubCategory, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="หมวดหมู่ย่อย") # 🌟 เพิ่มแล้ว
     
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาทุน")
     sell_price = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ราคาขาย")
-    
-    # 🌟 [UPDATE] ปลดล็อคให้รองรับทศนิยม 2 ตำแหน่ง 🌟
     stock_qty = models.DecimalField(max_digits=12, decimal_places=2, default=0, verbose_name="จำนวนคงเหลือ")
     min_level = models.DecimalField(max_digits=12, decimal_places=2, default=5, verbose_name="จุดสั่งซื้อ (Low Stock)")
     

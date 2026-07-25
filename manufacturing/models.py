@@ -64,7 +64,6 @@ class Transporter(models.Model):
     bank_account = models.CharField(max_length=200, blank=True, verbose_name="เลขที่บัญชีธนาคาร (ระบุชื่อธนาคารด้วย)")
     id_card_image = models.ImageField(upload_to='transporter_docs/', null=True, blank=True, verbose_name="เอกสารใบขับขี่ / บัตรประชาชน")
 
-    # 🚨 บรรทัดนี้สำคัญมากค่ะ! ถ้าไม่มีบรรทัดนี้หน้า Admin จะพังทันที 🚨
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าตอบแทนพื้นฐาน")
 
     class Meta:
@@ -146,7 +145,9 @@ class BlueprintClaimSplit(models.Model):
 class BOM(models.Model):
     product = models.OneToOneField(Product, on_delete=models.CASCADE, verbose_name="สินค้าสำเร็จรูป (FG)")
     name = models.CharField(max_length=200, verbose_name="ชื่อสูตร (เช่น สูตรมาตรฐาน)")
+    labor_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าแรงประกอบ") # 🌟 [NEW] เพิ่มฟิลด์เก็บค่าแรงประกอบตามความต้องการผู้ใช้
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
+    
     def __str__(self): return f"สูตรผลิต: {self.product.name}"
 
     class Meta:
@@ -165,7 +166,7 @@ class BOMItem(models.Model):
 class ProductionOrder(models.Model):
     STATUS_CHOICES = [
         ('NEW_JOB', '1. รอจ่ายงาน (New JOB)'),
-        ('WAITING_BLUEPRINT', 'รอตรวจสอบแบบแปลน'), # 🌟 [NEW] สถานะใหม่
+        ('WAITING_BLUEPRINT', 'รอตรวจสอบแบบแปลน'),
         ('PLANNED', '2. ตรวจแบบแปลน / ดึงสูตร'),
         ('WAITING_MATERIALS', '3. รอสั่งซื้อวัตถุดิบ'),
         ('WAITING_INVENTORY', '4. รอเบิกวัตถุดิบ'),
@@ -214,7 +215,6 @@ class ProductionOrder(models.Model):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='NEW_JOB', verbose_name="สถานะระบบ")
     is_materials_ordered = models.BooleanField(default=False, verbose_name="สั่งซื้อวัตถุดิบแล้ว")
 
-    # 🌟 [NEW] ข้อมูลสำหรับการตรวจสอบแบบแปลน 🌟
     blueprint_approved_by = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True, related_name='approved_blueprints', verbose_name="ผู้อนุมัติแบบแปลน")
     blueprint_approved_at = models.DateTimeField(null=True, blank=True, verbose_name="เวลาที่อนุมัติแบบแปลน")
     blueprint_claim = models.ForeignKey(BlueprintClaim, on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="ใบตั้งเบิกผลงาน")
@@ -232,7 +232,7 @@ class ProductionOrder(models.Model):
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
     is_closed = models.BooleanField(default=False, verbose_name="ปิดจ๊อบแล้ว (งานเสร็จสมบูรณ์)")
     is_onsite = models.BooleanField(default=False, verbose_name="งานประกอบหน้างาน (On-site)")
-    # 🌟 [NEW] ช่องค่าจ้างรถเฉพาะงานนี้ 🌟
+    
     delivery_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="ค่าจ้างขนส่ง (สำหรับงานนี้)")
     proof_of_delivery = models.ImageField(upload_to='delivery_proofs/%Y/%m/', null=True, blank=True, verbose_name="รูปถ่ายใบส่งมอบสินค้า")
     logistics_claim = models.ForeignKey('LogisticsClaim', on_delete=models.SET_NULL, null=True, blank=True, related_name='production_orders', verbose_name="ใบตั้งเบิกค่ารถขนส่ง")

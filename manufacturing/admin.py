@@ -1,8 +1,8 @@
 from django.contrib import admin
 from .models import (
-    ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch, 
-    MfgBranch, Salesperson, ProductionStatus, ProductionTeam, 
-    DeliveryStatus, Transporter, QCInspectionLog, BlueprintClaim, 
+    ProductionOrder, ProductionOrderMaterial, BOM, BOMItem, Branch,
+    MfgBranch, Salesperson, ProductionStatus, ProductionTeam,
+    DeliveryStatus, Transporter, QCInspectionLog, BlueprintClaim,
     BlueprintLog, BlueprintClaimSplit, LogisticsClaim
 )
 
@@ -24,7 +24,7 @@ class ProductionOrderAdmin(admin.ModelAdmin):
 
 @admin.register(BOM)
 class BOMAdmin(admin.ModelAdmin):
-    list_display = ('product', 'name', 'created_at')
+    list_display = ('product', 'name') # ✅ ลบ 'created_at' ออกแล้ว
     search_fields = ('product__name', 'name')
     inlines = [BOMItemInline]
 
