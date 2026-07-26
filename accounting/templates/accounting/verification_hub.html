@@ -49,7 +49,18 @@
                     {% for item in items %}
                     <tr>
                         <td class="ps-4">
-                            <div class="fw-bold text-dark fs-6" style="font-family: 'Courier New', monospace;">{{ item.code }}</div>
+                            <div class="d-flex align-items-center gap-2">
+                                <div class="fw-bold text-dark fs-6" style="font-family: 'Courier New', monospace;">{{ item.code }}</div>
+                                <!-- 🌟 ป้ายบอกระบบให้บัญชีเห็นชัดเจนว่าเป็นงานน็อคดาวน์หรือโซล่า 🌟 -->
+                                {% if task_type == 'deposits' %}
+                                    {% if item.system_type == 'solar' %}
+                                        <span class="badge bg-warning text-dark" style="font-size: 0.65rem;">โซล่าเซลล์</span>
+                                    {% else %}
+                                        <span class="badge bg-primary text-white" style="font-size: 0.65rem;">น็อคดาวน์</span>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+
                             <div class="text-muted small mb-1" style="font-size: 0.75rem;">
                                 <i class="far fa-clock me-1"></i> 
                                 {% if item.total_amount %}
@@ -64,7 +75,7 @@
                                 {% for job in item.quotation_ref.production_orders.all %}
                                     <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">JOB:</span> {{ job.code }}</div>
                                 {% endfor %}
-                            {% elif task_type == 'deposits' %}
+                            {% elif task_type == 'deposits' and item.system_type != 'solar' %}
                                 {% for job in item.production_orders.all %}
                                     <div class="small lh-sm" style="font-size: 0.7rem;"><span class="text-secondary opacity-75">JOB:</span> {{ job.code }}</div>
                                 {% endfor %}
@@ -206,7 +217,6 @@
                                             <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
                                         {% endif %}
                                         
-                                        <!-- 🌟 แสดงรูปหลักฐานเสมอ ถ้ามีการอัปโหลดไฟล์มา -->
                                         {% if item.deposit_slip %}
                                             <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
                                         {% endif %}
@@ -226,6 +236,11 @@
                             <form method="POST" action="{% url 'accounting_approve_transaction' task_type item.id %}">
                                 {% csrf_token %}
                                 <input type="hidden" name="doc_type" value="{% if item.total_amount %}pos{% else %}invoice{% endif %}">
+                                
+                                <!-- 🌟 [FIXED] เพิ่ม input ซ่อนสำหรับส่งค่าบอกระบบหลังบ้านว่าเป็นของน็อคดาวน์หรือโซล่าเซลล์ 🌟 -->
+                                {% if task_type == 'deposits' %}
+                                    <input type="hidden" name="doc_system" value="{{ item.system_type }}">
+                                {% endif %}
                                 
                                 <button type="submit" class="btn btn-sm btn-success rounded-pill px-3 shadow-sm fw-bold w-100" onclick="return confirm('ยืนยันความถูกต้อง และสร้างบันทึกรายรับ-รายจ่ายในระบบบัญชีใช่หรือไม่?');">
                                     <i class="fas fa-check-circle me-1"></i> {% if task_type == 'po_payments' %}อนุมัติทำจ่าย{% else %}อนุมัติรับเงิน{% endif %}

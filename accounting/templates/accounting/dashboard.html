@@ -3,24 +3,10 @@
 
 {% block content %}
 <style>
-    .task-btn {
-        transition: all 0.2s ease-in-out;
-        border: 1px solid transparent;
-    }
-    .task-btn:hover {
-        background-color: #fff8e1;
-        border-color: #ffc107;
-        transform: translateX(5px);
-    }
-    .modal-task-btn {
-        transition: all 0.2s ease;
-    }
-    .modal-task-btn:hover {
-        background-color: #fff !important;
-        border-color: #0d6efd !important;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-    }
+    .task-btn { transition: all 0.2s ease-in-out; border: 1px solid transparent; }
+    .task-btn:hover { background-color: #fff8e1; border-color: #ffc107; transform: translateX(5px); }
+    .modal-task-btn { transition: all 0.2s ease; }
+    .modal-task-btn:hover { background-color: #fff !important; border-color: #0d6efd !important; transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
 </style>
 
 <div class="container-fluid py-4 px-4">
@@ -70,6 +56,7 @@
                 <div class="card-body p-3">
                     <h6 class="text-warning fw-bold mb-3"><i class="fas fa-bell me-1"></i> งานด่วนรอตรวจสอบ</h6>
 
+                    <!-- 🌟 ลิงก์ดึงยอดมัดจำรวม (น็อคดาวน์ + โซล่าเซลล์) 🌟 -->
                     <a href="{% url 'accounting_verification_hub' 'deposits' %}" class="d-flex justify-content-between align-items-center mb-2 text-decoration-none p-2 rounded task-btn">
                         <span class="small fw-bold text-dark"><i class="fas fa-hand-holding-usd text-muted me-1"></i> ตรวจสอบเงินมัดจำ</span>
                         <span class="badge bg-warning text-dark rounded-pill px-3 shadow-sm">{{ pending_deposits }} รายการ</span>

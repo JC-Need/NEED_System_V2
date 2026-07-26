@@ -9,6 +9,14 @@ from .forms import SolarQuotationStep1Form, SolarProductForm
 from solar_jobs.models import SolarJob
 import openpyxl
 from django.http import HttpResponse
+from django.utils.dateparse import parse_date
+from django.core.paginator import Paginator
+from django.db.models import Q
+from hr.models import Department
+import datetime
+
+# 🌟 [FIXED] เพิ่มบรรทัดนี้เข้ามา เพื่อให้ระบบรู้จักคำสั่ง timezone 🌟
+from django.utils import timezone 
 
 # ==========================================
 # 📊 Dashboards & Lists
@@ -33,7 +41,87 @@ def solar_sales_dashboard(request):
 @login_required
 def solar_quotation_list(request):
     quotations = SolarQuotation.objects.all().order_by('-date', '-id')
-    return render(request, 'solar_sales/quotation_list.html', {'quotations': quotations})
+
+    # 🌟 ระบบจำกัดสิทธิ์และดึงข้อมูลสาขา
+    is_manager = False
+    is_supervisor = False
+    current_emp = getattr(request.user, 'employee', None)
+
+    if request.user.is_superuser:
+        is_manager = True
+    elif current_emp:
+        rank = current_emp.business_rank.lower() if current_emp.business_rank else ""
+        if rank in ['manager', 'director'] or 'manager' in getattr(current_emp.position, 'title', '').lower() or 'บัญชี' in getattr(current_emp.department, 'name', ''):
+            is_manager = True
+        elif rank == 'supervisor':
+            is_supervisor = True
+
+    # โหลดรายชื่อสาขา
+    if is_manager:
+        departments = list(Department.objects.filter(Q(name__icontains='ทีม') | Q(name__icontains='สาขา')).order_by('name'))
+    elif is_supervisor and current_emp.department:
+        departments = list(Department.objects.filter(id=current_emp.department.id))
+    else:
+        departments = []
+
+    for d in departments:
+        d.name = d.name.replace('แผนก', '').strip()
+
+    # รับค่าการค้นหา
+    search_query = request.GET.get('q', '')
+    status_filter = request.GET.get('status', '')
+    branch_filter = request.GET.get('branch', '')
+
+    # 1. กรองสาขา
+    if branch_filter and (is_manager or is_supervisor):
+        quotations = quotations.filter(employee__department_id=branch_filter)
+    elif not is_manager and not is_supervisor and current_emp:
+        # พนักงานทั่วไปเห็นแค่งานตัวเอง
+        quotations = quotations.filter(employee=current_emp)
+
+    # 2. กรองสถานะ
+    if status_filter:
+        if status_filter == 'PENDING_CLOSING':
+            quotations = quotations.filter(status='APPROVED', is_deposit_paid=False)
+        elif status_filter == 'PENDING_VERIFY':
+            quotations = quotations.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=False)
+        elif status_filter == 'READY':
+            quotations = quotations.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True)
+        else:
+            quotations = quotations.filter(status=status_filter)
+
+    # 3. กรองคำค้นหา
+    if search_query:
+        quotations = quotations.filter(Q(code__icontains=search_query) | Q(customer__name__icontains=search_query))
+
+    # 4. กรองวันที่
+    date_start = request.GET.get('start_date')
+    date_end = request.GET.get('end_date')
+
+    if not date_start or date_start == 'None':
+        date_start = (timezone.now().date() - datetime.timedelta(days=29)).strftime('%Y-%m-%d')
+    if not date_end or date_end == 'None':
+        date_end = timezone.now().date().strftime('%Y-%m-%d')
+
+    if not status_filter:
+        quotations = quotations.filter(date__gte=date_start, date__lte=date_end)
+
+    # ระบบแบ่งหน้า (Pagination)
+    paginator = Paginator(quotations, 10)
+    page_obj = paginator.get_page(request.GET.get('page'))
+
+    return render(request, 'solar_sales/quotation_list.html', {
+        'quotations': page_obj,
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'is_manager': is_manager,
+        'is_supervisor': is_supervisor,
+        'departments': departments,
+        'branch_filter': branch_filter,
+        'status_filter': status_filter,
+        'date_start': date_start,
+        'date_end': date_end,
+    })
 
 # ==========================================
 # 📝 ระบบใบเสนอราคา (Knockdown Style)
@@ -153,7 +241,12 @@ def solar_quotation_approve(request, qt_id):
 @login_required
 def solar_quotation_send_to_center(request, qt_id):
     qt = get_object_or_404(SolarQuotation, pk=qt_id)
-    qt.is_deposit_paid = True
+
+    # 🌟 [เพิ่มระบบป้องกัน] ตรวจสอบว่าบัญชียืนยันสลิปแล้วหรือยัง
+    if not qt.is_deposit_verified:
+        messages.error(request, "❌ ไม่สามารถส่งงานได้: กรุณารอให้แผนกบัญชีตรวจสอบและยืนยันสลิปมัดจำก่อนครับ")
+        return redirect('solar_quotation_list')
+
     qt.status = 'CONVERTED'
     qt.save()
 
@@ -328,3 +421,41 @@ def solar_inventory_import(request):
         except Exception as e:
             messages.error(request, f'❌ เกิดข้อผิดพลาดในการอ่านไฟล์: {str(e)}')
     return redirect('solar_inventory_list')
+
+@login_required
+def solar_record_deposit(request, qt_id):
+    qt = get_object_or_404(SolarQuotation, pk=qt_id)
+    if request.method == 'POST':
+        amount_str = request.POST.get('deposit_amount', '0').replace(',', '')
+        try: amount = Decimal(amount_str)
+        except: amount = Decimal('0')
+
+        method = request.POST.get('deposit_method', 'TRANSFER')
+        date_str = request.POST.get('deposit_date')
+
+        if amount > 0:
+            qt.deposit_amount = amount
+            qt.deposit_method = method
+            if date_str:
+                qt.deposit_date = parse_date(date_str) or timezone.now().date()
+            else:
+                qt.deposit_date = timezone.now().date()
+
+            qt.is_deposit_paid = True
+
+            if 'deposit_slip' in request.FILES:
+                qt.deposit_slip = request.FILES['deposit_slip']
+            qt.save()
+            messages.success(request, f"💰 บันทึกรับมัดจำ {amount:,.2f} บาท สำหรับใบเสนอราคา {qt.code} เรียบร้อยแล้ว (รอตรวจสอบสลิป)")
+        else:
+            messages.error(request, "❌ จำนวนเงินมัดจำต้องมากกว่า 0")
+
+    return redirect('solar_quotation_list')
+
+@login_required
+def solar_verify_deposit(request, qt_id):
+    qt = get_object_or_404(SolarQuotation, pk=qt_id)
+    qt.is_deposit_verified = True
+    qt.save()
+    messages.success(request, f"✅ ยืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว! งานพร้อมส่งเข้า Center")
+    return redirect('solar_quotation_list')

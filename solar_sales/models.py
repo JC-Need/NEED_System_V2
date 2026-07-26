@@ -86,14 +86,12 @@ class SolarQuotation(models.Model):
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบเสนอราคาโซล่า")
     date = models.DateField(default=timezone.now, verbose_name="วันที่เอกสาร (dd/mm/yyyy)")
-    
-    # 🌟 เพิ่มวันหมดอายุของราคา
+
     valid_until = models.DateField(null=True, blank=True, verbose_name="ยืนยันราคาถึงวันที่ (dd/mm/yyyy)")
-    
+
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, blank=True)
     employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
 
-    # 🌟 ฟิลด์การคำนวณแบบจัดเต็ม
     subtotal = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="รวมราคาสินค้า")
     discount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="หักส่วนลด")
     survey_fee = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ค่าสำรวจหน้างาน / ค่าจัดส่ง")
@@ -101,14 +99,18 @@ class SolarQuotation(models.Model):
     vat_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอด VAT 7%")
     grand_total = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ยอดสุทธิ (Grand Total)")
 
-    # 🌟 เงื่อนไขการชำระเงิน
     payment_terms = models.TextField(
-        default="- ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ\n- ส่วนที่เหลือชำระก่อนการติดตั้ง", 
+        default="- ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ\n- ส่วนที่เหลือชำระก่อนการติดตั้ง",
         verbose_name="เงื่อนไขการชำระเงิน (Payment Terms)"
     )
 
+    # 🌟 ฟิลด์ระบบมัดจำที่เพิ่มเข้ามาใหม่ 🌟
     deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="มัดจำ")
+    deposit_method = models.CharField(max_length=20, default='TRANSFER', verbose_name="ช่องทางรับเงิน")
+    deposit_date = models.DateField(null=True, blank=True, verbose_name="วันที่รับเงินมัดจำ")
+    deposit_slip = models.ImageField(upload_to='solar_deposits/', null=True, blank=True, verbose_name="สลิปโอนเงิน")
     is_deposit_paid = models.BooleanField(default=False)
+    is_deposit_verified = models.BooleanField(default=False, verbose_name="บัญชีตรวจสอบแล้ว")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
 
@@ -120,16 +122,19 @@ class SolarQuotation(models.Model):
             last = SolarQuotation.objects.filter(code__startswith=prefix).order_by('code').last()
             seq = int(last.code.split('-')[-1]) + 1 if last else 1
             self.code = f"{prefix}-{seq:03d}"
-            
-            # ตั้งค่า default valid_until เป็น +15 วันหากไม่ได้ระบุ
+
             if not self.valid_until:
                 self.valid_until = self.date + datetime.timedelta(days=15)
-                
+
         super().save(*args, **kwargs)
 
 class SolarQuotationItem(models.Model):
     quotation = models.ForeignKey(SolarQuotation, related_name='items', on_delete=models.CASCADE)
-    product = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True)
+    product = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, blank=True)
+
+    # 🌟 [FIXED] เพิ่มคอลัมน์ item_name เพื่อรองรับข้อมูลจากหน้าเว็บ 🌟
+    item_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="ชื่อที่จะแสดงในบิล")
+
     quantity = models.IntegerField(default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
