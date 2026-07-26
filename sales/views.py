@@ -383,7 +383,7 @@ def record_deposit(request, qt_id):
         if amount > 0:
             qt.deposit_amount = amount
             qt.deposit_method = method
-            if date_str: qt.deposit_date = parse_thai_date(date_str) # 🌟 [FIXED] ใช้วิธีแปลงวันที่ใหม่
+            if date_str: qt.deposit_date = parse_thai_date(date_str) 
             else: qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
 
@@ -489,13 +489,12 @@ def create_job_order(request, qt_id):
 
     target_date_str = request.POST.get('target_date')
     
-    # 🌟 [CRITICAL FIX] ใช้ฟังก์ชัน parse_thai_date แทน parse_date ของ Django 🌟
     requested_date_obj = parse_thai_date(target_date_str) if target_date_str else None
 
     if requested_date_obj and requested_date_obj != final_delivery_date:
         approval_status = 'PENDING'
         req_date = requested_date_obj
-        deadline = requested_date_obj # 🌟 [FIXED] ถ้าขอมาต่างไป ให้ยึดเป็น deadline ตามที่เซลส์ขอ
+        deadline = requested_date_obj 
     else:
         approval_status = 'NOT_REQUIRED'
         req_date = None
@@ -542,7 +541,7 @@ def create_job_order(request, qt_id):
                     customer=qt.customer,
                     salesperson=qt.employee,
                     package_sold=first_item.product,
-                    status='DRAFT', # สถานะร่าง เพื่อรอให้ Center กดรับเรื่อง
+                    status='DRAFT',
                     note=f"📌 สร้างอัตโนมัติจากใบเสนอราคา {qt.code}\nรายละเอียดเพิ่มเติม: {qt.note}"
                 )
             except Exception as e:
@@ -1156,12 +1155,21 @@ def quotation_cancel(request, qt_id):
     is_owner = (qt.employee == current_emp) if current_emp else False
 
     if is_manager or is_owner:
-        if qt.status in ['DRAFT', 'APPROVED']:
+        # 🌟 ด่านตรวจที่ 2: ห้ามยกเลิกถ้าสั่งผลิตแล้ว 🌟
+        if qt.production_orders.exists():
+            messages.error(request, "❌ ไม่อนุญาตให้ยกเลิก เนื่องจากเอกสารนี้ถูกส่งเข้ากระบวนการผลิตเรียบร้อยแล้ว")
+        
+        # 🌟 ด่านตรวจที่ 1: ห้ามยกเลิกถ้าจ่ายมัดจำแล้ว 🌟
+        elif qt.is_deposit_paid:
+            messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากมีการรับมัดจำแล้ว กรุณาทำเรื่องคืนเงินมัดจำก่อน")
+            
+        # 🌟 ผ่านด่านตรวจ จึงจะยอมให้ยกเลิก 🌟
+        elif qt.status in ['DRAFT', 'APPROVED']:
             qt.status = 'CANCELLED'
             qt.save()
             messages.warning(request, f"⚠️ ยกเลิกใบเสนอราคา {qt.code} เรียบร้อยแล้ว (เอกสารนี้ถือเป็นโมฆะ)")
         else:
-            messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากเอกสารถูกนำไปเปิดบิลแล้ว")
+            messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากเอกสารถูกนำไปเปิดบิลแล้ว หรือสถานะไม่ถูกต้อง")
     else:
         messages.error(request, "❌ คุณไม่มีสิทธิ์ยกเลิกใบเสนอราคานี้")
 
