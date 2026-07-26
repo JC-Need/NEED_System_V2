@@ -350,7 +350,7 @@
                                 </button>
                                 {% else %}
                                 <button type="button" class="btn btn-sm btn-outline-secondary shadow-sm rounded-pill fw-bold px-3 py-2 d-flex align-items-center"
-                                        onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{% for d in order.completed_departments.all %}{{ d.id }}{% if not forloop.last %},{% endif %}{% endfor %}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}')">
+                                        onclick="openUpdateModal('{{ order.id }}', '{{ order.code }}', '{% for d in order.completed_departments.all %}{{ d.id }}{% if not forloop.last %},{% endif %}{% endfor %}', '{{ order.production_team.id|default:'' }}', '{{ order.delivery_status.id|default:'' }}', '{{ order.transporter.id|default:'' }}', '{{ order.is_closed }}', '{{ order.qc_paint }}', '{{ order.qc_internal }}', '{{ order.qc_external }}', '{{ order.qc_electrical }}', '{{ order.qc_plumbing }}', '{{ order.qc_aircon }}', '{{ order.status }}')">
                                     <i class="fas fa-search me-1"></i> ดูข้อมูล
                                 </button>
                                 {% endif %}
@@ -448,13 +448,14 @@
                                 </div>
                             </div>
 
+                            <!-- 🌟 [FIXED] นำคลาส alert ออก และเขียนสไตล์ด้วย bg-success แทน ป้องกันสคริปต์ Auto-dismiss 🌟 -->
                             <div id="qcCompleteBtnContainer">
                                 <button type="submit" name="action" value="qc_complete_and_receive" class="btn btn-success w-100 fw-bold shadow-sm rounded-pill py-2 border-0" onclick="return confirm('ยืนยันผลิตเสร็จและรับสินค้าเข้าคลังใช่หรือไม่?\n(เมื่อกดแล้ว งานจะถูกย้ายไปช่อง W4 พร้อมจัดส่ง)');">
                                     <i class="fas fa-box-open me-1"></i> ผลิตเสร็จ (รับเข้าคลัง)
                                 </button>
                             </div>
                             <div id="qcCompletedAlert" style="display: none;">
-                                <div class="alert alert-success text-center py-2 mb-0 rounded-pill small fw-bold border-success border-opacity-50">
+                                <div class="bg-success bg-opacity-10 text-success text-center py-2 mb-0 rounded-pill small fw-bold border border-success border-opacity-50">
                                     <i class="fas fa-check-circle me-1"></i> ผลิตและรับเข้าคลังเรียบร้อยแล้ว
                                 </div>
                             </div>
@@ -493,7 +494,8 @@
                             </div>
 
                             <hr class="my-4">
-                            <div class="alert alert-danger bg-danger bg-opacity-10 border-danger border-opacity-25 rounded-3 p-3 mt-4 mb-0">
+                            <!-- 🌟 [FIXED] นำคลาส alert ออก และเขียนสไตล์ด้วย bg-danger แทน ป้องกันสคริปต์ Auto-dismiss 🌟 -->
+                            <div class="bg-danger bg-opacity-10 border border-danger border-opacity-25 rounded-3 p-3 mt-4 mb-0" style="display: block !important;">
                                <div class="form-check form-switch d-flex justify-content-between align-items-center p-0 m-0">
                                     <div>
                                         <h6 class="fw-bold text-danger mb-0" style="cursor: pointer;" onclick="document.getElementById('modalIsClosed').click()">ปิดจ๊อบ (Close JOB)</h6>
@@ -518,10 +520,7 @@
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://npmcdn.com/flatpickr/dist/l10n/th.js"></script>
 <script>
-    let updateModal;
     document.addEventListener('DOMContentLoaded', function() {
-        updateModal = new bootstrap.Modal(document.getElementById('updateBoardModal'));
-
         flatpickr(".datepicker", {
             altInput: true,
             altFormat: "d/m/Y",
@@ -535,7 +534,6 @@
         });
     });
 
-    // 🌟 [FIXED] เพิ่ม JavaScript จัดการ Layout โชว์/ซ่อน ส่วนจัดส่ง & ดักสถานะ WAITING_QC และ REWORK ให้สมบูรณ์ 🌟
     function openUpdateModal(jobId, jobCode, completedDeptsStr, pTeam, dStatus, transp, isClosed, qc1, qc2, qc3, qc4, qc5, qc6, status) {
         document.getElementById('updateJobId').value = jobId;
         document.getElementById('displayJobCode').innerText = jobCode;
@@ -562,16 +560,14 @@
         document.getElementById('modalQcPlumbing').checked = (qc5 === 'True');
         document.getElementById('modalQcAircon').checked = (qc6 === 'True');
 
-        // 🌟 ป้องกัน error กรณีสถานะถูกส่งมาเป็น undefined (เช่น ในแท็บประวัติปิดจ๊อบ) 🌟
         if (!status || isClosed === 'True') {
             status = 'COMPLETED';
         }
 
-        // 🌟 ยืด-หด Layout คอลัมน์ ตามสถานะงาน (ดักสถานะ QC และ REWORK ไว้ตรงนี้แล้ว!) 🌟
         if (status === 'IN_PROGRESS' || status === 'WAITING_QC' || status === 'REWORK') {
             document.getElementById('colProduction').className = 'col-md-6 border-end';
             document.getElementById('colQC').className = 'col-md-6';
-            document.getElementById('colDelivery').style.display = 'none'; // ซ่อนจัดส่ง
+            document.getElementById('colDelivery').style.display = 'none'; 
 
             document.getElementById('qcCompleteBtnContainer').style.display = 'block';
             document.getElementById('qcCompletedAlert').style.display = 'none';
@@ -579,14 +575,17 @@
             document.getElementById('colProduction').className = 'col-md-4 border-end';
             document.getElementById('colQC').className = 'col-md-4 border-end';
             document.getElementById('colDelivery').className = 'col-md-4';
-            document.getElementById('colDelivery').style.display = 'block'; // โชว์จัดส่ง
+            document.getElementById('colDelivery').style.display = 'block'; 
 
             document.getElementById('qcCompleteBtnContainer').style.display = 'none';
             document.getElementById('qcCompletedAlert').style.display = 'block';
         }
 
         document.getElementById('updateForm').action = `/manufacturing/production/${jobId}/update-board/`;
-        updateModal.show();
+        
+        const modalEl = document.getElementById('updateBoardModal');
+        const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInstance.show();
     }
 
     function quickAdd(type) {

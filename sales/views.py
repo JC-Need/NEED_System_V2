@@ -27,6 +27,24 @@ from inventory.models import Product, InventoryDoc, StockMovement, Category
 from solar_jobs.models import SolarJob
 
 # ==========================================
+# 🌟 Helper Function: แปลงวันที่ DD/MM/YYYY เป็น YYYY-MM-DD
+# ==========================================
+def parse_thai_date(date_str):
+    if not date_str:
+        return None
+    try:
+        # ลองแปลงแบบ YYYY-MM-DD ดูก่อน (เผื่อระบบส่งมาถูก)
+        return parse_date(date_str)
+    except:
+        pass
+    try:
+        # ถ้าแปลงไม่ได้ ให้ลองแปลงแบบ DD/MM/YYYY
+        day, month, year = map(int, date_str.split('/'))
+        return datetime.date(year, month, day)
+    except:
+        return None
+
+# ==========================================
 # 🧠 ระบบคำนวณคอมมิชชัน
 # ==========================================
 def process_commission_logic(sale_amount, seller, sale_ref_id):
@@ -365,7 +383,7 @@ def record_deposit(request, qt_id):
         if amount > 0:
             qt.deposit_amount = amount
             qt.deposit_method = method
-            if date_str: qt.deposit_date = parse_date(date_str)
+            if date_str: qt.deposit_date = parse_thai_date(date_str) # 🌟 [FIXED] ใช้วิธีแปลงวันที่ใหม่
             else: qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
 
@@ -470,12 +488,14 @@ def create_job_order(request, qt_id):
     final_delivery_date = monday_of_delivery_week + datetime.timedelta(days=4)
 
     target_date_str = request.POST.get('target_date')
-    requested_date_obj = parse_date(target_date_str) if target_date_str else None
+    
+    # 🌟 [CRITICAL FIX] ใช้ฟังก์ชัน parse_thai_date แทน parse_date ของ Django 🌟
+    requested_date_obj = parse_thai_date(target_date_str) if target_date_str else None
 
     if requested_date_obj and requested_date_obj != final_delivery_date:
         approval_status = 'PENDING'
         req_date = requested_date_obj
-        deadline = final_delivery_date
+        deadline = requested_date_obj # 🌟 [FIXED] ถ้าขอมาต่างไป ให้ยึดเป็น deadline ตามที่เซลส์ขอ
     else:
         approval_status = 'NOT_REQUIRED'
         req_date = None
@@ -527,7 +547,6 @@ def create_job_order(request, qt_id):
                 )
             except Exception as e:
                 print(f"เกิดข้อผิดพลาดในการสร้าง Solar Job: {e}")
-    # 🌟 สิ้นสุดโค้ดชุดใหม่ 🌟
 
     if approval_status == 'PENDING':
         messages.warning(request, f"🏭 ส่งสั่งผลิตสำเร็จ! (ระบบตั้งสถานะ 'รออนุมัติวัน' เนื่องจากขอเปลี่ยนวันจัดส่งเป็น {req_date.strftime('%d/%m/%Y')})")
@@ -535,7 +554,7 @@ def create_job_order(request, qt_id):
         messages.warning(request, f"⚠️ คิวผลิตสัปดาห์แรกล้น! ระบบปัดคิวงาน {job.code} ไปสัปดาห์ถัดไป (กำหนดส่ง: {final_delivery_date.strftime('%d/%m/%Y')})")
     else:
         onsite_txt = " 👷‍♂️(ประกอบหน้างาน)" if is_onsite_val else ""
-        messages.success(request, f"🏭 ส่งข้อมูลเข้ากองกลางผลิตสำเร็จ (Job Order: {job.code}){onsite_txt}! (กำหนดส่ง: {final_delivery_date.strftime('%d/%m/%Y')})")
+        messages.success(request, f"🏭 ส่งข้อมูลเข้ากองกลางผลิตสำเร็จ (Job Order: {job.code}){onsite_txt}! (กำหนดส่ง: {deadline.strftime('%d/%m/%Y')})")
 
     return redirect('quotation_list')
 
@@ -555,7 +574,7 @@ def sales_timeline(request):
 
     deposit_date_str = request.GET.get('deposit_date')
     if deposit_date_str:
-        try: calc_deposit_date = parse_date(deposit_date_str) or today
+        try: calc_deposit_date = parse_thai_date(deposit_date_str) or today
         except: calc_deposit_date = today
     else:
         calc_deposit_date = today
@@ -619,7 +638,7 @@ def sales_timeline(request):
 
     filter_date_str = request.GET.get('filter_date')
     if filter_date_str:
-        try: filter_date = parse_date(filter_date_str) or today
+        try: filter_date = parse_thai_date(filter_date_str) or today
         except: filter_date = today
     else:
         filter_date = today
@@ -1408,7 +1427,7 @@ def record_invoice_payment(request, inv_id):
                 invoice=inv,
                 amount=amount,
                 payment_method=method,
-                payment_date=parse_date(date_str) if date_str else timezone.now().date()
+                payment_date=parse_thai_date(date_str) if date_str else timezone.now().date()
             )
             if method == 'TRANSFER' and 'transfer_slip' in request.FILES:
                 payment.transfer_slip = request.FILES['transfer_slip']

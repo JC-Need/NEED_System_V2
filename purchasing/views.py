@@ -25,7 +25,8 @@ from inventory.models import (
     Product, ProductSupplier, SupplierPriceHistory,
     Category, RawMaterialCategory
 )
-from manufacturing.models import BOM
+# 🌟 [NEW] เพิ่มการนำเข้า ProductionOrder เพื่อใช้นับจำนวนงานรอ PPO 🌟
+from manufacturing.models import BOM, ProductionOrder 
 
 # ------------------------------------------
 # 🛡️ ระบบนายทวาร (Gatekeeper) แบ่งสิทธิ์การทำงาน
@@ -81,10 +82,14 @@ def purchasing_dashboard(request):
     recent_pos = pos.order_by('-created_at')[:10]
     is_approver = check_is_approver(request.user)
 
+    # 🌟 [NEW] นับจำนวนใบสั่งผลิต (JOB) ที่รอเปิดใบเตรียม (PPO) 🌟
+    pending_ppo_count = ProductionOrder.objects.filter(status='WAITING_MATERIALS', is_materials_ordered=False).count()
+
     context = {
         'draft_count': draft_count, 'pending_payment_count': pending_payment_count,
         'pending_payment_amount': actual_pending_amount, 'pending_receipt_count': pending_receipt_count,
         'recent_pos': recent_pos, 'is_approver': is_approver,
+        'pending_ppo_count': pending_ppo_count, # ส่งยอดไปแสดงเป็น Badge แดงๆ
     }
     return render(request, 'purchasing/purchasing_dashboard.html', context)
 

@@ -200,19 +200,17 @@
                                     {% if task_type == 'deposits' %}
                                         {% if item.deposit_method == 'TRANSFER' %}
                                             <span class="badge bg-info bg-opacity-10 text-info border border-info rounded-pill"><i class="fas fa-mobile-alt me-1"></i> โอนเงิน</span>
-                                            {% if item.deposit_slip %}
-                                                <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'">
-                                            {% endif %}
                                         {% elif item.deposit_method == 'CASH' %}
                                             <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill"><i class="fas fa-money-bill-wave me-1"></i> เงินสด</span>
                                         {% elif item.deposit_method == 'CHECK' %}
                                             <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill"><i class="fas fa-money-check me-1"></i> เช็คธนาคาร</span>
-                                            {% if item.deposit_slip %}
-                                                <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'">
-                                            {% endif %}
-                                        {% else %}
-                                            <span class="text-muted small">-</span>
                                         {% endif %}
+                                        
+                                        <!-- 🌟 แสดงรูปหลักฐานเสมอ ถ้ามีการอัปโหลดไฟล์มา -->
+                                        {% if item.deposit_slip %}
+                                            <img src="{{ item.deposit_slip.url }}" class="slip-thumbnail border shadow-sm" loading="lazy" data-bs-toggle="modal" data-bs-target="#slipModal" onclick="document.getElementById('slipImageFull').src='{{ item.deposit_slip.url }}'" title="คลิกเพื่อดูหลักฐาน">
+                                        {% endif %}
+                                        
                                     {% else %}
                                         <span class="text-muted small">-</span>
                                     {% endif %}

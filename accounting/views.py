@@ -69,7 +69,8 @@ def verification_hub(request, task_type):
 
     # ดึงตารางข้อมูลให้ตรงกับเมนูที่กดเข้ามา
     if task_type == 'deposits':
-        context['items'] = Quotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).order_by('-updated_at')
+        # 🌟 แก้ไขจาก updated_at เป็น created_at แล้ว 🌟
+        context['items'] = Quotation.objects.filter(is_deposit_paid=True, is_deposit_verified=False).order_by('-created_at')
         context['title'] = 'ตรวจสอบรับเงินมัดจำฝ่ายขาย (Deposits)'
         context['icon'] = 'fa-hand-holding-usd text-success'
     elif task_type == 'invoices':

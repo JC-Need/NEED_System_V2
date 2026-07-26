@@ -35,6 +35,9 @@ class CompanyInfo(models.Model):
     website = models.URLField(blank=True, verbose_name="เว็บไซต์")
 
     logo = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้")
+    # 🌟 เพิ่มช่องอัปโหลดโลโก้สำหรับระบบโซล่าเซลล์
+    solar_logo = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้ (ระบบโซล่าเซลล์)")
+    
     login_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="รูปหน้า Login")
     navbar_image = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="โลโก้บนแถบเมนู")
     seal = models.ImageField(upload_to='company/', blank=True, null=True, verbose_name="ตราประทับบริษัท (Seal)")

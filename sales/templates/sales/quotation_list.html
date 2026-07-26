@@ -219,6 +219,8 @@
                                             {% if qt.status == 'APPROVED' %}
                                                 {% if not qt.is_deposit_paid %}
                                                     <span class="badge-soft badge-soft-warning"><i class="fas fa-hourglass-half me-1"></i>รอรับมัดจำ</span>
+                                                {% elif qt.is_deposit_paid and not qt.is_deposit_verified %}
+                                                    <span class="badge-soft badge-soft-secondary"><i class="fas fa-user-clock me-1"></i>รอตรวจมัดจำ</span>
                                                 {% else %}
                                                     <span class="badge-soft badge-soft-success"><i class="fas fa-check-circle me-1"></i>อนุมัติแล้ว</span>
                                                 {% endif %}
@@ -267,7 +269,6 @@
                                         ฿{{ qt.grand_total|floatformat:2|intcomma }}
                                     </h6>
 
-                                    <!-- 🌟 ดักเงื่อนไขสถานะ "เปิดบิลแล้ว" ให้แสดงเป็นสีเขียว 🌟 -->
                                     {% if qt.status == 'CONVERTED' %}
                                         <div class="text-success fw-bold" style="font-size: 0.75rem;"><i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว</div>
                                     {% elif qt.balance_due > 0 and qt.status != 'CANCELLED' and qt.status != 'DRAFT' %}
@@ -281,14 +282,34 @@
                                     <div class="d-flex justify-content-end align-items-center gap-2">
                                         {% if is_manager and qt.status == 'DRAFT' %}
                                             <a href="{% url 'quotation_approve' qt.id %}" class="btn btn-success btn-primary-action rounded-pill text-white" onclick="return confirm('ยืนยันการอนุมัติเอกสารนี้?');"><i class="fas fa-check-circle me-1"></i> อนุมัติ</a>
+                                        
                                         {% elif qt.status == 'APPROVED' and not qt.is_deposit_paid %}
                                             <button class="btn btn-warning btn-primary-action rounded-pill text-dark" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}"><i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำ</button>
+                                        
+                                        {% elif qt.is_deposit_paid and not qt.is_deposit_verified %}
+                                            <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.8;"><i class="fas fa-user-clock me-1"></i> รอตรวจสอบรับเงินมัดจำ</span>
+                                        
                                         {% elif qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.all %}
                                             <button class="btn btn-info btn-primary-action rounded-pill text-dark" data-bs-toggle="modal" data-bs-target="#produceModal{{ qt.id }}"><i class="fas fa-industry me-1"></i> สั่งผลิต</button>
-                                        {% elif qt.status == 'APPROVED' %}
+                                            
+                                        <!-- 🌟 [FIXED] เพิ่มเงื่อนไขเช็คว่าถ้าสั่งผลิตแล้ว (มีงาน) ให้โชว์ปุ่มสถานะ หรือ ปุ่มเปิดบิลขาย 🌟 -->    
+                                        {% elif qt.status == 'APPROVED' and qt.production_orders.all %}
                                             {% with job=qt.production_orders.first %}
                                                 {% if job and job.status == 'COMPLETED' %}
-                                                    <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn" style="background-color: #6f42c1; color: white; padding: 6px 16px; font-size: 0.85rem; border-radius: 50px; font-weight: 600;" onclick="return confirm('เปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');"><i class="fas fa-file-invoice-dollar me-1"></i> เปิดบิลขาย</a>
+                                                    <!-- ถ้างานผลิตเสร็จแล้ว ให้เปิดบิลขายได้ -->
+                                                    <a href="{% url 'convert_quote_to_invoice' qt.id %}" class="btn btn-primary-action rounded-pill text-white" style="background-color: #6f42c1; border-color: #6f42c1;" onclick="return confirm('เปิดบิลขายจากใบเสนอราคานี้ใช่หรือไม่?');"><i class="fas fa-file-invoice-dollar me-1"></i> เปิดบิลขาย</a>
+                                                {% else %}
+                                                    <!-- ถ้าย้งไม่เสร็จ ให้โชว์เป็นปุ่มสีเทา -->
+                                                    <span class="btn btn-secondary btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.7;"><i class="fas fa-cogs me-1"></i> กำลังดำเนินการผลิต</span>
+                                                {% endif %}
+                                            {% endwith %}
+
+                                        {% elif qt.status == 'CONVERTED' %}
+                                            {% with job=qt.production_orders.first %}
+                                                {% if job and job.delivery_status and job.delivery_status.name == 'จัดส่งเรียบร้อย' %}
+                                                    <span class="btn btn-success btn-primary-action rounded-pill text-white" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-check-circle me-1"></i> จัดส่งสินค้าเรียบร้อย</span>
+                                                {% elif job %}
+                                                    <span class="btn btn-warning btn-primary-action rounded-pill text-dark" style="cursor: not-allowed; opacity: 0.9;"><i class="fas fa-truck-loading me-1"></i> รอจัดส่งสินค้า</span>
                                                 {% endif %}
                                             {% endwith %}
                                         {% endif %}

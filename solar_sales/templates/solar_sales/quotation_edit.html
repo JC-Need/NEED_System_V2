@@ -4,10 +4,11 @@
 {% block content %}
 <div class="container-xxl py-4 px-4">
 
+    <!-- 🌟 ส่วนหัวและปุ่มจัดการ -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="fw-bold text-dark mb-1" style="font-size: 1.5rem;">
-                <i class="fas fa-edit text-primary me-2"></i>{% if qt.status != 'DRAFT' %}รายละเอียดใบเสนอราคา{% else %}แก้ไขใบเสนอราคา{% endif %}
+                <i class="fas fa-edit text-primary me-2"></i>{% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}รายละเอียดใบเสนอราคา{% else %}แก้ไขใบเสนอราคา{% endif %}
             </h4>
             <div class="text-muted" style="font-size: 0.9rem;">
                 เลขที่: <span class="text-danger fw-bold">{{ qt.code }}</span> | วันที่: {{ qt.date|date:"d/m/Y" }}
@@ -15,6 +16,21 @@
         </div>
         <div>
             <a href="{% url 'solar_quotation_list' %}" class="btn btn-light border shadow-sm rounded-pill px-3 btn-sm fw-bold"><i class="fas fa-chevron-left me-1"></i> กลับ</a>
+            
+            <!-- 🌟 ปุ่มอนุมัติ (จะแสดงเมื่อสถานะเป็น DRAFT หรือรออนุมัติ) -->
+            {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
+            <a href="{% url 'solar_quotation_approve' qt.id %}" class="btn btn-success shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold" onclick="return confirm('ยืนยันการอนุมัติใบเสนอราคา {{ qt.code }} ใช่หรือไม่?');">
+                <i class="fas fa-check-circle me-1"></i> อนุมัติเอกสาร
+            </a>
+            {% endif %}
+
+            <!-- 🌟 ปุ่มส่งงานเข้า Center (จะแสดงเมื่อเอกสารอนุมัติแล้วเท่านั้น) -->
+            {% if qt.status == 'APPROVED' %}
+            <a href="{% url 'solar_quotation_send_to_center' qt.id %}" class="btn btn-warning shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold text-dark" onclick="return confirm('ยืนยันการส่งงาน {{ qt.code }} เข้า Center เพื่อเริ่มงานใช่หรือไม่?');">
+                <i class="fas fa-paper-plane me-1"></i> ส่งงานเข้า Center
+            </a>
+            {% endif %}
+
             {% if qt.status != 'CANCELLED' %}
             <a href="{% url 'solar_quotation_print' qt.id %}" target="_blank" class="btn btn-primary shadow-sm rounded-pill px-4 ms-2 btn-sm fw-bold"><i class="fas fa-print me-1"></i> พิมพ์ / ตัวอย่าง</a>
             {% endif %}
@@ -22,6 +38,7 @@
     </div>
 
     <div class="row g-3">
+        <!-- 🌟 ฝั่งซ้าย: ข้อมูลลูกค้า -->
         <div class="col-lg-4">
             <div class="card shadow-sm border-0 rounded-3 h-100">
                 <div class="card-header bg-white py-3 border-bottom">
@@ -44,9 +61,10 @@
             </div>
         </div>
 
+        <!-- 🌟 ฝั่งขวา: รายการสินค้าและสรุปยอด -->
         <div class="col-lg-8">
             
-            {% if qt.status == 'DRAFT' %}
+            {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
             <div class="d-flex justify-content-center gap-3 mb-4">
                 <button type="button" class="btn btn-outline-primary rounded-pill px-4 py-2 fw-bold shadow-sm border-2" onclick="$('#box-main-product').slideDown(); $('#box-upsale').slideUp();">
                     <i class="fas fa-solar-panel me-2"></i>+ เพิ่มแพ็กเกจ (FG)
@@ -56,6 +74,7 @@
                 </button>
             </div>
 
+            <!-- กล่องเพิ่ม FG -->
             <div id="box-main-product" class="card border-primary border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
                 <div class="card-body p-4 bg-light"> 
                     <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
@@ -94,6 +113,7 @@
                 </div>
             </div>
 
+            <!-- กล่องเพิ่ม RM -->
             <div id="box-upsale" class="card border-warning border-2 border-bottom-0 border-end-0 border-start-0 shadow-sm mb-4" style="display: none;">
                 <div class="card-body p-4 bg-light"> 
                     <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
@@ -133,6 +153,7 @@
             </div>
             {% endif %}
 
+            <!-- 🌟 ตารางรายการสินค้า -->
             <div class="card shadow-sm border-0 rounded-3">
                 <div class="card-header py-3 bg-white">
                     <h6 class="m-0 fw-bold text-dark"><i class="fas fa-list me-2"></i>รายการในใบเสนอราคา</h6>
@@ -147,7 +168,7 @@
                                 <th class="text-center" style="width: 10%;">จำนวน</th>
                                 <th class="text-end" style="width: 15%;">ราคา/หน่วย</th>
                                 <th class="text-end pe-4" style="width: 15%;">รวมเงิน</th>
-                                {% if qt.status == 'DRAFT' %}<th style="width: 10%;" class="text-center">ลบ</th>{% endif %}
+                                {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}<th style="width: 10%;" class="text-center">ลบ</th>{% endif %}
                             </tr>
                         </thead>
                         <tbody>
@@ -159,7 +180,7 @@
                                 <td class="text-center"><span class="badge bg-light text-dark border px-3">{{ item.quantity|floatformat:0 }}</span></td>
                                 <td class="text-end">{{ item.unit_price|floatformat:2|intcomma }}</td>
                                 <td class="text-end pe-4 fw-bold {% if item.product.product_type == 'RM' %}text-dark{% else %}text-primary{% endif %}">{{ item.amount|floatformat:2|intcomma }}</td>
-                                {% if qt.status == 'DRAFT' %}
+                                {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
                                 <td class="text-center">
                                     <a href="{% url 'solar_delete_item' item.id %}" class="text-danger" onclick="return confirm('ลบสินค้านี้?')"><i class="fas fa-trash-alt"></i></a>
                                 </td>
@@ -167,7 +188,7 @@
                             </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if qt.status == 'DRAFT' %}7{% else %}6{% endif %}" class="text-center py-5">
+                                <td colspan="{% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}7{% else %}6{% endif %}" class="text-center py-5">
                                     <i class="fas fa-shopping-basket fa-2x mb-3 text-muted opacity-25"></i>
                                     <p class="small mb-0 text-muted">ยังไม่มีรายการสินค้า</p>
                                 </td>
@@ -177,25 +198,26 @@
                     </table>
                 </div>
 
+                <!-- 🌟 สรุปยอดและหมายเหตุ -->
                 <div class="card-footer bg-white p-3 border-top">
                     <form method="post" autocomplete="off" class="smart-form">
                         {% csrf_token %}
                         <div class="row">
                             <div class="col-lg-7 border-end pe-lg-4 pb-3 pb-lg-0">
                                 <label class="text-primary fw-bold small mb-1"><i class="fas fa-file-invoice-dollar me-1"></i> เงื่อนไขการชำระเงิน (Payment Terms):</label>
-                                <textarea name="payment_terms" class="form-control form-control-sm mb-3" rows="3" {% if qt.status != 'DRAFT' %}readonly{% endif %}>{{ qt.payment_terms|default:"- ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ\n- ส่วนที่เหลือชำระก่อนการติดตั้ง" }}</textarea>
+                                <textarea name="payment_terms" class="form-control form-control-sm mb-3" rows="3" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>{{ qt.payment_terms|default:"- ชำระเงินมัดจำ 50% ของยอดรวมเพื่อยืนยันการสั่งซื้อ\n- ส่วนที่เหลือชำระก่อนการติดตั้ง" }}</textarea>
                                 
                                 <label class="text-primary fw-bold small mb-1"><i class="fas fa-pen me-1"></i> หมายเหตุ / เงื่อนไข (Note):</label>
-                                <textarea name="note" class="form-control form-control-sm mb-2" rows="2" {% if qt.status != 'DRAFT' %}readonly{% endif %}>{{ qt.note|default:"-ไม่มี-" }}</textarea>
+                                <textarea name="note" class="form-control form-control-sm mb-2" rows="2" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>{{ qt.note|default:"-ไม่มี-" }}</textarea>
                                 
                                 <label class="text-primary fw-bold small mb-1 mt-2"><i class="fas fa-percent me-1"></i> การคิดภาษี (VAT):</label>
-                                <select name="vat_type" id="vat_type" class="form-select form-select-sm mb-2" {% if qt.status != 'DRAFT' %}disabled{% endif %}>
+                                <select name="vat_type" id="vat_type" class="form-select form-select-sm mb-2" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}disabled{% endif %}>
                                     <option value="NONE" {% if qt.vat_type == 'NONE' %}selected{% endif %}>ไม่มี VAT</option>
                                     <option value="EXCLUDE" {% if qt.vat_type == 'EXCLUDE' %}selected{% endif %}>แยก VAT 7%</option>
                                     <option value="INCLUDE" {% if qt.vat_type == 'INCLUDE' %}selected{% endif %}>รวม VAT 7% แล้ว</option>
                                 </select>
                                 
-                                {% if qt.status == 'DRAFT' %}
+                                {% if qt.status == 'DRAFT' or qt.status == 'PENDING' %}
                                 <button type="submit" name="update_info" class="btn btn-outline-primary btn-sm shadow-sm rounded-pill px-3 mt-2">
                                     <i class="fas fa-sync-alt me-1"></i> บันทึกหมายเหตุ/เงื่อนไข
                                 </button>
@@ -211,13 +233,13 @@
                                     <tr>
                                         <td class="text-end text-muted align-middle pt-2">หักส่วนลด:</td>
                                         <td class="pt-2 text-end">
-                                            <input type="text" name="discount" id="live_discount" value="{% if qt.discount > 0 %}{{ qt.discount }}{% endif %}" class="form-control form-control-sm text-end d-inline-block text-danger number-format" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' %}readonly{% endif %}>
+                                            <input type="text" name="discount" id="live_discount" value="{% if qt.discount > 0 %}{{ qt.discount }}{% endif %}" class="form-control form-control-sm text-end d-inline-block text-danger number-format" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>
                                         </td>
                                     </tr>
                                     <tr>
                                         <td class="text-end text-muted align-middle">ค่าสำรวจหน้างาน/จัดส่ง:</td>
                                         <td class="text-end">
-                                            <input type="text" name="survey_fee" id="live_survey" value="{% if qt.survey_fee > 0 %}{{ qt.survey_fee }}{% endif %}" class="form-control form-control-sm text-end d-inline-block number-format fw-bold text-success" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' %}readonly{% endif %}>
+                                            <input type="text" name="survey_fee" id="live_survey" value="{% if qt.survey_fee > 0 %}{{ qt.survey_fee }}{% endif %}" class="form-control form-control-sm text-end d-inline-block number-format fw-bold text-success" style="width: 110px;" placeholder="0.00" autocomplete="off" {% if qt.status != 'DRAFT' and qt.status != 'PENDING' %}readonly{% endif %}>
                                         </td>
                                     </tr>
                                     <tr class="border-top">
@@ -250,6 +272,7 @@
     </div>
 </div>
 
+<!-- 🌟 Scripts (Select2 + Live Calculation) -->
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link href="https://cdn.jsdelivr.net/npm/@ttskch/select2-bootstrap4-theme@x.x.x/dist/select2-bootstrap4.min.css" rel="stylesheet">
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
