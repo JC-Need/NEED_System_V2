@@ -47,6 +47,12 @@
     }
     .search-pill-btn:hover { background-color: #000; transform: scale(1.05); }
     .hidden-date { display: none; }
+
+    /* 🌟 เมนู Dropdown 🌟 */
+    .dropdown-menu { border: none; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); padding: 10px 0; }
+    .dropdown-item { padding: 8px 20px; font-size: 0.85rem; font-weight: 500; transition: background-color 0.2s; }
+    .dropdown-item:hover { background-color: #f8f9fa; color: #0d6efd; }
+    .dropdown-item.text-danger:hover { background-color: #fee2e2; color: #dc3545 !important; }
 </style>
 
 <div class="container-fluid py-4 px-4">
@@ -160,8 +166,17 @@
                                         {% if qt.employee.department %}({{ qt.employee.department.name|default:"สำนักงานใหญ่" }}){% endif %}
                                     </div>
                                 </td>
-                                <td class="text-end fw-bold fs-6 text-dark">
-                                    ฿{{ qt.grand_total|floatformat:2|intcomma }}
+                                <td class="text-end">
+                                    <!-- 🌟 [FIXED] แสดงยอดสุทธิ และยอดค้างชำระ (Balance Due) 🌟 -->
+                                    <div class="fw-bold fs-6 text-dark">฿{{ qt.grand_total|floatformat:2|intcomma }}</div>
+                                    
+                                    {% if qt.status != 'CANCELLED' %}
+                                        {% if qt.balance_due > 0 and qt.is_deposit_paid %}
+                                            <div class="small fw-bold mt-1 text-danger">ค้างชำระ: ฿{{ qt.balance_due|floatformat:2|intcomma }}</div>
+                                        {% elif qt.balance_due == 0 and qt.is_deposit_paid %}
+                                            <div class="small fw-bold mt-1 text-success"><i class="fas fa-check-circle me-1"></i>ชำระครบแล้ว</div>
+                                        {% endif %}
+                                    {% endif %}
                                 </td>
                                 
                                 <td class="text-center">
@@ -185,7 +200,7 @@
                                 <td class="pe-4 text-center">
                                     <div class="d-flex justify-content-center align-items-center gap-2">
                                         
-                                        <!-- 🌟 [FIXED] เซลส์มีสิทธิ์กดรับมัดจำ และกดส่งงาน (เมื่อบัญชีตรวจผ่านแล้ว) แต่ไม่มีสิทธิ์กดตรวจมัดจำเอง 🌟 -->
+                                        <!-- ปุ่ม Action ด่วน (รับมัดจำ / ส่งงาน) -->
                                         {% if qt.status == 'APPROVED' and not qt.is_deposit_paid %}
                                             <button class="btn btn-sm btn-warning rounded-pill px-3 fw-bold text-dark shadow-sm btn-primary-action" data-bs-toggle="modal" data-bs-target="#depositModal{{ qt.id }}">
                                                 <i class="fas fa-hand-holding-usd me-1"></i> รับมัดจำ
@@ -198,7 +213,32 @@
                                             </a>
                                         {% endif %}
 
-                                        <a href="{% url 'solar_quotation_edit' qt.id %}" class="btn btn-sm btn-outline-primary rounded-pill px-3 fw-bold btn-primary-action">เปิดดู</a>
+                                        <!-- 🌟 [FIXED] เมนูสามจุด Dropdown (แก้ไข, พิมพ์ใบเสนอราคา, สัญญา, ยกเลิก) 🌟 -->
+                                        <div class="dropdown">
+                                            <button class="btn btn-sm btn-light border rounded-circle shadow-sm" type="button" data-bs-toggle="dropdown" style="width: 32px; height: 32px;">
+                                                <i class="fas fa-ellipsis-v text-muted"></i>
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow-lg border-0 rounded-4">
+                                                <li><h6 class="dropdown-header text-secondary small fw-bold"><i class="fas fa-layer-group me-1"></i> เอกสารสั่งพิมพ์</h6></li>
+                                                
+                                                <li><a class="dropdown-item" href="{% url 'solar_quotation_edit' qt.id %}"><i class="fas fa-search text-primary me-2"></i> ดูรายละเอียด/แก้ไข</a></li>
+                                                <li><a class="dropdown-item" href="{% url 'solar_quotation_print' qt.id %}" target="_blank"><i class="fas fa-print text-muted me-2"></i> พิมพ์ใบเสนอราคา</a></li>
+                                                
+                                                <!-- ฟีเจอร์พิมพ์สัญญา จะโชว์เมื่อมัดจำแล้วเท่านั้น -->
+                                                {% if qt.is_deposit_paid %}
+                                                    <li><a class="dropdown-item fw-bold text-dark" href="{% url 'solar_quotation_print_contract' qt.id %}" target="_blank"><i class="fas fa-file-signature text-warning me-2"></i> พิมพ์สัญญามัดจำ</a></li>
+                                                {% endif %}
+                                                
+                                                <li><hr class="dropdown-divider"></li>
+                                                
+                                                <li><a class="dropdown-item text-success" href="{% url 'solar_quotation_copy' qt.id %}" onclick="return confirm('ต้องการคัดลอกเอกสารนี้เพื่อสร้างฉบับใหม่?');"><i class="fas fa-copy me-2"></i> คัดลอกสร้างฉบับใหม่</a></li>
+                                                
+                                                {% if qt.status != 'CANCELLED' and qt.status != 'CONVERTED' %}
+                                                    <li><a class="dropdown-item text-danger fw-bold" href="{% url 'solar_quotation_cancel' qt.id %}" onclick="return confirm('คำเตือน: คุณต้องการยกเลิกใบเสนอราคานี้ใช่หรือไม่?');"><i class="fas fa-ban me-2"></i> ยกเลิกเอกสาร</a></li>
+                                                {% endif %}
+                                            </ul>
+                                        </div>
+
                                     </div>
                                 </td>
                             </tr>

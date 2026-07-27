@@ -16,7 +16,7 @@ from hr.models import Department
 import datetime
 
 # 🌟 [FIXED] เพิ่มบรรทัดนี้เข้ามา เพื่อให้ระบบรู้จักคำสั่ง timezone 🌟
-from django.utils import timezone 
+from django.utils import timezone
 
 # ==========================================
 # 📊 Dashboards & Lists
@@ -458,4 +458,68 @@ def solar_verify_deposit(request, qt_id):
     qt.is_deposit_verified = True
     qt.save()
     messages.success(request, f"✅ ยืนยันตรวจสอบยอดมัดจำของ {qt.code} เรียบร้อยแล้ว! งานพร้อมส่งเข้า Center")
+    return redirect('solar_quotation_list')
+
+# ==========================================
+# 📑 ฟังก์ชันเมนูจัดการ (พิมพ์สัญญา / คัดลอก / ยกเลิก)
+# ==========================================
+@login_required
+def solar_quotation_print_contract(request, qt_id):
+    qt = get_object_or_404(SolarQuotation, pk=qt_id)
+
+    # ดักไว้ไม่ให้พิมพ์สัญญาถ้ายังไม่มัดจำ
+    if not qt.is_deposit_paid:
+        messages.error(request, "❌ ไม่สามารถพิมพ์สัญญาได้ เนื่องจากยังไม่มีการบันทึกรับเงินมัดจำ")
+        return redirect('solar_quotation_list')
+
+    from master_data.models import CompanyInfo
+    company = CompanyInfo.objects.first()
+    item_total = sum(item.amount for item in qt.items.all())
+
+    # 🌟 หมายเหตุ: เดี๋ยวเราจะต้องสร้างไฟล์หน้าตาใบสัญญา (quotation_contract.html) มารองรับฟังก์ชันนี้ทีหลังนะครับ
+    return render(request, 'solar_sales/quotation_contract.html', {
+        'qt': qt,
+        'company': company,
+        'item_total': item_total
+    })
+
+@login_required
+def solar_quotation_copy(request, qt_id):
+    old_qt = get_object_or_404(SolarQuotation, pk=qt_id)
+
+    # 1. สร้างใบเสนอราคาใหม่ โดยลอกข้อมูลเดิมมา (แต่เปลี่ยนสถานะเป็น DRAFT)
+    new_qt = SolarQuotation.objects.create(
+        customer=old_qt.customer,
+        employee=request.user.employee if hasattr(request.user, 'employee') else old_qt.employee,
+        subtotal=old_qt.subtotal,
+        discount=old_qt.discount,
+        survey_fee=old_qt.survey_fee,
+        vat_type=old_qt.vat_type,
+        vat_amount=old_qt.vat_amount,
+        grand_total=old_qt.grand_total,
+        payment_terms=old_qt.payment_terms,
+        note=old_qt.note,
+        status='DRAFT'
+    )
+
+    # 2. คัดลอกรายการสินค้าข้างในมาด้วย
+    for item in old_qt.items.all():
+        SolarQuotationItem.objects.create(
+            quotation=new_qt,
+            product=item.product,
+            item_name=item.item_name,
+            quantity=item.quantity,
+            unit_price=item.unit_price,
+            amount=item.amount
+        )
+
+    messages.success(request, f"✅ คัดลอกเอกสารเรียบร้อยแล้ว ได้เอกสารใหม่เลขที่ {new_qt.code}")
+    return redirect('solar_quotation_edit', qt_id=new_qt.id)
+
+@login_required
+def solar_quotation_cancel(request, qt_id):
+    qt = get_object_or_404(SolarQuotation, pk=qt_id)
+    qt.status = 'CANCELLED'
+    qt.save()
+    messages.success(request, f"✅ ยกเลิกเอกสาร {qt.code} เรียบร้อยแล้ว")
     return redirect('solar_quotation_list')

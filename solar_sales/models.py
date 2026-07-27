@@ -104,7 +104,6 @@ class SolarQuotation(models.Model):
         verbose_name="เงื่อนไขการชำระเงิน (Payment Terms)"
     )
 
-    # 🌟 ฟิลด์ระบบมัดจำที่เพิ่มเข้ามาใหม่ 🌟
     deposit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="มัดจำ")
     deposit_method = models.CharField(max_length=20, default='TRANSFER', verbose_name="ช่องทางรับเงิน")
     deposit_date = models.DateField(null=True, blank=True, verbose_name="วันที่รับเงินมัดจำ")
@@ -113,6 +112,11 @@ class SolarQuotation(models.Model):
     is_deposit_verified = models.BooleanField(default=False, verbose_name="บัญชีตรวจสอบแล้ว")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     note = models.TextField(blank=True, verbose_name="หมายเหตุ")
+
+    # 🌟 [FIXED] เพิ่มฟังก์ชันคำนวณยอดค้างชำระ (Balance Due) 🌟
+    @property
+    def balance_due(self):
+        return self.grand_total - self.deposit_amount
 
     def save(self, *args, **kwargs):
         if not self.code:
@@ -132,7 +136,6 @@ class SolarQuotationItem(models.Model):
     quotation = models.ForeignKey(SolarQuotation, related_name='items', on_delete=models.CASCADE)
     product = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, blank=True)
 
-    # 🌟 [FIXED] เพิ่มคอลัมน์ item_name เพื่อรองรับข้อมูลจากหน้าเว็บ 🌟
     item_name = models.CharField(max_length=255, blank=True, null=True, verbose_name="ชื่อที่จะแสดงในบิล")
 
     quantity = models.IntegerField(default=1)

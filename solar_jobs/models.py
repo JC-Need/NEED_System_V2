@@ -3,9 +3,23 @@ from django.utils import timezone
 import datetime
 
 from master_data.models import Customer
-from hr.models import Employee, Department
-# 🌟 ดึงตารางสินค้าจากแผนกโซล่าเซลล์โดยตรง (แยกขาดจาก Inventory เดิม)
+from hr.models import Employee
 from solar_sales.models import SolarProduct
+
+# 🌟 [FIXED] สร้างฐานข้อมูล "ทีมช่างรับเหมาติดตั้ง" (ช่างนอก)
+class SubcontractorTeam(models.Model):
+    name = models.CharField(max_length=150, unique=True, verbose_name="ชื่อทีมรับเหมา / ชื่อบริษัท")
+    leader_name = models.CharField(max_length=100, blank=True, null=True, verbose_name="ชื่อหัวหน้าช่าง")
+    phone = models.CharField(max_length=20, blank=True, null=True, verbose_name="เบอร์ติดต่อ")
+    is_active = models.BooleanField(default=True, verbose_name="สถานะรับงาน")
+    note = models.TextField(blank=True, verbose_name="หมายเหตุ / ความเชี่ยวชาญ")
+    
+    class Meta:
+        verbose_name = "ทีมช่างรับเหมาโซล่า"
+        verbose_name_plural = "ฐานข้อมูลทีมช่างรับเหมา"
+        
+    def __str__(self):
+        return f"{self.name} (หัวหน้า: {self.leader_name or '-'})"
 
 class SolarJob(models.Model):
     STATUS_CHOICES = [
@@ -18,17 +32,14 @@ class SolarJob(models.Model):
 
     code = models.CharField(max_length=20, unique=True, verbose_name="เลขที่ใบสั่งงาน (Solar Job)")
     
-    # ข้อมูลการขาย (ต้นทาง)
     customer = models.ForeignKey(Customer, on_delete=models.SET_NULL, null=True, verbose_name="ลูกค้า")
     salesperson = models.ForeignKey(Employee, related_name='solar_sales_jobs', on_delete=models.SET_NULL, null=True, verbose_name="พนักงานขาย")
-    # 🌟 เปลี่ยนจาก Product เป็น SolarProduct
     package_sold = models.ForeignKey(SolarProduct, on_delete=models.SET_NULL, null=True, related_name='solar_jobs', verbose_name="แพ็กเกจที่ขาย (FG)")
     
-    # ข้อมูลสำหรับ Center (กลางทาง)
-    technician_team = models.ForeignKey(Department, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมช่างติดตั้ง")
+    # 🌟 [FIXED] เปลี่ยนจาก Department เป็น SubcontractorTeam
+    technician_team = models.ForeignKey(SubcontractorTeam, on_delete=models.SET_NULL, null=True, blank=True, verbose_name="ทีมช่างติดตั้ง")
     labor_cost_budget = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="งบประมาณค่าช่าง (ที่ Center กำหนด)")
     
-    # 🌟 กำกับรูปแบบวันที่
     start_date = models.DateField(null=True, blank=True, verbose_name="วันที่เริ่มงาน (dd/mm/yyyy)")
     expected_finish_date = models.DateField(null=True, blank=True, verbose_name="กำหนดเสร็จ (dd/mm/yyyy)")
     
@@ -44,7 +55,6 @@ class SolarJob(models.Model):
         return str(self.code)
 
     def save(self, *args, **kwargs):
-        # 🌟 Auto-generate รหัส SOL-YYMM-XXX
         if not self.code:
             today = datetime.date.today()
             thai_year = (today.year + 543) % 100
@@ -61,19 +71,15 @@ class SolarJob(models.Model):
 
     @property
     def total_material_cost(self):
-        # คำนวณต้นทุนวัตถุดิบทั้งหมดที่เบิกไป
         return sum(item.total_cost for item in self.materials.all())
 
     @property
     def total_job_cost(self):
-        # ต้นทุนรวม = วัตถุดิบ + ค่าแรงช่างที่กำหนดไว้
         return self.total_material_cost + self.labor_cost_budget
 
 
 class SolarJobMaterial(models.Model):
-    # ตารางการเบิกวัตถุดิบของแผนก Center
     job = models.ForeignKey(SolarJob, related_name='materials', on_delete=models.CASCADE)
-    # 🌟 เปลี่ยนจาก Product เป็น SolarProduct
     product = models.ForeignKey(SolarProduct, on_delete=models.PROTECT, verbose_name="วัตถุดิบ (RM)")
     quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1, verbose_name="จำนวนที่เบิก")
     unit_cost = models.DecimalField(max_digits=10, decimal_places=2, default=0, verbose_name="ต้นทุนต่อหน่วย (ณ วันที่เบิก)")
