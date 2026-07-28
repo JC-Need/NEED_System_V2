@@ -383,7 +383,7 @@ def record_deposit(request, qt_id):
         if amount > 0:
             qt.deposit_amount = amount
             qt.deposit_method = method
-            if date_str: qt.deposit_date = parse_thai_date(date_str) 
+            if date_str: qt.deposit_date = parse_thai_date(date_str)
             else: qt.deposit_date = timezone.now().date()
             qt.is_deposit_paid = True
 
@@ -488,13 +488,13 @@ def create_job_order(request, qt_id):
     final_delivery_date = monday_of_delivery_week + datetime.timedelta(days=4)
 
     target_date_str = request.POST.get('target_date')
-    
+
     requested_date_obj = parse_thai_date(target_date_str) if target_date_str else None
 
     if requested_date_obj and requested_date_obj != final_delivery_date:
         approval_status = 'PENDING'
         req_date = requested_date_obj
-        deadline = requested_date_obj 
+        deadline = requested_date_obj
     else:
         approval_status = 'NOT_REQUIRED'
         req_date = None
@@ -851,27 +851,34 @@ def quotation_list(request):
     for d in departments:
         d.name = d.name.replace('แผนก', '').strip()
 
+    # ... (โค้ดด้านบนของฟังก์ชันเหมือนเดิม) ...
     search_query = request.GET.get('q', '')
     status_filter = request.GET.get('status')
     prod_status_filter = request.GET.get('prod_status')
-    branch_filter = request.GET.get('branch', '') # 🌟 รับค่าตัวกรองสาขา
+    # 🌟 [NEW] รับค่าตัวกรองใหม่: สถานะจัดส่ง 🌟
+    deliv_status_filter = request.GET.get('deliv_status')
+    branch_filter = request.GET.get('branch', '')
 
-    # 🌟 กรองข้อมูลตาม "สาขา"
+    # 🌟 1. กรองข้อมูลตาม "สาขา"
     if branch_filter and (is_manager or is_supervisor):
         queryset = queryset.filter(employee__department_id=branch_filter)
 
+    # 🌟 2. กรองข้อมูลตาม "สถานะเอกสาร" (อัปเดตเงื่อนไขให้ครบ)
     if status_filter:
-        if status_filter == 'PENDING_PRODUCTION':
-             queryset = queryset.filter(is_deposit_paid=True, production_orders__isnull=True).distinct()
-        elif status_filter == 'PENDING_CLOSING':
+        if status_filter == 'PENDING_CLOSING': # รอรับมัดจำ
             queryset = queryset.filter(status='APPROVED', is_deposit_paid=False).distinct()
-        elif status_filter == 'IN_PRODUCTION':
-            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True).distinct()
+        elif status_filter == 'PENDING_VERIFY': # รอตรวจมัดจำ (เพิ่มใหม่)
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=False).distinct()
+        elif status_filter == 'READY': # พร้อมส่งงาน (มัดจำผ่านแล้ว แต่ยังไม่สั่งผลิต) (เพิ่มใหม่)
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True, production_orders__isnull=True).distinct()
+        elif status_filter == 'IN_PRODUCTION': # กำลังดำเนินการผลิต
+            queryset = queryset.filter(status='APPROVED', is_deposit_paid=True, is_deposit_verified=True, production_orders__isnull=False).distinct()
         else:
             queryset = queryset.filter(status=status_filter).distinct()
 
     total_departments_count = ProductionStatus.objects.count()
 
+    # 🌟 3. กรองข้อมูลตาม "สถานะผลิต" (อัปเดตเงื่อนไขให้ครบ)
     if prod_status_filter:
         if prod_status_filter == 'CLOSED':
             valid_jobs = ProductionOrder.objects.filter(is_closed=True)
@@ -881,15 +888,36 @@ def quotation_list(request):
                  valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count__lt=total_departments_count)
             elif prod_status_filter == 'IN_PROGRESS_6':
                  valid_jobs = valid_jobs.annotate(dept_count=Count('completed_departments')).filter(status='IN_PROGRESS', dept_count=total_departments_count)
+            # (เพิ่มใหม่) กรุ๊ปงานที่รอตรวจคุณภาพและตีกลับไว้ด้วยกัน
+            elif prod_status_filter == 'WAITING_QC_REWORK':
+                 valid_jobs = valid_jobs.filter(status__in=['WAITING_QC', 'REWORK'])
             else:
                   valid_jobs = valid_jobs.filter(status=prod_status_filter)
         valid_job_ids = list(valid_jobs.values_list('id', flat=True))
         queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
 
+    # 🌟 4. [NEW] กรองข้อมูลตาม "สถานะจัดส่ง" 🌟
+    if deliv_status_filter:
+        if deliv_status_filter == 'NO_TRUCK': # งานที่ผลิตเสร็จหรือต้องไปหน้างาน แต่แอดมินยังไม่ใส่ชื่อรถ/คนขับ
+            valid_jobs = ProductionOrder.objects.filter(
+                Q(status='COMPLETED') | Q(status='WAITING_QC') | Q(is_onsite=True)
+            ).filter(transporter__isnull=True)
+        elif deliv_status_filter == 'DELIVERING': # มีรถแล้วแต่สถานะยังไม่ส่งมอบสำเร็จ
+            valid_jobs = ProductionOrder.objects.filter(transporter__isnull=False).exclude(
+                delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+            )
+        elif deliv_status_filter == 'DELIVERED': # ปิดงานส่งของแล้ว
+            valid_jobs = ProductionOrder.objects.filter(
+                delivery_status__name__in=['ส่งมอบสำเร็จ', 'ลูกค้าเซ็นรับแล้ว', 'จัดส่งเรียบร้อย']
+            )
+        valid_job_ids = list(valid_jobs.values_list('id', flat=True))
+        queryset = queryset.filter(production_orders__in=valid_job_ids).distinct()
+
+    # 🌟 5. กรองคำค้นหา
     if search_query:
         queryset = queryset.filter(Q(code__icontains=search_query) | Q(customer_name__icontains=search_query)).distinct()
 
-    # 🌟 กรองวันที่ (ตั้งค่าเริ่มต้นเป็น "ช่วง 30 วันก่อนหน้า") 🌟
+    # 🌟 6. กรองวันที่
     date_start = request.GET.get('start_date')
     date_end = request.GET.get('end_date')
 
@@ -898,12 +926,13 @@ def quotation_list(request):
     if not date_end or date_end == 'None':
         date_end = timezone.now().date().strftime('%Y-%m-%d')
 
-    # 🌟 [NEW] ถ้าเลือก 'สถานะเอกสาร' หรือ 'สถานะผลิต' ให้ข้ามการกรองวันที่ (ดึงข้อมูลมาทั้งหมด) 🌟
-    if not status_filter and not prod_status_filter:
+    # ถ้ามีการกรองสถานะใดๆ ให้ข้ามการกรองวันที่ไป เพื่อให้เจองานที่ค้างอยู่ทั้งหมด
+    if not status_filter and not prod_status_filter and not deliv_status_filter:
         queryset = queryset.filter(date__gte=date_start, date__lte=date_end).distinct()
 
     paginator = Paginator(queryset, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
+# ... (โค้ดด้านล่างของฟังก์ชันเหมือนเดิม) ...
 
     for qt in page_obj:
         if qt.status == 'APPROVED' and qt.is_deposit_paid and qt.is_deposit_verified and not qt.production_orders.exists():
@@ -1158,11 +1187,11 @@ def quotation_cancel(request, qt_id):
         # 🌟 ด่านตรวจที่ 2: ห้ามยกเลิกถ้าสั่งผลิตแล้ว 🌟
         if qt.production_orders.exists():
             messages.error(request, "❌ ไม่อนุญาตให้ยกเลิก เนื่องจากเอกสารนี้ถูกส่งเข้ากระบวนการผลิตเรียบร้อยแล้ว")
-        
+
         # 🌟 ด่านตรวจที่ 1: ห้ามยกเลิกถ้าจ่ายมัดจำแล้ว 🌟
         elif qt.is_deposit_paid:
             messages.error(request, "❌ ไม่สามารถยกเลิกได้ เนื่องจากมีการรับมัดจำแล้ว กรุณาทำเรื่องคืนเงินมัดจำก่อน")
-            
+
         # 🌟 ผ่านด่านตรวจ จึงจะยอมให้ยกเลิก 🌟
         elif qt.status in ['DRAFT', 'APPROVED']:
             qt.status = 'CANCELLED'

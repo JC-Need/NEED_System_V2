@@ -150,9 +150,10 @@ def planner_board(request):
     search_team = request.GET.get('team', '')
     search_salesperson = request.GET.get('salesperson', '')
 
+    # 🌟 [FIXED] เปลี่ยนจาก .all() เป็น .filter(is_closed=False) เพื่อซ่อนงานที่กดปิดจ๊อบแล้วออกจากกระดาน 🌟
     orders = ProductionOrder.objects.select_related(
         'product', 'branch', 'production_team', 'salesperson', 'salesperson__branch', 'quotation_ref'
-    ).all().order_by('-id')
+    ).filter(is_closed=False).order_by('-id')
 
     if start_date: orders = orders.filter(start_date__gte=start_date)
     if end_date: orders = orders.filter(start_date__lte=end_date)
@@ -563,7 +564,7 @@ def update_production_board(request, pk):
     if request.method == 'POST':
         order = get_object_or_404(ProductionOrder, pk=pk)
         action = request.POST.get('action')
-        redirect_to = request.POST.get('redirect_to') 
+        redirect_to = request.POST.get('redirect_to')
 
         if action == 'update_note':
             order.note = request.POST.get('note', '')
@@ -580,7 +581,7 @@ def update_production_board(request, pk):
 
         if 'production_team' in request.POST:
             order.production_team_id = request.POST.get('production_team') or None
-        
+
         if 'branch' in request.POST:
             order.branch_id = request.POST.get('branch') or None
 
@@ -817,10 +818,10 @@ def production_head_board(request):
         else:
             return f"จ.{monday.day}/{monday.month}-อา.{sunday.day}/{sunday.month}/{y_str}"
 
-    col1_upcoming = []  
-    col2_current = []   
-    col3_overdue = []   
-    col4_rework = []    
+    col1_upcoming = []
+    col2_current = []
+    col3_overdue = []
+    col4_rework = []
 
     for order in orders:
         order.display_cohort = format_week_range(order.start_date)
@@ -841,7 +842,7 @@ def production_head_board(request):
     prod_statuses = ProductionStatus.objects.all().order_by('sequence', 'id')
 
     return render(request, 'manufacturing/production_head_board.html', {
-        'orders': orders, 
+        'orders': orders,
         'col1_upcoming': col1_upcoming,
         'col2_current': col2_current,
         'col3_overdue': col3_overdue,
@@ -918,9 +919,9 @@ def qc_board(request):
         else:
             return f"จ.{monday.day}/{monday.month}-อา.{sunday.day}/{sunday.month}/{y_str}"
 
-    col1_current = []   
-    col2_overdue = []   
-    col3_rework = []    
+    col1_current = []
+    col2_overdue = []
+    col3_rework = []
 
     for order in orders:
         order.display_cohort = format_week_range(order.start_date)
@@ -1002,7 +1003,7 @@ def process_qc(request, pk):
         elif action == 'fail':
             comments = request.POST.get('comments', '')
             order.rework_count += 1
-            order.status = 'REWORK' 
+            order.status = 'REWORK'
 
             log = QCInspectionLog.objects.create(
                 production_order=order,
@@ -1065,18 +1066,18 @@ def blueprint_hub(request):
     elif claim_status in ['PENDING', 'PAID', 'REJECTED']:
         history_jobs = history_jobs.filter(blueprint_claim__status=claim_status)
 
-    history_jobs = history_jobs.order_by('-blueprint_approved_at')[:100] 
+    history_jobs = history_jobs.order_by('-blueprint_approved_at')[:100]
 
     claimable_jobs = ProductionOrder.objects.filter(
         blueprint_approved_by=current_emp,
         blueprint_claim__isnull=True,
-        quotation_ref__invoice__isnull=False 
+        quotation_ref__invoice__isnull=False
     ).order_by('blueprint_approved_at')
 
     waiting_invoice_jobs = ProductionOrder.objects.filter(
         blueprint_approved_by=current_emp,
         blueprint_claim__isnull=True,
-        quotation_ref__invoice__isnull=True 
+        quotation_ref__invoice__isnull=True
     ).order_by('blueprint_approved_at')
 
     claims = BlueprintClaim.objects.filter(employee=current_emp).order_by('-created_at')
@@ -1087,7 +1088,7 @@ def blueprint_hub(request):
         'pending_jobs': pending_jobs,
         'history_jobs': history_jobs,
         'claimable_jobs': claimable_jobs,
-        'waiting_invoice_jobs': waiting_invoice_jobs, 
+        'waiting_invoice_jobs': waiting_invoice_jobs,
         'claims': claims,
         'salespersons': salespersons,
         'start_date': start_date,
@@ -1231,10 +1232,10 @@ def print_blueprint_claim(request, pk):
     splits = claim.splits.all()
 
     total_split_amount = sum([s.amount for s in splits]) if splits else Decimal('0')
-    fund_amount = claim.total_amount - total_split_amount 
+    fund_amount = claim.total_amount - total_split_amount
 
     total_split_percent = sum([s.percentage for s in splits]) if splits else Decimal('0')
-    fund_percentage = Decimal('100') - total_split_percent 
+    fund_percentage = Decimal('100') - total_split_percent
 
     return render(request, 'manufacturing/print_blueprint_claim.html', {
         'claim': claim,
@@ -1242,7 +1243,7 @@ def print_blueprint_claim(request, pk):
         'company': company,
         'amount_text': amount_text,
         'fund_amount': fund_amount,
-        'fund_percentage': fund_percentage, 
+        'fund_percentage': fund_percentage,
     })
 
 # ==========================================
@@ -1267,7 +1268,7 @@ def logistics_board(request):
                 inv = order.quotation_ref.invoice_set.first()
             elif hasattr(order.quotation_ref, 'invoice'):
                 inv = order.quotation_ref.invoice
-            
+
             if inv:
                 # ถ้ามีการเปิด Invoice แล้ว ยึดยอดคงเหลือจาก Invoice เป็นหลัก
                 order.actual_balance = getattr(inv, 'balance_amount', Decimal('0'))
@@ -1305,7 +1306,7 @@ def process_logistics(request, pk):
         if action == 'assign_truck':
             transporter_id = request.POST.get('transporter')
             delivery_fee = request.POST.get('delivery_fee', 0)
-            delivery_date_str = request.POST.get('delivery_date') 
+            delivery_date_str = request.POST.get('delivery_date')
 
             if transporter_id:
                 order.transporter_id = transporter_id
@@ -1355,7 +1356,7 @@ def create_logistics_claim(request):
                 messages.success(request, f"💰 สร้างใบตั้งเบิกค่ารถ {claim.code} สำเร็จ!")
             else: messages.error(request, "❌ ไม่พบงาน หรือมีการตั้งเบิกไปแล้ว")
         else: messages.warning(request, "⚠️ กรุณาติ๊กเลือกอย่างน้อย 1 งาน")
-    return redirect('logistics_claim_history') 
+    return redirect('logistics_claim_history')
 
 @login_required
 def print_delivery_note(request, pk):
@@ -1369,7 +1370,26 @@ def print_delivery_note(request, pk):
     return render(request, 'manufacturing/print_delivery_note.html', {
         'order': order,
         'company': company,
-        'amount_text': amount_text 
+        'amount_text': amount_text
+    })
+
+@login_required
+def print_consent_form(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    company = CompanyInfo.objects.first()
+    return render(request, 'manufacturing/print_consent_form.html', {
+        'order': order,
+        'company': company,
+    })
+
+# 🌟 [NEW] ฟังก์ชันดึงข้อมูลเพื่อพิมพ์ใบตรวจสอบก่อนติดตั้ง 🌟
+@login_required
+def print_site_checklist(request, pk):
+    order = get_object_or_404(ProductionOrder, pk=pk)
+    company = CompanyInfo.objects.first()
+    return render(request, 'manufacturing/print_site_checklist.html', {
+        'order': order,
+        'company': company,
     })
 
 @login_required
